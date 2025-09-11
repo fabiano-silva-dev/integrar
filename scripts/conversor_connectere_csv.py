@@ -29,7 +29,7 @@ def formatar_valor_brl(valor):
     except Exception:
         return "0,00"
 
-def processar_lancamentos(csv_path, output_path=None):
+def processar_lancamentos(csv_path, output_path=None, codigo_empresa=None):
     df = pd.read_csv(csv_path)
     lancamentos = []
     i = 0
@@ -101,22 +101,53 @@ def processar_lancamentos(csv_path, output_path=None):
                 soma_debitos += valor_debito
                 i += 1
     df_saida = pd.DataFrame(lancamentos)
-    colunas = ['Data', 'Histórico', 'Conta Débito', 'Conta Crédito', 'Valor']
-    df_saida = df_saida[colunas]
-    df_saida['Data'] = pd.to_datetime(df_saida['Data'], format='%d/%m/%Y')
-    df_saida = df_saida.sort_values('Data')
-    df_saida['Data'] = df_saida['Data'].dt.strftime('%d/%m/%Y')
+    
+    # Renomear colunas para o formato esperado pelo importador
+    df_saida = df_saida.rename(columns={
+        'Data': 'Data do Lançamento',
+        'Histórico': 'Histórico',
+        'Conta Débito': 'Conta Débito',
+        'Conta Crédito': 'Conta Crédito',
+        'Valor': 'Valor do Lançamento'
+    })
+    
+    # Adicionar colunas obrigatórias que estão faltando
+    df_saida['Usuário'] = 'Sistema'
+    # Usar o código da empresa se fornecido, senão usar padrão
+    codigo_filial = codigo_empresa if codigo_empresa else '0000001'
+    df_saida['Código da Filial/Matriz'] = codigo_filial
+    df_saida['Nome da Empresa'] = ''
+    df_saida['Número da Nota'] = ''
+    
+    # Reordenar colunas na sequência esperada
+    colunas_ordenadas = [
+        'Data do Lançamento',
+        'Usuário', 
+        'Conta Débito',
+        'Conta Crédito',
+        'Valor do Lançamento',
+        'Histórico',
+        'Código da Filial/Matriz',
+        'Nome da Empresa',
+        'Número da Nota'
+    ]
+    df_saida = df_saida[colunas_ordenadas]
+    
+    df_saida['Data do Lançamento'] = pd.to_datetime(df_saida['Data do Lançamento'], format='%d/%m/%Y')
+    df_saida = df_saida.sort_values('Data do Lançamento')
+    df_saida['Data do Lançamento'] = df_saida['Data do Lançamento'].dt.strftime('%d/%m/%Y')
     if not output_path:
-    base_name = os.path.basename(csv_path)
-    nome_sem_ext = os.path.splitext(base_name)[0]
+        base_name = os.path.basename(csv_path)
+        nome_sem_ext = os.path.splitext(base_name)[0]
         output_path = f"padrao-{nome_sem_ext}.csv"
     df_saida.to_csv(output_path, index=False, sep=';')
     print(f"Arquivo CSV gerado: {output_path}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Uso: python conversor_connectere_csv.py <arquivo_entrada.csv> [arquivo_saida.csv]")
+        print("Uso: python conversor_connectere_csv.py <arquivo_entrada.csv> [arquivo_saida.csv] [codigo_empresa]")
         sys.exit(1)
     csv_path = sys.argv[1]
     output_path = sys.argv[2] if len(sys.argv) > 2 else None
-    processar_lancamentos(csv_path, output_path) 
+    codigo_empresa = sys.argv[3] if len(sys.argv) > 3 else None
+    processar_lancamentos(csv_path, output_path, codigo_empresa) 

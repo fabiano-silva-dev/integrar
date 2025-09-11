@@ -32,7 +32,7 @@ class ImportadorAvancado extends Component
     protected $rules = [
         'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240', // 10MB
         'empresa_id' => 'required|exists:empresas,id',
-        'layout_selecionado' => 'required|in:connectere,dominio,grafeno,sicoob,caixa_federal,ofx,registros',
+        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros',
         'conta_banco' => 'required_if:layout_selecionado,grafeno,sicoob,caixa_federal,registros',
     ];
 
@@ -196,7 +196,6 @@ class ImportadorAvancado extends Component
     private function determinarScriptPython()
     {
         $scripts = [
-            'connectere' => 'conversor_connectere_csv.py',
             'dominio' => 'conversor_dominio_txt_csv.py',
             'grafeno' => 'conversor_extrato_grafeno_pdf_csv.py',
             'sicoob' => 'conversor_extrato_sicoob_pdf_csv.py',
@@ -205,11 +204,23 @@ class ImportadorAvancado extends Component
             'registros' => 'conversor_registros_csv.py',
         ];
 
-        return $scripts[$this->layout_selecionado] ?? 'conversor_connectere_csv.py';
+        return $scripts[$this->layout_selecionado] ?? 'conversor_registros_csv.py';
     }
 
     private function executarScriptPython($script, $entrada, $saida)
     {
+        // Buscar código da empresa
+        $empresa = Empresa::find($this->empresa_id);
+        $codigoEmpresa = $empresa ? $empresa->codigo_sistema : null;
+        
+        Log::info("=== DEBUG SCRIPT PYTHON ===", [
+            'layout_selecionado' => $this->layout_selecionado,
+            'script' => $script,
+            'empresa_id' => $this->empresa_id,
+            'codigo_empresa' => $codigoEmpresa,
+            'conta_banco' => $this->conta_banco ?? 'não informada'
+        ]);
+        
         // Se for o script do Grafeno, SICOOB, Caixa Federal ou Registros, passar a conta do banco como terceiro parâmetro
         if (($this->layout_selecionado === 'grafeno' || $this->layout_selecionado === 'sicoob' || $this->layout_selecionado === 'caixa_federal' || $this->layout_selecionado === 'registros') && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
@@ -349,7 +360,21 @@ class ImportadorAvancado extends Component
             $valor = $get('Valor do Lançamento');
             $historico = $get('Histórico') ?? $get('Histórico (Complemento)');
             $codigoFilialRaw = $get('Código da Filial/Matriz');
-            $codigoFilial = $codigoFilialRaw ? str_pad($codigoFilialRaw, 7, '0', STR_PAD_LEFT) : str_pad($codigoSistemaEmpresa, 7, '0', STR_PAD_LEFT);
+            // Se o CSV já tem o código da filial preenchido, usar ele. Senão, usar o código da empresa
+            if (!empty($codigoFilialRaw) && $codigoFilialRaw !== '0000001') {
+                $codigoFilial = str_pad($codigoFilialRaw, 7, '0', STR_PAD_LEFT);
+            } else {
+                $codigoFilial = str_pad($codigoSistemaEmpresa, 7, '0', STR_PAD_LEFT);
+            }
+            
+            // Log para debug do código da filial
+            if ($linhaNumero <= 5) {
+                Log::info("Debug código filial linha {$linhaNumero}:", [
+                    'codigo_filial_raw' => $codigoFilialRaw,
+                    'codigo_sistema_empresa' => $codigoSistemaEmpresa,
+                    'codigo_filial_final' => $codigoFilial
+                ]);
+            }
             $nomeEmpresa = $get('Nome da Empresa');
             $numeroNota = $get('Número da Nota');
             
@@ -645,7 +670,6 @@ class ImportadorAvancado extends Component
         $empresas = Empresa::orderBy('nome')->get();
         
         $layouts = [
-            // 'connectere' => 'Connectere (CSV)', // Comentado - substituído por registros
             'dominio' => 'Domínio (TXT)',
             'grafeno' => 'Grafeno (PDF)',
             'sicoob' => 'Sicoob (PDF)',
