@@ -54,7 +54,7 @@
                 <select wire:model.live="filtroImportacao" class="h-10 px-4 rounded-lg border border-gray-300 bg-white text-xs placeholder-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all w-full shadow outline-none">
                         <option value="">Todas</option>
                         @foreach($importacoes as $importacao)
-                            <option value="{{ $importacao->id }}">{{ $importacao->id }} - {{ $importacao->nome_arquivo }}</option>
+                            <option value="{{ $importacao['id'] }}">{{ $importacao['display_text'] }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -99,7 +99,7 @@
                                 <select wire:model="novoLancamento.importacao_id" wire:change="carregarDadosImportacao" class="w-full rounded-md border-gray-300 shadow-sm">
                                     <option value="">Selecione uma importação</option>
                                     @foreach($importacoes as $importacao)
-                                        <option value="{{ $importacao->id }}">{{ $importacao->id }} - {{ $importacao->nome_arquivo }} @if($importacao->empresa) ({{ $importacao->empresa->nome }}) @endif</option>
+                                        <option value="{{ $importacao['id'] }}">{{ $importacao['display_text'] }}</option>
                                     @endforeach
                                 </select>
                                 @error('novoLancamento.importacao_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror

@@ -44,8 +44,8 @@
                         @enderror
                     </div>
 
-                    <!-- Conta do Banco (apenas para Grafeno, SICOOB e Caixa Federal) -->
-                    @if($layout_selecionado === 'grafeno' || $layout_selecionado === 'sicoob' || $layout_selecionado === 'caixa_federal')
+                    <!-- Conta do Banco (apenas para Grafeno, SICOOB, Caixa Federal e Registros) -->
+                    @if($layout_selecionado === 'grafeno' || $layout_selecionado === 'sicoob' || $layout_selecionado === 'caixa_federal' || $layout_selecionado === 'registros')
                         <div>
                             <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-2">
                                 Conta do Banco <span class="text-red-500">*</span>

@@ -25,11 +25,11 @@
                             <!-- Conta do Banco -->
                             <div>
                                 <label for="contaBanco" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Conta do Banco *
+                                    Conta do Banco * (Código contábil da conta do banco no sistema Domínio)
                                 </label>
                                 <input type="text" wire:model="contaBanco" id="contaBanco" 
                                        class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                       placeholder="Ex: 1.1.1.01.001">
+                                       placeholder="Ex: 8">
                                 @error('contaBanco') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
 

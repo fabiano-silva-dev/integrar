@@ -32,8 +32,8 @@ class ImportadorAvancado extends Component
     protected $rules = [
         'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240', // 10MB
         'empresa_id' => 'required|exists:empresas,id',
-        'layout_selecionado' => 'required|in:connectere,dominio,grafeno,sicoob,caixa_federal,ofx',
-        'conta_banco' => 'required_if:layout_selecionado,grafeno,sicoob,caixa_federal',
+        'layout_selecionado' => 'required|in:connectere,dominio,grafeno,sicoob,caixa_federal,ofx,registros',
+        'conta_banco' => 'required_if:layout_selecionado,grafeno,sicoob,caixa_federal,registros',
     ];
 
     public function mount()
@@ -190,6 +190,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'conversor_extrato_sicoob_pdf_csv.py',
             'caixa_federal' => 'conversor_extrato_caixa_federal_pdf_csv.py',
             'ofx' => 'conversor_ofx_csv.py',
+            'registros' => 'conversor_registros_csv.py',
         ];
 
         return $scripts[$this->layout_selecionado] ?? 'conversor_connectere_csv.py';
@@ -197,8 +198,8 @@ class ImportadorAvancado extends Component
 
     private function executarScriptPython($script, $entrada, $saida)
     {
-        // Se for o script do Grafeno, SICOOB ou Caixa Federal, passar a conta do banco como terceiro parâmetro
-        if (($this->layout_selecionado === 'grafeno' || $this->layout_selecionado === 'sicoob' || $this->layout_selecionado === 'caixa_federal') && !empty($this->conta_banco)) {
+        // Se for o script do Grafeno, SICOOB, Caixa Federal ou Registros, passar a conta do banco como terceiro parâmetro
+        if (($this->layout_selecionado === 'grafeno' || $this->layout_selecionado === 'sicoob' || $this->layout_selecionado === 'caixa_federal' || $this->layout_selecionado === 'registros') && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\"";
@@ -632,12 +633,13 @@ class ImportadorAvancado extends Component
         $empresas = Empresa::orderBy('nome')->get();
         
         $layouts = [
-            'connectere' => 'Connectere (CSV)',
+            // 'connectere' => 'Connectere (CSV)', // Comentado - substituído por registros
             'dominio' => 'Domínio (TXT)',
             'grafeno' => 'Grafeno (PDF)',
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'ofx' => 'Formato OFX',
+            'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
         ];
 
         return view('livewire.importador-avancado', [

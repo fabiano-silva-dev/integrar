@@ -34,7 +34,7 @@ class TabelaLancamentos extends Component
     
     // Ordenação
     public $ordenacao = 'data';
-    public $direcao = 'desc';
+    public $direcao = 'asc';
 
     // Novas propriedades para confirmação de edição
     public $confirmarSalvarAmarracao = false;
@@ -86,7 +86,7 @@ class TabelaLancamentos extends Component
         'filtroValor' => ['except' => ''],
         'filtroConferido' => ['except' => ''],
         'ordenacao' => ['except' => 'data'],
-        'direcao' => ['except' => 'desc'],
+        'direcao' => ['except' => 'asc'],
     ];
 
     public function mount()
@@ -100,7 +100,13 @@ class TabelaLancamentos extends Component
         $camposValidos = ['data', 'nome_empresa', 'conta_debito', 'conta_credito', 'valor', 'historico', 'codigo_filial_matriz'];
         if (!in_array($this->ordenacao, $camposValidos)) {
             $this->ordenacao = 'data';
-            $this->direcao = 'desc';
+            $this->direcao = 'asc';
+        }
+        
+        // Se há filtro de importação, garantir ordenação crescente por data
+        if (!empty($this->filtroImportacao)) {
+            $this->ordenacao = 'data';
+            $this->direcao = 'asc';
         }
         
         // Definir data padrão para novo lançamento
@@ -214,11 +220,11 @@ class TabelaLancamentos extends Component
             $this->ordenacao = 'data';
             $this->direcao = 'desc';
         } else {
-        if ($this->ordenacao === $campo) {
-            $this->direcao = $this->direcao === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->ordenacao = $campo;
-            $this->direcao = 'asc';
+            if ($this->ordenacao === $campo) {
+                $this->direcao = $this->direcao === 'asc' ? 'desc' : 'asc';
+            } else {
+                $this->ordenacao = $campo;
+                $this->direcao = 'asc';
             }
         }
         $this->resetPage();
@@ -857,8 +863,21 @@ class TabelaLancamentos extends Component
     public function render()
     {
         $query = $this->getLancamentosQuery();
-            $lancamentos = $query->paginate($this->perPage);
-        $importacoes = Importacao::orderBy('created_at', 'desc')->get();
+        $lancamentos = $query->paginate($this->perPage);
+        
+        // Carregar importações com nome da empresa
+        $importacoes = Importacao::with('empresa')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($importacao) {
+                $empresaNome = $importacao->empresa ? $importacao->empresa->nome : 'Sem empresa';
+                return [
+                    'id' => $importacao->id,
+                    'nome_arquivo' => $importacao->nome_arquivo,
+                    'empresa_nome' => $empresaNome,
+                    'display_text' => "ID: {$importacao->id} - {$importacao->nome_arquivo} - {$empresaNome}"
+                ];
+            });
 
         return view('livewire.tabela-lancamentos', [
             'lancamentos' => $lancamentos,
