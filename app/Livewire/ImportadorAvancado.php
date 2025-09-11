@@ -36,6 +36,18 @@ class ImportadorAvancado extends Component
         'conta_banco' => 'required_if:layout_selecionado,grafeno,sicoob,caixa_federal,registros',
     ];
 
+    protected $messages = [
+        'arquivo.required' => 'O arquivo é obrigatório.',
+        'arquivo.file' => 'O arquivo deve ser um arquivo válido.',
+        'arquivo.extensions' => 'O arquivo deve ter uma das extensões: csv, txt, pdf, ofx.',
+        'arquivo.max' => 'O arquivo não pode ser maior que 10MB.',
+        'empresa_id.required' => 'A empresa é obrigatória.',
+        'empresa_id.exists' => 'A empresa selecionada não existe.',
+        'layout_selecionado.required' => 'O layout é obrigatório.',
+        'layout_selecionado.in' => 'O layout selecionado não é válido.',
+        'conta_banco.required_if' => 'O campo Conta do Banco é obrigatório para este layout.',
+    ];
+
     public function mount()
     {
         $this->mensagem_status = 'Aguardando upload do arquivo...';

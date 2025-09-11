@@ -48,10 +48,10 @@
                     @if($layout_selecionado === 'grafeno' || $layout_selecionado === 'sicoob' || $layout_selecionado === 'caixa_federal' || $layout_selecionado === 'registros')
                         <div>
                             <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-2">
-                                Conta do Banco <span class="text-red-500">*</span>
+                                Conta do Banco <span class="text-red-500">*</span> (Código contábil da conta do banco no sistema Domínio)
                             </label>
                             <input type="text" id="conta_banco" wire:model="conta_banco" 
-                                   placeholder="Ex: 1.1.1.01" 
+                                   placeholder="Ex: 8" 
                                    class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                             <p class="text-sm text-gray-500 mt-1">
                                 Esta conta será usada para lançamentos de débito (recebimentos) e crédito (pagamentos)
@@ -85,8 +85,22 @@
                             </div>
                         </div>
                         @if($arquivo)
-                            <div class="mt-2 text-sm text-gray-600">
-                                Arquivo selecionado: {{ $arquivo->getClientOriginalName() }}
+                            <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-green-800">
+                                            ✅ Arquivo selecionado: <strong>{{ $arquivo->getClientOriginalName() }}</strong>
+                                        </p>
+                                        <p class="text-xs text-green-600 mt-1">
+                                            Pronto para processamento
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         @endif
                         @error('arquivo') 
