@@ -4,7 +4,7 @@
 # Executar diariamente via cron
 
 DATA=$(date +%Y%m%d_%H%M%S)
-DIRETORIO_BACKUP="/ico/fabiano/ft/integrar/backups"
+DIRETORIO_BACKUP="$(dirname "$0")/backups"
 ARQUIVO_BACKUP="$DIRETORIO_BACKUP/backup-integrar-$DATA.sql"
 
 # Criar diretório de backup se não existir
