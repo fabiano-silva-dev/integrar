@@ -269,7 +269,8 @@ class ImportadorAvancado extends Component
             'total_registros' => 0,
             'registros_processados' => 0,
             'status' => 'processando',
-            'usuario' => 'Sistema',
+            'usuario' => auth()->user() ? auth()->user()->name : 'Sistema',
+            'user_id' => auth()->id(),
             'empresa_id' => $empresa->id,
         ]);
 

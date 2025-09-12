@@ -86,6 +86,7 @@ class ListaImportacoes extends Component
     {
         $importacoes = $this->getImportacoesQuery()
             ->withCount('lancamentos') // Adicionar contagem de lançamentos
+            ->with('user') // Carregar relacionamento com usuário
             ->paginate(15);
 
         return view('livewire.lista-importacoes', [

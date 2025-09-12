@@ -1310,6 +1310,7 @@ class ImportadorPersonalizado extends Component
             'tipo' => 'personalizado',
             'empresa_id' => $this->empresa_id ?? (auth()->user() ? auth()->user()->empresa_id : 1),
             'user_id' => auth()->id(),
+            'usuario' => auth()->user() ? auth()->user()->name : 'Sistema',
             'status' => 'processando',
         ]);
 
@@ -1538,6 +1539,14 @@ class ImportadorPersonalizado extends Component
         $dados['conta_debito'] = $dados['conta_debito'] ?? '';
         $dados['conta_credito'] = $dados['conta_credito'] ?? '';
         $dados['centro_custo'] = $dados['centro_custo'] ?? '';
+        
+        // Garantir que codigo_filial_matriz seja salvo
+        if (!isset($dados['codigo_filial_matriz']) || empty($dados['codigo_filial_matriz'])) {
+            // Buscar código da empresa para usar como fallback
+            $empresa = Empresa::find($dados['empresa_id']);
+            $codigoSistemaEmpresa = $empresa ? $empresa->codigo_sistema : null;
+            $dados['codigo_filial_matriz'] = $codigoSistemaEmpresa ? str_pad($codigoSistemaEmpresa, 7, '0', STR_PAD_LEFT) : null;
+        }
         
         // Garantir que data sempre exista
         if (!isset($dados['data']) || empty($dados['data'])) {

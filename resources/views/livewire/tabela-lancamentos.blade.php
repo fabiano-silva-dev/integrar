@@ -374,7 +374,8 @@
                                            class="w-full rounded border-2 border-black text-xs bg-white focus:border-blue-500 input-debito"
                                            placeholder="Débito"
                                            data-lancamento-id="{{ $lancamento->id }}"
-                                           onkeydown="handleKeyDown(event, this)">
+                                           data-campo="conta_debito"
+                                           onkeydown="handleKeyDown(event, this)"
                                 </div>
                             </td>
                             <td class="px-1 py-3 text-sm text-gray-900">
@@ -385,7 +386,8 @@
                                            class="w-full rounded border-2 border-black text-xs bg-white focus:border-blue-500 input-credito"
                                            placeholder="Crédito"
                                            data-lancamento-id="{{ $lancamento->id }}"
-                                           onkeydown="handleKeyDownCredito(event, this)">
+                                           data-campo="conta_credito"
+                                           onkeydown="handleKeyDownCredito(event, this)"
                                 </div>
                             </td>
                             <td class="px-1 py-3 text-center text-sm text-gray-900 break-words whitespace-normal" onclick="event.stopPropagation()">
@@ -413,6 +415,7 @@
                                        class="w-full rounded border-2 border-black text-xs bg-white focus:border-blue-500 input-historico resize-none"
                                        placeholder="Histórico"
                                        data-lancamento-id="{{ $lancamento->id }}"
+                                       data-campo="historico"
                                        rows="2"
                                        onkeydown="handleKeyDownHistorico(event, this)">{{ $lancamento->historico }}</textarea>
                             </td>
@@ -477,178 +480,101 @@
 </div>
 
 <script>
+// Cache de debounce para evitar múltiplas chamadas
+const debounceTimers = {};
+
+// Função de debounce otimizada para inputs
+function debounceInput(input, callback, delay = 300) {
+    const key = input.dataset.lancamentoId + '_' + input.dataset.campo;
+    
+    // Limpar timer anterior se existir
+    if (debounceTimers[key]) {
+        clearTimeout(debounceTimers[key]);
+    }
+    
+    // Configurar novo timer
+    debounceTimers[key] = setTimeout(() => {
+        callback(input.value);
+    }, delay);
+}
+
 function handleKeyDown(event, input) {
     if (event.key === 'Enter' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         
         const currentValue = input.value;
         const currentId = input.dataset.lancamentoId;
+        const campo = input.dataset.campo;
         const direction = (event.key === 'ArrowUp') ? 'up' : 'down';
         
-        // Salvar o valor primeiro
-        if (window.Livewire) {
-            const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-            window.Livewire.find(wireId).call('iniciarEdicao', currentId, 'conta_debito', currentValue);
-            window.Livewire.find(wireId).call('salvarEdicao');
+        console.log('Navegação:', { currentId, campo, direction, currentValue });
+        
+        // Salvar o valor primeiro usando o método original
+        if (window.Livewire && campo) {
+            const wireId = document.querySelector('[wire\\:id]')?.getAttribute('wire:id');
+            if (wireId) {
+                window.Livewire.find(wireId).call('iniciarEdicao', currentId, campo, currentValue);
+                window.Livewire.find(wireId).call('salvarEdicao');
+            }
         }
         
-        // Se for Enter, marcar como conferido independentemente de alteração
+        // Se for Enter, marcar como conferido
         if (event.key === 'Enter') {
             setTimeout(() => {
                 if (window.Livewire) {
-                    const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-                    window.Livewire.find(wireId).call('marcarComoConferido', currentId);
+                    const wireId = document.querySelector('[wire\\:id]')?.getAttribute('wire:id');
+                    if (wireId) {
+                        window.Livewire.find(wireId).call('marcarComoConferido', currentId);
+                    }
                 }
             }, 50);
         }
         
         // Navegar para o próximo input
         setTimeout(() => {
-            const debitoInputs = document.querySelectorAll('.input-debito');
+            const inputClass = campo === 'conta_debito' ? '.input-debito' : 
+                              campo === 'conta_credito' ? '.input-credito' : '.input-historico';
+            const inputs = document.querySelectorAll(inputClass);
             let targetInput = null;
+            
+            console.log('Buscando inputs:', { inputClass, totalInputs: inputs.length });
             
             // Encontrar o input atual
             let currentIndex = -1;
-            for (let i = 0; i < debitoInputs.length; i++) {
-                if (debitoInputs[i].dataset.lancamentoId == currentId) {
+            for (let i = 0; i < inputs.length; i++) {
+                if (inputs[i].dataset.lancamentoId == currentId) {
                     currentIndex = i;
                     break;
                 }
             }
             
+            console.log('Índice atual:', currentIndex);
+            
             if (currentIndex !== -1) {
-                if (direction === 'down' && currentIndex + 1 < debitoInputs.length) {
-                    // Navegar para baixo
-                    targetInput = debitoInputs[currentIndex + 1];
+                if (direction === 'down' && currentIndex + 1 < inputs.length) {
+                    targetInput = inputs[currentIndex + 1];
                 } else if (direction === 'up' && currentIndex - 1 >= 0) {
-                    // Navegar para cima
-                    targetInput = debitoInputs[currentIndex - 1];
+                    targetInput = inputs[currentIndex - 1];
                 }
             }
             
-            // Focar no input alvo se existir
+            console.log('Input alvo encontrado:', targetInput);
+            
             if (targetInput) {
                 targetInput.focus();
-                targetInput.select(); // Selecionar todo o texto para facilitar a edição
+                targetInput.select();
             }
-        }, 100); // Pequeno delay para garantir que o valor foi salvo
+        }, 100); // Aumentado delay para garantir que o valor foi salvo
     }
 }
 
+// Funções unificadas - todas usam a mesma lógica otimizada
 function handleKeyDownCredito(event, input) {
-    if (event.key === 'Enter' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        
-        const currentValue = input.value;
-        const currentId = input.dataset.lancamentoId;
-        const direction = (event.key === 'ArrowUp') ? 'up' : 'down';
-        
-        // Salvar o valor primeiro
-        if (window.Livewire) {
-            const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-            window.Livewire.find(wireId).call('iniciarEdicao', currentId, 'conta_credito', currentValue);
-            window.Livewire.find(wireId).call('salvarEdicao');
-        }
-        
-        // Se for Enter, marcar como conferido independentemente de alteração
-        if (event.key === 'Enter') {
-            setTimeout(() => {
-                if (window.Livewire) {
-                    const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-                    window.Livewire.find(wireId).call('marcarComoConferido', currentId);
-                }
-            }, 50);
-        }
-        
-        // Navegar para o próximo input
-        setTimeout(() => {
-            const creditoInputs = document.querySelectorAll('.input-credito');
-            let targetInput = null;
-            
-            // Encontrar o input atual
-            let currentIndex = -1;
-            for (let i = 0; i < creditoInputs.length; i++) {
-                if (creditoInputs[i].dataset.lancamentoId == currentId) {
-                    currentIndex = i;
-                    break;
-                }
-            }
-            
-            if (currentIndex !== -1) {
-                if (direction === 'down' && currentIndex + 1 < creditoInputs.length) {
-                    // Navegar para baixo
-                    targetInput = creditoInputs[currentIndex + 1];
-                } else if (direction === 'up' && currentIndex - 1 >= 0) {
-                    // Navegar para cima
-                    targetInput = creditoInputs[currentIndex - 1];
-                }
-            }
-            
-            // Focar no input alvo se existir
-            if (targetInput) {
-                targetInput.focus();
-                targetInput.select(); // Selecionar todo o texto para facilitar a edição
-            }
-        }, 100); // Pequeno delay para garantir que o valor foi salvo
-    }
+    handleKeyDown(event, input);
 }
 
 function handleKeyDownHistorico(event, input) {
-    if (event.key === 'Enter' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        
-        const currentValue = input.value;
-        const currentId = input.dataset.lancamentoId;
-        const direction = (event.key === 'ArrowUp') ? 'up' : 'down';
-        
-        // Salvar o valor primeiro
-        if (window.Livewire) {
-            const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-            window.Livewire.find(wireId).call('iniciarEdicao', currentId, 'historico', currentValue);
-            window.Livewire.find(wireId).call('salvarEdicao');
-        }
-        
-        // Se for Enter, marcar como conferido independentemente de alteração
-        if (event.key === 'Enter') {
-            setTimeout(() => {
-                if (window.Livewire) {
-                    const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-                    window.Livewire.find(wireId).call('marcarComoConferido', currentId);
-                }
-            }, 50);
-        }
-        
-        // Navegar para o próximo input
-        setTimeout(() => {
-            const historicoInputs = document.querySelectorAll('.input-historico');
-            let targetInput = null;
-            
-            // Encontrar o input atual
-            let currentIndex = -1;
-            for (let i = 0; i < historicoInputs.length; i++) {
-                if (historicoInputs[i].dataset.lancamentoId == currentId) {
-                    currentIndex = i;
-                    break;
-                }
-            }
-            
-            if (currentIndex !== -1) {
-                if (direction === 'down' && currentIndex + 1 < historicoInputs.length) {
-                    // Navegar para baixo
-                    targetInput = historicoInputs[currentIndex + 1];
-                } else if (direction === 'up' && currentIndex - 1 >= 0) {
-                    // Navegar para cima
-                    targetInput = historicoInputs[currentIndex - 1];
-                }
-            }
-            
-            // Focar no input alvo se existir
-            if (targetInput) {
-                targetInput.focus();
-                targetInput.select(); // Selecionar todo o texto para facilitar a edição
-            }
-        }, 100); // Pequeno delay para garantir que o valor foi salvo
-    }
+    handleKeyDown(event, input);
 }
 
 function reverterContaDebito(btn, valorOriginal, lancamentoId) {
@@ -696,13 +622,9 @@ function reverterContaCredito(btn, valorOriginal, lancamentoId) {
 
 
 
-// Garantir que os eventos de clique funcionem após ordenação
+// JavaScript otimizado - apenas eventos essenciais
 document.addEventListener('livewire:init', () => {
-    // Preservar estado de edição durante atualizações
-    Livewire.on('preservar-edicao', (data) => {
-        // O estado será preservado automaticamente pelo Livewire
-    });
-    // Função para garantir que o cursor pointer seja aplicado nas linhas
+    // Aplicar cursor pointer apenas uma vez
     function aplicarCursorPointer() {
         const rows = document.querySelectorAll('tr[wire\\:click*="toggleConferido"]');
         rows.forEach(row => {
@@ -713,48 +635,20 @@ document.addEventListener('livewire:init', () => {
     // Aplicar cursor pointer inicialmente
     aplicarCursorPointer();
     
-    // Reaplicar após ordenação
+    // Reaplicar apenas após ordenação (evento específico)
     Livewire.on('ordenacao-alterada', () => {
-        setTimeout(aplicarCursorPointer, 100);
+        setTimeout(aplicarCursorPointer, 50);
     });
     
-    // Reaplicar após qualquer atualização do Livewire
-    Livewire.on('$refresh', () => {
-        setTimeout(aplicarCursorPointer, 100);
-    });
-    
-
-    
-    // Reaplicar após qualquer atualização do componente
-    Livewire.on('$updated', () => {
-        setTimeout(aplicarCursorPointer, 100);
-    });
-    
-    // Garantir que a funcionalidade de conferência funcione após qualquer atualização
-    Livewire.on('conferido-alterado', (id, conferido) => {
-        // Atualizar visual da linha se necessário
-        const row = document.querySelector(`tr[wire\\:key="lancamento-${id}"]`);
-        if (row) {
-            if (conferido) {
-                row.classList.add('bg-green-50');
-            } else {
-                row.classList.remove('bg-green-50');
-            }
-        }
-    });
-    
-
-    
-    // Fechar menu de ações quando clicar fora
+    // Fechar menu de ações quando clicar fora (evento único)
     document.addEventListener('click', function(event) {
         const menuButtons = document.querySelectorAll('[wire\\:click*="abrirMenuAcoes"]');
         const isMenuButton = Array.from(menuButtons).some(button => button.contains(event.target));
         
         if (!isMenuButton && !event.target.closest('.absolute')) {
-            // Se clicou fora do menu e não é um botão de menu, fechar menu
             if (window.Livewire) {
-                const wireId = document.querySelector('[wire\\:id]').getAttribute('wire:id');
-                const component = window.Livewire.find(wireId);
+                const wireId = document.querySelector('[wire\\:id]')?.getAttribute('wire:id');
+                const component = wireId ? window.Livewire.find(wireId) : null;
                 if (component) {
                     component.call('fecharMenuAcoes');
                 }

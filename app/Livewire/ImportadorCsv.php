@@ -43,7 +43,9 @@ class ImportadorCsv extends Component
             $importacao = Importacao::create([
                 'nome_arquivo' => $this->arquivo->getClientOriginalName(),
                 'status' => 'processando',
-                'usuario' => 'Sistema'
+                'usuario' => auth()->user() ? auth()->user()->name : 'Sistema',
+                'user_id' => auth()->id(),
+                'empresa_id' => auth()->user() ? auth()->user()->empresa_id : null,
             ]);
 
             $this->importacaoId = $importacao->id;
@@ -96,6 +98,14 @@ class ImportadorCsv extends Component
                 $codigoFilial = $get('Código da Filial/Matriz');
                 $nomeEmpresa = $get('Nome da Empresa');
                 $numeroNota = $get('Número da Nota');
+                
+                // Se não há código da filial, usar o código da empresa
+                if (empty($codigoFilial)) {
+                    $empresa = \App\Models\Empresa::find($importacao->empresa_id);
+                    if ($empresa && $empresa->codigo_sistema) {
+                        $codigoFilial = str_pad($empresa->codigo_sistema, 7, '0', STR_PAD_LEFT);
+                    }
+                }
                 
                 if (count($dados) >= 9) {
                     // Processar terceiro se existir

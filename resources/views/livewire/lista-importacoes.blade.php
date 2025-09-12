@@ -105,7 +105,14 @@
                                 {{ $importacao->created_at->format('d/m/Y H:i') }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ $importacao->usuario }}
+                                <div class="flex flex-col">
+                                    <span class="font-medium">
+                                        {{ $importacao->usuario ?? ($importacao->user ? $importacao->user->name : 'Sistema') }}
+                                    </span>
+                                    @if($importacao->user)
+                                        <span class="text-xs text-gray-500">{{ $importacao->user->email }}</span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div class="flex space-x-2">
