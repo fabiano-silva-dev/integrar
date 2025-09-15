@@ -10,6 +10,7 @@ use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class ImportadorAvancado extends Component
 {
@@ -269,8 +270,8 @@ class ImportadorAvancado extends Component
             'total_registros' => 0,
             'registros_processados' => 0,
             'status' => 'processando',
-            'usuario' => auth()->user() ? auth()->user()->name : 'Sistema',
-            'user_id' => auth()->id(),
+            'usuario' => Auth::check() ? Auth::user()->name : 'Sistema',
+            'user_id' => Auth::check() ? Auth::id() : null,
             'empresa_id' => $empresa->id,
         ]);
 
@@ -412,7 +413,7 @@ class ImportadorAvancado extends Component
                     }
                 }
 
-                // Preparar dados para amarração (sem criar automaticamente)
+                // Preparar dados para amarração
                 $terceiroNome = trim($nomeEmpresa ?? '');
                 $historico = $historico ?? '';
                 $contaDebito = ltrim($contaDebito, '0');
@@ -449,16 +450,36 @@ class ImportadorAvancado extends Component
                     ]);
                 }
 
-                // Usar contas originais (sem amarração automática)
-                $contaDebitoFinal = $contaDebito;
-                $contaCreditoFinal = $contaCredito;
+                // Criar amarração sem detalhes da operação
+                $amarracaoId = null;
+                if (!empty($terceiroNome)) {
+                    $amarracaoId = $this->criarAmarracaoParaLancamento($terceiroNome, $contaDebito, $contaCredito, $codigoSistemaEmpresa);
+                    
+                    // Log para debug
+                    if ($linhaNumero <= 5) {
+                        Log::info("Amarração criada/encontrada:", [
+                            'linha' => $linhaNumero,
+                            'terceiro' => $terceiroNome,
+                            'conta_debito' => $contaDebito,
+                            'conta_credito' => $contaCredito,
+                            'amarracao_id' => $amarracaoId
+                        ]);
+                    }
+                } else {
+                    if ($linhaNumero <= 5) {
+                        Log::info("Nenhuma amarração criada - terceiro vazio:", [
+                            'linha' => $linhaNumero,
+                            'nome_empresa' => $nomeEmpresa
+                        ]);
+                    }
+                }
 
                 // Adicionar ao batch em vez de criar imediatamente
                 $lancamentos_batch[] = [
                     'data' => $this->formatarData($dataLancamento),
                     'usuario' => $usuario ?? '',
-                    'conta_debito' => $contaDebitoFinal,
-                    'conta_credito' => $contaCreditoFinal,
+                    'conta_debito' => $contaDebito,
+                    'conta_credito' => $contaCredito,
                     'conta_debito_original' => $contaDebito,
                     'conta_credito_original' => $contaCredito,
                     'valor' => $this->formatarValor($valor ?? 0),
@@ -468,7 +489,7 @@ class ImportadorAvancado extends Component
                     'importacao_id' => $importacao->id,
                     'empresa_id' => $empresa->id,
                     'terceiro_id' => $terceiroId,
-                    'amarracao_id' => null,
+                    'amarracao_id' => $amarracaoId,
                     'linha_arquivo' => $linhaNumero,
                     'detalhes_operacao_para_amarracao' => $detalhesOperacao,
                     'processado' => true,
@@ -656,6 +677,66 @@ class ImportadorAvancado extends Component
     {
         $this->reset(['arquivo', 'empresa_id', 'layout_selecionado', 'conta_banco', 'status_importacao', 'progresso', 'mensagem_status', 'arquivo_processado', 'caminho_csv_final', 'importacao_id', 'total_registros_importados']);
         $this->mensagem_status = 'Aguardando upload do arquivo...';
+    }
+
+    private function criarAmarracaoParaLancamento($terceiroNome, $contaDebito, $contaCredito, $codigoSistemaEmpresa)
+    {
+        try {
+            Log::info("=== INICIANDO CRIAÇÃO DE AMARRAÇÃO ===", [
+                'terceiro' => $terceiroNome,
+                'conta_debito' => $contaDebito,
+                'conta_credito' => $contaCredito,
+                'codigo_sistema' => $codigoSistemaEmpresa
+            ]);
+
+            // Verificar se já existe uma amarração similar (sem detalhes da operação)
+            $amarracaoExistente = \App\Models\Amarracao::where('terceiro', $terceiroNome)
+                ->where('conta_debito', $contaDebito)
+                ->where('conta_credito', $contaCredito)
+                ->where('codigo_sistema_empresa', $codigoSistemaEmpresa)
+                ->whereNull('detalhes_operacao') // Sem detalhes da operação
+                ->first();
+            
+            if ($amarracaoExistente) {
+                Log::info("Usando amarração existente", [
+                    'amarracao_id' => $amarracaoExistente->id,
+                    'terceiro' => $terceiroNome,
+                    'conta_debito' => $contaDebito,
+                    'conta_credito' => $contaCredito
+                ]);
+                return $amarracaoExistente->id;
+            } else {
+                // Criar nova amarração sem detalhes da operação
+                $novaAmarracao = \App\Models\Amarracao::create([
+                    'terceiro' => $terceiroNome,
+                    'detalhes_operacao' => null, // Sem detalhes da operação
+                    'conta_debito' => $contaDebito,
+                    'conta_credito' => $contaCredito,
+                    'codigo_sistema_empresa' => $codigoSistemaEmpresa,
+                ]);
+                
+                Log::info("Nova amarração criada com sucesso", [
+                    'amarracao_id' => $novaAmarracao->id,
+                    'terceiro' => $terceiroNome,
+                    'conta_debito' => $contaDebito,
+                    'conta_credito' => $contaCredito,
+                    'codigo_sistema' => $codigoSistemaEmpresa
+                ]);
+                
+                return $novaAmarracao->id;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("Erro ao criar amarração", [
+                'terceiro' => $terceiroNome,
+                'conta_debito' => $contaDebito,
+                'conta_credito' => $contaCredito,
+                'codigo_sistema' => $codigoSistemaEmpresa,
+                'erro' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return null;
+        }
     }
 
     public function abrirLancamentos()

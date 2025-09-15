@@ -113,62 +113,86 @@ class TabelaLancamentos extends Component
         $this->novoLancamento['data'] = now()->format('Y-m-d');
     }
 
+    public function atualizarFiltros()
+    {
+        // Preservar estado de edição atual
+        $editandoId = $this->editandoId;
+        $editandoCampo = $this->editandoCampo;
+        $valorEditando = $this->valorEditando;
+        
+        $this->resetPage();
+        
+        // Restaurar estado de edição após reset da página
+        if ($editandoId) {
+            $this->editandoId = $editandoId;
+            $this->editandoCampo = $editandoCampo;
+            $this->valorEditando = $valorEditando;
+        }
+    }
 
-    // Métodos otimizados para filtros - apenas os essenciais
+    // Métodos para lidar com atualizações de filtros individuais
     public function updatedFiltroData()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroHistorico()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroTerceiro()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroImportacao()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroCodigoFilial()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroContaDebito()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroContaCredito()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroContaAmbas()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroValor()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
     public function updatedFiltroConferido()
     {
-        $this->resetPage();
+        $this->atualizarFiltros();
     }
 
-    // Método simplificado para hidratação
+    // Método para preservar estado de edição durante atualizações
     public function hydrate()
     {
-        // Manter apenas o essencial para performance
+        // Preservar estado de edição durante hidratação
+        if ($this->editandoId) {
+            // Garantir que o estado de edição seja mantido
+            $this->dispatch('preservar-edicao', [
+                'editandoId' => $this->editandoId,
+                'editandoCampo' => $this->editandoCampo,
+                'valorEditando' => $this->valorEditando
+            ]);
+        }
     }
 
     public function limparFiltros()
@@ -217,36 +241,102 @@ class TabelaLancamentos extends Component
     public function salvarEdicao()
     {
         if (!$this->editandoId || !$this->editandoCampo) {
-            return;
+            // Se for confirmação de amarração, usar os dados pendentes
+            if ($this->edicaoLancamentoId && $this->edicaoCampo && $this->edicaoValor) {
+                $lancamento = Lancamento::find($this->edicaoLancamentoId);
+                $campo = $this->edicaoCampo;
+                $valorNovo = $this->edicaoValor;
+            } else {
+                return;
+            }
+        } else {
+            $lancamento = Lancamento::find($this->editandoId);
+            $campo = $this->editandoCampo;
+            $valorNovo = $this->valorEditando;
         }
         
-        $lancamento = Lancamento::find($this->editandoId);
         if (!$lancamento) {
             return;
         }
         
-        $campo = $this->editandoCampo;
-        $valorNovo = $this->valorEditando;
         $valorAnterior = $lancamento->{$campo};
         
-        // Verificar se houve mudança real
-        if ($valorAnterior === $valorNovo) {
+        // Verificar se é edição de conta débito/crédito
+        if (in_array($campo, ['conta_debito', 'conta_credito'])) {
+            $amarracao = $lancamento->amarracao;
+            
+            // Se há amarração e ainda não foi confirmado, perguntar sobre salvar na amarração
+            if ($amarracao && !$this->confirmarSalvarAmarracao && !$this->confirmarSalvarAmarracao === false) {
+                $this->edicaoLancamentoId = $lancamento->id;
+                $this->edicaoCampo = $campo;
+                $this->edicaoValor = $valorNovo;
+                $this->edicaoTipo = 'amarracao';
+                return;
+            }
+            
+            // Executar ações conforme confirmações
+            if ($this->confirmarSalvarAmarracao && $amarracao) {
+                $amarracao->{$campo} = $valorNovo;
+                $amarracao->save();
+            }
+            
+            $lancamento->{$campo} = $valorNovo;
+            $lancamento->conferido = true;
+            $lancamento->save();
+            
+            AlteracaoLog::create([
+                'lancamento_id' => $lancamento->id,
+                'campo_alterado' => $campo,
+                'valor_anterior' => $valorAnterior,
+                'valor_novo' => $valorNovo,
+                'tipo_alteracao' => 'conta',
+                'data_alteracao' => now()
+            ]);
+            
+            // Resetar confirmações
+            $this->confirmarSalvarAmarracao = false;
+            $this->edicaoPendente = null;
+            $this->edicaoTipo = '';
+            $this->edicaoCampo = '';
+            $this->edicaoValor = '';
+            $this->edicaoLancamentoId = null;
+            $this->edicaoAmarracaoId = null;
             $this->cancelarEdicao();
             return;
+        } else {
+            // Tratamento específico para data
+            if ($this->editandoCampo === 'data') {
+                try {
+                    $dataFormatada = \Carbon\Carbon::parse($this->valorEditando)->format('Y-m-d');
+                    $lancamento->data = $dataFormatada;
+                } catch (\Exception $e) {
+                    session()->flash('error', 'Data inválida. Use o formato DD/MM/AAAA.');
+                    return;
+                }
+            } 
+            // Tratamento específico para valor
+            elseif ($this->editandoCampo === 'valor') {
+                $valor = floatval($this->valorEditando);
+                if ($valor < 0) {
+                    session()->flash('error', 'O valor não pode ser negativo.');
+                    return;
+                }
+                $lancamento->valor = $valor;
+            } else {
+                $lancamento->{$this->editandoCampo} = $this->valorEditando;
+            }
         }
         
-        // Atualizar o valor
-        $lancamento->{$campo} = $valorNovo;
-        $lancamento->conferido = true;
+        $lancamento->conferido = true; // Marcar como conferido ao editar
         $lancamento->save();
 
         // Registrar alteração no log
         AlteracaoLog::create([
             'lancamento_id' => $lancamento->id,
-            'campo_alterado' => $campo,
+            'campo_alterado' => $this->editandoCampo,
             'valor_anterior' => $valorAnterior,
-            'valor_novo' => $valorNovo,
-            'tipo_alteracao' => in_array($campo, ['conta_debito', 'conta_credito']) ? 'conta' : 'outro',
+            'valor_novo' => $this->valorEditando,
+            'tipo_alteracao' => in_array($this->editandoCampo, ['conta_debito', 'conta_credito']) ? 'conta' : 'outro',
             'data_alteracao' => now()
         ]);
 
@@ -261,55 +351,6 @@ class TabelaLancamentos extends Component
         $this->editandoCampo = '';
         $this->valorEditando = '';
     }
-
-    // Método otimizado para edição rápida
-    public function salvarEdicaoRapida($lancamentoId, $campo, $valor)
-    {
-        try {
-            $lancamento = Lancamento::find($lancamentoId);
-            if (!$lancamento) {
-                return;
-            }
-
-            $valorAnterior = $lancamento->{$campo};
-            
-            // Verificar se houve mudança real
-            if ($valorAnterior === $valor) {
-                return;
-            }
-
-            // Atualizar o valor
-            $lancamento->{$campo} = $valor;
-            $lancamento->conferido = true;
-            $lancamento->save();
-
-            // Registrar alteração no log (sem validações desnecessárias)
-            AlteracaoLog::create([
-                'lancamento_id' => $lancamento->id,
-                'campo_alterado' => $campo,
-                'valor_anterior' => $valorAnterior,
-                'valor_novo' => $valor,
-                'tipo_alteracao' => in_array($campo, ['conta_debito', 'conta_credito']) ? 'conta' : 'outro',
-                'data_alteracao' => now()
-            ]);
-
-            // Atualizar cache local
-            if (!isset($this->valoresEditando[$lancamentoId])) {
-                $this->valoresEditando[$lancamentoId] = [];
-            }
-            $this->valoresEditando[$lancamentoId][$campo] = $valor;
-
-        } catch (\Exception $e) {
-            // Log silencioso para não interromper o fluxo
-            Log::warning("Erro na edição rápida", [
-                'lancamento_id' => $lancamentoId,
-                'campo' => $campo,
-                'erro' => $e->getMessage()
-            ]);
-        }
-    }
-
-
 
 
 
@@ -375,10 +416,12 @@ class TabelaLancamentos extends Component
                 $terceiroNome = $lancamento->nome_empresa ?? '';
             }
             
-            // Verificar se já existe uma amarração similar
+            // Verificar se já existe uma amarração similar (sem detalhes da operação)
             $amarracaoExistente = \App\Models\Amarracao::where('terceiro', $terceiroNome)
-                ->where('detalhes_operacao', $lancamento->detalhes_operacao_para_amarracao)
+                ->where('conta_debito', $lancamento->conta_debito)
+                ->where('conta_credito', $lancamento->conta_credito)
                 ->where('codigo_sistema_empresa', $codigoSistemaEmpresa)
+                ->whereNull('detalhes_operacao') // Sem detalhes da operação
                 ->first();
             
             if ($amarracaoExistente) {
@@ -390,13 +433,14 @@ class TabelaLancamentos extends Component
                     'lancamento_id' => $lancamento->id,
                     'amarracao_id' => $amarracaoExistente->id,
                     'terceiro' => $terceiroNome,
-                    'detalhes' => $lancamento->detalhes_operacao_para_amarracao
+                    'conta_debito' => $lancamento->conta_debito,
+                    'conta_credito' => $lancamento->conta_credito
                 ]);
             } else {
-                // Criar nova amarração
+                // Criar nova amarração sem detalhes da operação
                 $novaAmarracao = \App\Models\Amarracao::create([
                     'terceiro' => $terceiroNome,
-                    'detalhes_operacao' => $lancamento->detalhes_operacao_para_amarracao,
+                    'detalhes_operacao' => null, // Sem detalhes da operação
                     'conta_debito' => $lancamento->conta_debito,
                     'conta_credito' => $lancamento->conta_credito,
                     'codigo_sistema_empresa' => $codigoSistemaEmpresa,
@@ -410,7 +454,8 @@ class TabelaLancamentos extends Component
                     'lancamento_id' => $lancamento->id,
                     'amarracao_id' => $novaAmarracao->id,
                     'terceiro' => $terceiroNome,
-                    'detalhes' => $lancamento->detalhes_operacao_para_amarracao,
+                    'conta_debito' => $lancamento->conta_debito,
+                    'conta_credito' => $lancamento->conta_credito,
                     'codigo_sistema' => $codigoSistemaEmpresa
                 ]);
             }
@@ -420,6 +465,140 @@ class TabelaLancamentos extends Component
                 'lancamento_id' => $lancamento->id,
                 'erro' => $e->getMessage()
             ]);
+        }
+    }
+
+    public function atualizarLancamentosComAmarracoes()
+    {
+        try {
+            if (empty($this->filtroImportacao)) {
+                session()->flash('error', 'Nenhuma importação selecionada.');
+                return;
+            }
+
+            Log::info("=== INICIANDO ATUALIZAÇÃO DE LANÇAMENTOS COM AMARRAÇÕES ===", [
+                'importacao_id' => $this->filtroImportacao
+            ]);
+
+            // Buscar lançamentos da importação que têm contas vazias (débito ou crédito vazio)
+            $lancamentos = Lancamento::where('importacao_id', $this->filtroImportacao)
+                ->where(function($query) {
+                    $query->where('conta_debito', '')
+                          ->orWhere('conta_credito', '')
+                          ->orWhereNull('conta_debito')
+                          ->orWhereNull('conta_credito');
+                })
+                ->with(['terceiro', 'empresa'])
+                ->get();
+
+            Log::info("Lançamentos encontrados com contas vazias", [
+                'total' => $lancamentos->count()
+            ]);
+
+            $atualizados = 0;
+            $naoEncontrados = 0;
+
+            foreach ($lancamentos as $lancamento) {
+                // Buscar terceiro através do terceiro_id
+                $terceiroNome = '';
+                if ($lancamento->terceiro_id) {
+                    $terceiro = \App\Models\Terceiro::find($lancamento->terceiro_id);
+                    $terceiroNome = $terceiro ? $terceiro->nome : '';
+                } else {
+                    $terceiroNome = $lancamento->nome_empresa ?? '';
+                }
+
+                // Buscar código do sistema da empresa
+                $codigoSistemaEmpresa = $lancamento->empresa ? $lancamento->empresa->codigo_sistema : null;
+
+                // Verificar se tem código do sistema
+                if (empty($codigoSistemaEmpresa)) {
+                    $naoEncontrados++;
+                    continue;
+                }
+
+                // Verificar se tem terceiro - obrigatório para fazer a correspondência
+                if (empty($terceiroNome)) {
+                    $naoEncontrados++;
+                    continue;
+                }
+
+                // Buscar amarração correspondente
+                // Deve ter correspondência exata: terceiro + código do sistema + contas
+                $query = \App\Models\Amarracao::where('terceiro', $terceiroNome)
+                    ->where('codigo_sistema_empresa', $codigoSistemaEmpresa);
+
+                // Se débito está vazio, buscar amarração com débito preenchido
+                if (empty($lancamento->conta_debito)) {
+                    $query->whereNotNull('conta_debito')
+                          ->where('conta_debito', '!=', '');
+                } else {
+                    $query->where('conta_debito', $lancamento->conta_debito);
+                }
+
+                // Se crédito está vazio, buscar amarração com crédito preenchido
+                if (empty($lancamento->conta_credito)) {
+                    $query->whereNotNull('conta_credito')
+                          ->where('conta_credito', '!=', '');
+                } else {
+                    $query->where('conta_credito', $lancamento->conta_credito);
+                }
+
+                $amarracao = $query->first();
+
+                if ($amarracao) {
+                    // Atualizar lançamento com a amarração encontrada
+                    $lancamento->amarracao_id = $amarracao->id;
+                    
+                    // Atualizar contas vazias com as contas da amarração
+                    if (empty($lancamento->conta_debito) && !empty($amarracao->conta_debito)) {
+                        $lancamento->conta_debito = $amarracao->conta_debito;
+                    }
+                    if (empty($lancamento->conta_credito) && !empty($amarracao->conta_credito)) {
+                        $lancamento->conta_credito = $amarracao->conta_credito;
+                    }
+                    
+                    $lancamento->save();
+
+                    $atualizados++;
+
+                    Log::info("Lançamento atualizado com amarração", [
+                        'lancamento_id' => $lancamento->id,
+                        'amarracao_id' => $amarracao->id,
+                        'terceiro' => $terceiroNome,
+                        'conta_debito_antes' => $lancamento->getOriginal('conta_debito'),
+                        'conta_credito_antes' => $lancamento->getOriginal('conta_credito'),
+                        'conta_debito_depois' => $lancamento->conta_debito,
+                        'conta_credito_depois' => $lancamento->conta_credito
+                    ]);
+                } else {
+                    $naoEncontrados++;
+
+                    Log::info("Nenhuma amarração encontrada para lançamento", [
+                        'lancamento_id' => $lancamento->id,
+                        'terceiro' => $terceiroNome,
+                        'codigo_sistema' => $codigoSistemaEmpresa,
+                        'conta_debito' => $lancamento->conta_debito,
+                        'conta_credito' => $lancamento->conta_credito
+                    ]);
+                }
+            }
+
+            Log::info("=== ATUALIZAÇÃO CONCLUÍDA ===", [
+                'total_processados' => $lancamentos->count(),
+                'atualizados' => $atualizados,
+                'nao_encontrados' => $naoEncontrados
+            ]);
+
+            session()->flash('message', "Atualização concluída! {$atualizados} lançamentos com correspondência exata de terceiro e amarração foram atualizados, {$naoEncontrados} não encontraram amarração correspondente.");
+
+        } catch (\Exception $e) {
+            Log::error("Erro ao atualizar lançamentos com amarrações", [
+                'erro' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            session()->flash('error', 'Erro ao atualizar lançamentos: ' . $e->getMessage());
         }
     }
 
@@ -824,28 +1003,23 @@ class TabelaLancamentos extends Component
         $query = $this->getLancamentosQuery();
         $lancamentos = $query->paginate($this->perPage);
         
-        // Carregar importações com nome da empresa e usuário (cache para melhor performance)
-        static $importacoesCache = null;
-        if ($importacoesCache === null) {
-            $importacoesCache = Importacao::with(['empresa', 'user'])
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($importacao) {
-                    $empresaNome = $importacao->empresa ? $importacao->empresa->nome : 'Sem empresa';
-                    $usuarioNome = $importacao->usuario ?? ($importacao->user ? $importacao->user->name : 'Sistema');
-                    return [
-                        'id' => $importacao->id,
-                        'nome_arquivo' => $importacao->nome_arquivo,
-                        'empresa_nome' => $empresaNome,
-                        'usuario_nome' => $usuarioNome,
-                        'display_text' => "ID: {$importacao->id} - {$importacao->nome_arquivo} - {$empresaNome} - {$usuarioNome}"
-                    ];
-                });
-        }
+        // Carregar importações com nome da empresa
+        $importacoes = Importacao::with('empresa')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($importacao) {
+                $empresaNome = $importacao->empresa ? $importacao->empresa->nome : 'Sem empresa';
+                return [
+                    'id' => $importacao->id,
+                    'nome_arquivo' => $importacao->nome_arquivo,
+                    'empresa_nome' => $empresaNome,
+                    'display_text' => "ID: {$importacao->id} - {$importacao->nome_arquivo} - {$empresaNome}"
+                ];
+            });
 
         return view('livewire.tabela-lancamentos', [
             'lancamentos' => $lancamentos,
-            'importacoes' => $importacoesCache
+            'importacoes' => $importacoes
         ]);
     }
 

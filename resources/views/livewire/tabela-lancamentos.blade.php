@@ -73,7 +73,17 @@
             <div class="mr-2">
                 <button wire:click="limparFiltros" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-xs shadow transition-all">Limpar</button>
             </div>
-            <div>
+            <div class="flex gap-2">
+                @if($filtroImportacao)
+                    <button wire:click="atualizarLancamentosComAmarracoes" 
+                            wire:confirm="Tem certeza que deseja atualizar todos os lançamentos em branco desta importação conforme as amarrações existentes?"
+                            class="px-5 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Atualizar com Amarrações
+                    </button>
+                @endif
                 <button wire:click="abrirModalNovoLancamento" class="px-5 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
