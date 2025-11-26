@@ -27,6 +27,8 @@ class ExportadorContabil extends Component
     public $usuario = 'INTEGRAR02';
     public $empresas = [];
     public $empresaSelecionada = null;
+    public $lancamentosComContasVazias = [];
+    public $mostrarAvisoContasVazias = false;
 
     public function mount()
     {
@@ -123,6 +125,9 @@ class ExportadorContabil extends Component
                 $this->dataFim = $importacao->data_final ?? $this->dataFim;
             }
             
+            // Verificar lançamentos com contas vazias
+            $this->verificarLancamentosComContasVazias();
+            
             // Forçar atualização da interface
             $this->dispatch('$refresh');
             
@@ -170,6 +175,31 @@ class ExportadorContabil extends Component
         return $query->count();
     }
 
+    public function verificarLancamentosComContasVazias()
+    {
+        $query = \App\Models\Lancamento::query();
+        
+        if ($this->importacaoId) {
+            $query->where('importacao_id', $this->importacaoId);
+        } else {
+            if ($this->dataInicio && $this->dataFim) {
+                $query->whereBetween('data', [$this->dataInicio, $this->dataFim]);
+            }
+        }
+        
+        // Buscar lançamentos com conta débito ou crédito vazias
+        $this->lancamentosComContasVazias = $query->where(function($q) {
+            $q->whereNull('conta_debito')
+              ->orWhere('conta_debito', '')
+              ->orWhereNull('conta_credito')
+              ->orWhere('conta_credito', '');
+        })->get();
+        
+        $this->mostrarAvisoContasVazias = count($this->lancamentosComContasVazias) > 0;
+        
+        return $this->lancamentosComContasVazias;
+    }
+
     public function updatedEmpresaSelecionada($value)
     {
         Log::info("updatedEmpresaSelecionada chamado", ['value' => $value]);
@@ -193,6 +223,20 @@ class ExportadorContabil extends Component
             }
         } else {
             Log::info("Valor vazio recebido em updatedEmpresaSelecionada");
+        }
+    }
+
+    public function updatedDataInicio($value)
+    {
+        if ($this->dataInicio && $this->dataFim) {
+            $this->verificarLancamentosComContasVazias();
+        }
+    }
+
+    public function updatedDataFim($value)
+    {
+        if ($this->dataInicio && $this->dataFim) {
+            $this->verificarLancamentosComContasVazias();
         }
     }
 
@@ -286,6 +330,9 @@ class ExportadorContabil extends Component
         try {
             Log::info('Buscando lançamentos para exportação');
             
+            // Verificar se há lançamentos com contas vazias
+            $this->verificarLancamentosComContasVazias();
+            
             $query = \App\Models\Lancamento::query();
             if ($this->importacaoId) {
                 $query->where('importacao_id', $this->importacaoId);
@@ -326,11 +373,18 @@ class ExportadorContabil extends Component
             
             $this->arquivoGerado = $nomeArquivo;
             $this->quantidadeRegistros = $lancamentos->count();
-            $this->mensagem = "Arquivo gerado com sucesso! {$this->quantidadeRegistros} lançamento(s) exportado(s).";
+            
+            // Mensagem de sucesso com aviso sobre contas vazias
+            if ($this->mostrarAvisoContasVazias) {
+                $this->mensagem = "Arquivo gerado com sucesso! {$this->quantidadeRegistros} lançamento(s) exportado(s). ATENÇÃO: " . count($this->lancamentosComContasVazias) . " lançamento(s) possuem conta débito ou crédito vazias.";
+            } else {
+                $this->mensagem = "Arquivo gerado com sucesso! {$this->quantidadeRegistros} lançamento(s) exportado(s).";
+            }
             
             Log::info('Exportação concluída com sucesso', [
                 'arquivo' => $nomeArquivo,
-                'lançamentos' => $lancamentos->count()
+                'lançamentos' => $lancamentos->count(),
+                'contas_vazias' => count($this->lancamentosComContasVazias)
             ]);
             
         } catch (\Exception $e) {

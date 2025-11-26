@@ -6,11 +6,17 @@ from datetime import datetime
 
 def valor_para_float(valor):
     """Converte valor para float, tratando formato brasileiro"""
-    if pd.isna(valor) or valor == '' or valor == '""':
+    # Tratar valores None, NaN, vazios ou strings 'nan'
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return 0.0
+    
+    valor_str = str(valor).strip()
+    
+    if valor_str == '' or valor_str == '""' or valor_str.lower() == 'nan':
         return 0.0
     
     # Remove aspas e R$ se existirem
-    valor_str = str(valor).replace('R$', '').replace('"', '').strip()
+    valor_str = valor_str.replace('R$', '').replace('"', '').strip()
     
     # Se estiver vazio após limpeza
     if not valor_str:
@@ -33,10 +39,14 @@ def formatar_valor_brl(valor):
 
 def processar_documento(documento):
     """Processa documento conforme regras especificadas"""
-    if pd.isna(documento) or documento == '' or documento == '""':
+    # Tratar valores None, NaN, vazios ou strings 'nan'
+    if documento is None or (isinstance(documento, float) and pd.isna(documento)):
         return ''
     
     documento_str = str(documento).strip()
+    
+    if documento_str == '' or documento_str == '""' or documento_str.lower() == 'nan':
+        return ''
     
     # Se começar com número, adiciona NF
     if documento_str and documento_str[0].isdigit():
@@ -60,102 +70,145 @@ def gerar_historico(tipo, documento, pessoa):
 def processar_registros(csv_path, output_path=None, conta_banco=None):
     """Processa arquivo registros.csv e gera CSV no formato padrão"""
     
-    # Ler o arquivo CSV, pulando a primeira linha (Cadastros)
-    df = pd.read_csv(csv_path, sep=';', skiprows=1)
-    
-    # Usar conta do banco fornecida ou padrão
-    conta_banco_padrao = conta_banco if conta_banco else '1.1.01.001'
-    
-    lancamentos = []
-    
-    # Processar apenas linhas que começam com data (formato DD/MM/YYYY)
-    for index, row in df.iterrows():
-        data_str = str(row['Data']).strip()
+    try:
+        # Tentar ler o arquivo com diferentes encodings
+        encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+        df = None
+        erro_ultimo = None
         
-        # Verificar se a linha começa com data válida
-        if not re.match(r'^\d{2}/\d{2}/\d{4}$', data_str):
-            continue
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(csv_path, sep=';', skiprows=1, encoding=encoding, dtype=str, keep_default_na=False, on_bad_lines='skip')
+                # Verificar se conseguiu ler pelo menos algumas colunas
+                if len(df.columns) > 0:
+                    break
+            except (UnicodeDecodeError, pd.errors.ParserError, Exception) as e:
+                erro_ultimo = str(e)
+                continue
+        
+        if df is None or len(df.columns) == 0:
+            raise Exception(f"Não foi possível ler o arquivo com nenhum encoding testado. Último erro: {erro_ultimo}")
+        
+        # Verificar se as colunas esperadas existem
+        colunas_esperadas = ['Data', 'Pessoa', 'Documento', 'Entrada (R$)', 'Saída (R$)']
+        colunas_faltando = [col for col in colunas_esperadas if col not in df.columns]
+        
+        if colunas_faltando:
+            raise Exception(f"Colunas esperadas não encontradas no arquivo: {', '.join(colunas_faltando)}. Colunas encontradas: {', '.join(df.columns)}")
+        
+        # Usar conta do banco fornecida ou padrão
+        conta_banco_padrao = conta_banco if conta_banco else '1.1.01.001'
+        
+        lancamentos = []
+        
+        # Processar apenas linhas que começam com data (formato DD/MM/YYYY)
+        for index, row in df.iterrows():
+            try:
+                # Obter valor da coluna Data, tratando valores vazios
+                data_raw = row.get('Data', '')
+                if not data_raw or str(data_raw).strip() == '' or str(data_raw).lower() == 'nan':
+                    continue
+                
+                data_str = str(data_raw).strip()
+                
+                # Verificar se a linha começa com data válida
+                if not re.match(r'^\d{2}/\d{2}/\d{4}$', data_str):
+                    continue
+                    
+                # Verificar se não é linha de total
+                if data_str.lower() == 'total' or 'Total' in data_str:
+                    continue
+                
+                # Obter valores das outras colunas, tratando valores vazios
+                pessoa_raw = row.get('Pessoa', '')
+                pessoa = str(pessoa_raw).strip() if pessoa_raw and str(pessoa_raw).strip() != '' and str(pessoa_raw).lower() != 'nan' else ''
+                
+                documento_raw = row.get('Documento', '')
+                documento = str(documento_raw).strip() if documento_raw and str(documento_raw).strip() != '' and str(documento_raw).lower() != 'nan' else ''
+                
+                entrada_raw = row.get('Entrada (R$)', '')
+                saida_raw = row.get('Saída (R$)', '')
+                
+                entrada = valor_para_float(entrada_raw)
+                saida = valor_para_float(saida_raw)
+                
+                # Processar entrada (se houver valor)
+                if entrada > 0:
+                    lancamentos.append({
+                        'Data': data_str,
+                        'Histórico': gerar_historico('entrada', documento, pessoa),
+                        'Conta Débito': conta_banco_padrao,  # Conta do banco
+                        'Conta Crédito': '',  # Vazio para usuário preencher
+                        'Valor': formatar_valor_brl(entrada),
+                        'Nome da Empresa': pessoa  # Pessoa do CSV para coluna Terceiro
+                    })
+                
+                # Processar saída (se houver valor)
+                if saida > 0:
+                    lancamentos.append({
+                        'Data': data_str,
+                        'Histórico': gerar_historico('saida', documento, pessoa),
+                        'Conta Débito': '',  # Vazio para usuário preencher
+                        'Conta Crédito': conta_banco_padrao,  # Conta do banco
+                        'Valor': formatar_valor_brl(saida),
+                        'Nome da Empresa': pessoa  # Pessoa do CSV para coluna Terceiro
+                    })
+            except Exception as e:
+                # Continuar processando outras linhas mesmo se uma falhar
+                print(f"Aviso: Erro ao processar linha {index}: {e}", file=sys.stderr)
+                continue
+    
+        # Criar DataFrame de saída
+        if lancamentos:
+            df_saida = pd.DataFrame(lancamentos)
             
-        # Verificar se não é linha de total
-        if data_str == 'Total':
-            continue
+            # Ordenar por data
+            df_saida['Data'] = pd.to_datetime(df_saida['Data'], format='%d/%m/%Y', errors='coerce')
+            df_saida = df_saida.sort_values('Data')
+            df_saida['Data'] = df_saida['Data'].dt.strftime('%d/%m/%Y')
             
-        pessoa = str(row['Pessoa']).strip() if not pd.isna(row['Pessoa']) else ''
-        documento = str(row['Documento']).strip() if not pd.isna(row['Documento']) else ''
-        entrada = valor_para_float(row['Entrada (R$)'])
-        saida = valor_para_float(row['Saída (R$)'])
-        
-        # Processar entrada (se houver valor)
-        if entrada > 0:
-            lancamentos.append({
-                'Data': data_str,
-                'Histórico': gerar_historico('entrada', documento, pessoa),
-                'Conta Débito': conta_banco_padrao,  # Conta do banco
-                'Conta Crédito': '',  # Vazio para usuário preencher
-                'Valor': formatar_valor_brl(entrada),
-                'Nome da Empresa': pessoa  # Pessoa do CSV para coluna Terceiro
+            # Renomear colunas para o formato esperado pelo importador
+            df_saida = df_saida.rename(columns={
+                'Data': 'Data do Lançamento',
+                'Histórico': 'Histórico',
+                'Conta Débito': 'Conta Débito',
+                'Conta Crédito': 'Conta Crédito',
+                'Valor': 'Valor do Lançamento'
             })
-        
-        # Processar saída (se houver valor)
-        if saida > 0:
-            lancamentos.append({
-                'Data': data_str,
-                'Histórico': gerar_historico('saida', documento, pessoa),
-                'Conta Débito': '',  # Vazio para usuário preencher
-                'Conta Crédito': conta_banco_padrao,  # Conta do banco
-                'Valor': formatar_valor_brl(saida),
-                'Nome da Empresa': pessoa  # Pessoa do CSV para coluna Terceiro
-            })
-    
-    # Criar DataFrame de saída
-    if lancamentos:
-        df_saida = pd.DataFrame(lancamentos)
-        
-        # Ordenar por data
-        df_saida['Data'] = pd.to_datetime(df_saida['Data'], format='%d/%m/%Y')
-        df_saida = df_saida.sort_values('Data')
-        df_saida['Data'] = df_saida['Data'].dt.strftime('%d/%m/%Y')
-        
-        # Renomear colunas para o formato esperado pelo importador
-        df_saida = df_saida.rename(columns={
-            'Data': 'Data do Lançamento',
-            'Histórico': 'Histórico',
-            'Conta Débito': 'Conta Débito',
-            'Conta Crédito': 'Conta Crédito',
-            'Valor': 'Valor do Lançamento'
-        })
-        
-        # Adicionar colunas obrigatórias que estão faltando
-        df_saida['Usuário'] = 'Sistema'
-        df_saida['Código da Filial/Matriz'] = '0000001'
-        df_saida['Número da Nota'] = ''
-        
-        # Reordenar colunas na sequência esperada
-        colunas_ordenadas = [
-            'Data do Lançamento',
-            'Usuário', 
-            'Conta Débito',
-            'Conta Crédito',
-            'Valor do Lançamento',
-            'Histórico',
-            'Código da Filial/Matriz',
-            'Nome da Empresa',
-            'Número da Nota'
-        ]
-        df_saida = df_saida[colunas_ordenadas]
-        
-        # Definir caminho de saída
-        if not output_path:
-            base_name = os.path.basename(csv_path)
-            nome_sem_ext = os.path.splitext(base_name)[0]
-            output_path = f"padrao-{nome_sem_ext}.csv"
-        
-        # Salvar arquivo
-        df_saida.to_csv(output_path, index=False, sep=';')
-        print(f"Arquivo CSV gerado: {output_path}")
-        print(f"Total de lançamentos processados: {len(lancamentos)}")
-    else:
-        print("Nenhum lançamento válido encontrado no arquivo.")
+            
+            # Adicionar colunas obrigatórias que estão faltando
+            df_saida['Usuário'] = 'Sistema'
+            df_saida['Código da Filial/Matriz'] = '0000001'
+            df_saida['Número da Nota'] = ''
+            
+            # Reordenar colunas na sequência esperada
+            colunas_ordenadas = [
+                'Data do Lançamento',
+                'Usuário', 
+                'Conta Débito',
+                'Conta Crédito',
+                'Valor do Lançamento',
+                'Histórico',
+                'Código da Filial/Matriz',
+                'Nome da Empresa',
+                'Número da Nota'
+            ]
+            df_saida = df_saida[colunas_ordenadas]
+            
+            # Definir caminho de saída
+            if not output_path:
+                base_name = os.path.basename(csv_path)
+                nome_sem_ext = os.path.splitext(base_name)[0]
+                output_path = f"padrao-{nome_sem_ext}.csv"
+            
+            # Salvar arquivo
+            df_saida.to_csv(output_path, index=False, sep=';', encoding='utf-8')
+            print(f"Arquivo CSV gerado: {output_path}")
+            print(f"Total de lançamentos processados: {len(lancamentos)}")
+        else:
+            raise Exception("Nenhum lançamento válido encontrado no arquivo.")
+    except Exception as e:
+        raise Exception(f"Erro ao processar arquivo: {str(e)}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
