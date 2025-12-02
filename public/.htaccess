@@ -1,25 +1,35 @@
+# Proteção contra acesso a arquivos sensíveis
+# Bloquear acesso a arquivos de backup e configuração
+
+<FilesMatch "\.(sql|zip|tar|gz|rar|7z|bak|backup|env|log)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Bloquear acesso a diretórios específicos
 <IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
-
     RewriteEngine On
+    
+    # Bloquear acesso a arquivos de backup
+    RewriteRule ^.*\.(sql|zip|tar|gz|rar|7z|bak|backup)$ - [F,L]
+    
+    # Bloquear acesso a arquivos .env
+    RewriteRule ^.*\.env$ - [F,L]
+    
+    # Bloquear acesso a diretórios de backup
+    RewriteRule ^backups?/ - [F,L]
+    
+    # Bloquear acesso a arquivos de log
+    RewriteRule ^.*\.log$ - [F,L]
+</IfModule>
 
-    # Handle Authorization Header
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+# Desabilitar listagem de diretórios
+Options -Indexes
 
-    # Handle X-XSRF-Token Header
-    RewriteCond %{HTTP:x-xsrf-token} .
-    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
-
-    # Redirect Trailing Slashes If Not A Folder...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ %1 [L,R=301]
-
-    # Send Requests To Front Controller...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
+# Proteção adicional
+<IfModule mod_headers.c>
+    # Prevenir hotlinking
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
 </IfModule>

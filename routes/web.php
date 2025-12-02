@@ -36,27 +36,34 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/empresas-operadoras', App\Livewire\EmpresasOperadorasForm::class)->name('empresas-operadoras');
 });
 
-// Rota para download de arquivos (fora do middleware de autenticação)
-Route::get('/download/{arquivo}', function ($arquivo) {
-    $path = storage_path("app/exports/{$arquivo}");
-    
-    if (!file_exists($path)) {
-        abort(404, 'Arquivo não encontrado');
-    }
-    
-    return response()->download($path);
-})->name('download.arquivo');
+// Rotas de download protegidas por autenticação
+Route::middleware(['auth'])->group(function () {
+    Route::get('/download/{arquivo}', function ($arquivo) {
+        // Validar nome do arquivo para prevenir path traversal
+        $arquivo = basename($arquivo);
+        
+        $path = storage_path("app/exports/{$arquivo}");
+        
+        if (!file_exists($path)) {
+            abort(404, 'Arquivo não encontrado');
+        }
+        
+        return response()->download($path);
+    })->name('download.arquivo');
 
-// Rota para download de arquivos da API
-Route::get('/download-arquivo/{arquivo}', function ($arquivo) {
-    $path = storage_path("app/exports/{$arquivo}");
-    
-    if (!file_exists($path)) {
-        abort(404, 'Arquivo não encontrado');
-    }
-    
-    return response()->download($path);
-})->name('download.arquivo.api');
+    Route::get('/download-arquivo/{arquivo}', function ($arquivo) {
+        // Validar nome do arquivo para prevenir path traversal
+        $arquivo = basename($arquivo);
+        
+        $path = storage_path("app/exports/{$arquivo}");
+        
+        if (!file_exists($path)) {
+            abort(404, 'Arquivo não encontrado');
+        }
+        
+        return response()->download($path);
+    })->name('download.arquivo.api');
+});
 
 
 
