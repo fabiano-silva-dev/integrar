@@ -53,15 +53,50 @@ class ConversorLaravel:
                 if df is None:
                     raise Exception("Não foi possível decodificar o arquivo CSV com nenhum encoding testado")
             else:
-                # Para arquivos Excel, usar apenas openpyxl (mais compatível)
-                try:
-                    df = pd.read_excel(arquivo_entrada, engine='openpyxl')
-                except Exception as e:
-                    # Se openpyxl falhar, tentar sem especificar engine
+                # Para arquivos Excel: openpyxl (.xlsx), xlrd (.xls), ou auto-detect
+                df = None
+                extensao_lower = extensao
+                
+                # Tentativa 1: .xlsx com openpyxl
+                if extensao_lower == '.xlsx':
                     try:
-                        df = pd.read_excel(arquivo_entrada)
-                    except Exception as e2:
-                        raise Exception(f"Erro ao ler arquivo Excel: {str(e2)}")
+                        df = pd.read_excel(arquivo_entrada, engine='openpyxl')
+                    except Exception as e:
+                        raise Exception(f"Erro ao ler XLSX: {str(e)}")
+                
+                # Tentativa 2: .xls - tentar xlrd, depois auto-detect (Excel 2003 XML, etc)
+                elif extensao_lower == '.xls':
+                    engines_tentados = []
+                    # xlrd suporta .xls binário (xlrd < 2.0)
+                    try:
+                        df = pd.read_excel(arquivo_entrada, engine='xlrd')
+                        engines_tentados.append('xlrd')
+                    except Exception as e1:
+                        engines_tentados.append(f'xlrd: {str(e1)}')
+                        # Fallback: pandas auto-detect (pode funcionar com Excel 2003 XML)
+                        try:
+                            df = pd.read_excel(arquivo_entrada)
+                            engines_tentados.append('auto')
+                        except Exception as e2:
+                            # Última tentativa: openpyxl (alguns .xls são na verdade XML)
+                            try:
+                                df = pd.read_excel(arquivo_entrada, engine='openpyxl')
+                                engines_tentados.append('openpyxl')
+                            except Exception as e3:
+                                raise Exception(
+                                    f"Não foi possível ler o arquivo .xls. "
+                                    f"Tente salvar como .xlsx no Excel. Detalhes: {str(e2)}"
+                                )
+                
+                # Tentativa 3: outras extensões Excel
+                else:
+                    try:
+                        df = pd.read_excel(arquivo_entrada, engine='openpyxl')
+                    except Exception:
+                        try:
+                            df = pd.read_excel(arquivo_entrada)
+                        except Exception as e2:
+                            raise Exception(f"Erro ao ler arquivo Excel: {str(e2)}")
             
             # Detectar tipos
             tipos = self._detectar_tipos(df)

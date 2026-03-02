@@ -21,7 +21,7 @@ class ImportadorPersonalizado extends Component
 {
     use WithFileUploads;
 
-    #[Rule('required|file|mimes:csv,xls,xlsx|max:10240')]
+    #[Rule('required|file|extensions:csv,xls,xlsx|max:10240')]
     public $arquivo;
 
     public $colunasArquivo = [];
@@ -31,6 +31,7 @@ class ImportadorPersonalizado extends Component
     public $tipoArquivo = '';
     public $delimitador = ',';
     public $temCabecalho = true;
+    public $linhaCabecalho = 1; // Número da linha do cabeçalho (1-indexed)
     public $colunaDescricao = '';
     public $aplicarRegrasAutomaticas = false;
     public $layoutSelecionado = null;
@@ -532,6 +533,24 @@ class ImportadorPersonalizado extends Component
         $this->delimitador = $melhorDelimitador;
     }
 
+    /**
+     * Lê a linha do cabeçalho de um arquivo CSV, pulando as primeiras N linhas.
+     * @param resource $handle Handle do arquivo aberto
+     * @return array|false Linha do cabeçalho ou false
+     */
+    private function lerLinhaCabecalhoCsv($handle)
+    {
+        $linhaNumero = 0;
+        while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
+            $linhaNumero++;
+            if ($linhaNumero < $this->linhaCabecalho) {
+                continue;
+            }
+            return $linha;
+        }
+        return false;
+    }
+
     public function lerCabecalho()
     {
         $extensao = $this->tipoArquivo;
@@ -560,9 +579,9 @@ class ImportadorPersonalizado extends Component
             );
             
             if ($resultado['sucesso']) {
-                // Ler o cabeçalho do CSV convertido
+                // Ler o cabeçalho do CSV convertido (pulando linhas iniciais se necessário)
                 $handle = fopen($resultado['arquivo_csv'], 'r');
-                $cabecalho = fgetcsv($handle, 0, $this->delimitador);
+                $cabecalho = $this->lerLinhaCabecalhoCsv($handle);
                 fclose($handle);
                 
                 if ($this->temCabecalho && $cabecalho) {
@@ -629,7 +648,7 @@ class ImportadorPersonalizado extends Component
                 throw new \Exception('Não foi possível abrir o arquivo CSV');
             }
             
-            $cabecalho = fgetcsv($handle, 0, $this->delimitador);
+            $cabecalho = $this->lerLinhaCabecalhoCsv($handle);
             
             Log::info('Cabeçalho lido do CSV:', ['cabecalho' => $cabecalho, 'tem_cabecalho' => $this->temCabecalho]);
 
@@ -682,9 +701,9 @@ class ImportadorPersonalizado extends Component
             );
             
             if ($resultado['sucesso']) {
-                // Ler o cabeçalho do CSV convertido
+                // Ler o cabeçalho do CSV convertido (pulando linhas iniciais se necessário)
                 $handle = fopen($resultado['arquivo_csv'], 'r');
-                $cabecalho = fgetcsv($handle, 0, $this->delimitador);
+                $cabecalho = $this->lerLinhaCabecalhoCsv($handle);
                 fclose($handle);
                 
                 if ($this->temCabecalho && $cabecalho) {
@@ -735,9 +754,10 @@ class ImportadorPersonalizado extends Component
         $highestColumn = $worksheet->getHighestColumn();
         $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
 
+        $linhaCabecalho = $this->linhaCabecalho;
         $colunas = [];
         for ($col = 1; $col <= $highestColumnIndex; $col++) {
-            $cellValue = $worksheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . '1')->getValue();
+            $cellValue = $worksheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $linhaCabecalho)->getValue();
             
             if ($this->temCabecalho && $cellValue) {
                 $colunas[] = trim($cellValue);
@@ -750,6 +770,8 @@ class ImportadorPersonalizado extends Component
         
         // Carregar prévia automática de 10 linhas
         $this->carregarPreviaAutomaticaExcel($worksheet);
+        
+        $this->step = 2;
     }
     
     private function carregarPreviaAutomaticaCsvConvertido($arquivoCsv)
@@ -760,22 +782,48 @@ class ImportadorPersonalizado extends Component
         $handle = fopen($arquivoCsv, 'r');
         $linhaNumero = 0;
         $maxLinhas = 10;
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0); // Primeira linha de dados
         
-        while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false && $linhaNumero < $maxLinhas) {
-            if ($linhaNumero === 0 && $this->temCabecalho) {
-                $linhaNumero++;
-                continue; // Pular cabeçalho
+        while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
+            $linhaNumero++;
+            if ($linhaNumero < $linhaInicialDados) {
+                continue; // Pular linhas antes dos dados
+            }
+            if ($linhaNumero > $linhaInicialDados + $maxLinhas - 1) {
+                break;
             }
             
             $this->totalLinhas++;
             $this->dadosPrevia[] = $linha;
-            $linhaNumero++;
         }
         
         fclose($handle);
         
         // Atualizar o indicador de processamento para mostrar que está carregando a prévia
         $this->dispatch('previa-carregada');
+    }
+
+    public function updatedLinhaCabecalho()
+    {
+        $this->recarregarCabecalhoEPrevia();
+    }
+
+    public function updatedTemCabecalho()
+    {
+        $this->recarregarCabecalhoEPrevia();
+    }
+
+    private function recarregarCabecalhoEPrevia()
+    {
+        if (!$this->arquivo || $this->step !== 2) {
+            return;
+        }
+        try {
+            $this->lerCabecalho();
+        } catch (\Exception $e) {
+            Log::error('Erro ao recarregar cabeçalho:', ['erro' => $e->getMessage()]);
+            session()->flash('error', 'Erro ao recarregar: ' . $e->getMessage());
+        }
     }
 
     public function carregarLayout($layoutId)
@@ -788,6 +836,7 @@ class ImportadorPersonalizado extends Component
         $this->tipoArquivo = $layout->tipo_arquivo;
         $this->delimitador = $layout->delimitador ?? ',';
         $this->temCabecalho = $layout->tem_cabecalho;
+        $this->linhaCabecalho = $layout->configuracoes['linha_cabecalho'] ?? ($layout->configuracoes['linhas_pular_cabecalho'] ?? 0) + 1;
 
         // Carregar mapeamento de colunas
         $this->mapeamentoColunas = $layout->getMapeamentoColunas();
@@ -800,21 +849,22 @@ class ImportadorPersonalizado extends Component
         $this->dadosPrevia = [];
         $this->totalLinhas = 0;
         
-        // Voltar ao início do arquivo se necessário
         rewind($handle);
-        
         $linhaNumero = 0;
         $maxLinhas = 10;
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
         
-        while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false && $linhaNumero < $maxLinhas) {
-            if ($linhaNumero === 0 && $this->temCabecalho) {
-                $linhaNumero++;
-                continue; // Pular cabeçalho
+        while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
+            $linhaNumero++;
+            if ($linhaNumero < $linhaInicialDados) {
+                continue;
+            }
+            if ($linhaNumero > $linhaInicialDados + $maxLinhas - 1) {
+                break;
             }
             
             $this->totalLinhas++;
             $this->dadosPrevia[] = $linha;
-            $linhaNumero++;
         }
         
         // Atualizar o indicador de processamento para mostrar que está carregando a prévia
@@ -828,7 +878,7 @@ class ImportadorPersonalizado extends Component
         
         $highestRow = $worksheet->getHighestRow();
         $maxLinhas = 10;
-        $linhaInicial = $this->temCabecalho ? 2 : 1;
+        $linhaInicial = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
         
         for ($row = $linhaInicial; $row <= min($highestRow, $linhaInicial + $maxLinhas - 1); $row++) {
             $linha = [];
@@ -950,13 +1000,13 @@ class ImportadorPersonalizado extends Component
     {
         $handle = fopen($this->arquivo->getRealPath(), 'r');
         $linhaNumero = 0;
-        $maxLinhas = 10; // Mostrar apenas 10 linhas na prévia
+        $maxLinhas = 10;
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
 
         while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
             $linhaNumero++;
-            
-            if ($linhaNumero === 1 && $this->temCabecalho) {
-                continue; // Pular cabeçalho
+            if ($linhaNumero < $linhaInicialDados) {
+                continue;
             }
 
             $this->totalLinhas++;
@@ -1015,7 +1065,7 @@ class ImportadorPersonalizado extends Component
         $highestRow = $worksheet->getHighestRow();
         $maxLinhas = 10;
 
-        $linhaInicial = $this->temCabecalho ? 2 : 1;
+        $linhaInicial = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
         
         for ($row = $linhaInicial; $row <= min($highestRow, $linhaInicial + $maxLinhas - 1); $row++) {
             $linha = [];
@@ -1045,12 +1095,12 @@ class ImportadorPersonalizado extends Component
         $handle = fopen($arquivoCsv, 'r');
         $linhaNumero = 0;
         $maxLinhas = 10;
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
 
         while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
             $linhaNumero++;
-            
-            if ($linhaNumero === 1 && $this->temCabecalho) {
-                continue; // Pular cabeçalho
+            if ($linhaNumero < $linhaInicialDados) {
+                continue;
             }
 
             $this->totalLinhas++;
@@ -1338,10 +1388,19 @@ class ImportadorPersonalizado extends Component
             ->where('empresa_id', $empresaId)
             ->first();
 
+        $configuracoes = array_merge(($layoutExistente && $layoutExistente->configuracoes) ? $layoutExistente->configuracoes : [], [
+            'linha_cabecalho' => (int) $this->linhaCabecalho,
+        ]);
+
         if ($layoutExistente) {
             // Se existe, usar o layout existente e atualizar as colunas
             $layout = $layoutExistente;
             $this->layoutAtualizado = true;
+            $layout->update([
+                'delimitador' => $this->delimitador,
+                'tem_cabecalho' => $this->temCabecalho,
+                'configuracoes' => $configuracoes,
+            ]);
             
             // Remover colunas existentes
             LayoutColuna::where('layout_importacao_id', $layout->id)->delete();
@@ -1353,6 +1412,7 @@ class ImportadorPersonalizado extends Component
                 'tipo_arquivo' => $this->tipoArquivo,
                 'delimitador' => $this->delimitador,
                 'tem_cabecalho' => $this->temCabecalho,
+                'configuracoes' => $configuracoes,
                 'empresa_id' => $empresaId,
                 'user_id' => auth()->id(),
             ]);
@@ -1394,10 +1454,11 @@ class ImportadorPersonalizado extends Component
         $linhaNumero = 0;
         $linhasProcessadas = 0;
 
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
+
         while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
             $linhaNumero++;
-            
-            if ($linhaNumero === 1 && $this->temCabecalho) {
+            if ($linhaNumero < $linhaInicialDados) {
                 continue;
             }
 
@@ -1459,7 +1520,7 @@ class ImportadorPersonalizado extends Component
         $highestRow = $worksheet->getHighestRow();
         $linhasProcessadas = 0;
 
-        $linhaInicial = $this->temCabecalho ? 2 : 1;
+        $linhaInicial = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
         
         for ($row = $linhaInicial; $row <= $highestRow; $row++) {
             $linha = [];
@@ -1485,11 +1546,11 @@ class ImportadorPersonalizado extends Component
         $handle = fopen($arquivoCsv, 'r');
         $linhaNumero = 0;
         $linhasProcessadas = 0;
+        $linhaInicialDados = $this->linhaCabecalho + ($this->temCabecalho ? 1 : 0);
 
         while (($linha = fgetcsv($handle, 0, $this->delimitador)) !== false) {
             $linhaNumero++;
-            
-            if ($linhaNumero === 1 && $this->temCabecalho) {
+            if ($linhaNumero < $linhaInicialDados) {
                 continue;
             }
 

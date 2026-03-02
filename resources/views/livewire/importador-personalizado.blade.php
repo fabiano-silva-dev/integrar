@@ -67,7 +67,20 @@
                 <!-- Step 1: Upload -->
                 @if($step == 1)
                 <div class="space-y-6">
-                                    @if($processando)
+                    @if (session()->has('error'))
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex items-center">
+                            <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">Erro ao processar arquivo</h3>
+                                <p class="mt-1 text-sm text-red-700">{{ session('error') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                    @if($processando)
                 <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div class="flex items-center">
                         <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-3"></div>
@@ -289,9 +302,14 @@
                             @endif
                             <div>
                                 <label class="flex items-center">
-                                    <input wire:model="temCabecalho" type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                                    <span class="ml-2 text-sm text-gray-700">Primeira linha é cabeçalho</span>
+                                    <input wire:model.live="temCabecalho" type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2 text-sm text-gray-700">Arquivo possui linha de cabeçalho</span>
                                 </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Número da linha do cabeçalho</label>
+                                <input wire:model.live.debounce.300ms="linhaCabecalho" type="number" min="1" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="1">
+                                <p class="mt-1 text-xs text-gray-500">Linha onde estão os nomes das colunas (ex: 7 = cabeçalho na 7ª linha)</p>
                             </div>
                             <div>
                                 <label class="flex items-center">
@@ -360,11 +378,26 @@
                         <h3 class="text-lg font-semibold mb-4">Regras de Amarração</h3>
                         <div class="space-y-4">
                             <div class="flex justify-between items-center">
-                                <p class="text-sm text-gray-600">Configure regras para mapeamento automático ou manual</p>
+                                <div class="flex items-start gap-2">
+                                    <p class="text-sm text-gray-600">Configure regras para mapeamento automático ou manual</p>
+                                    <div class="group relative flex-shrink-0">
+                                        <svg class="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <div class="absolute left-6 top-0 hidden group-hover:block w-72 p-3 bg-gray-800 text-white text-xs rounded-lg shadow-lg z-10">
+                                            <p class="font-semibold mb-2">Automática:</p>
+                                            <p class="mb-2">Os valores vêm das colunas do arquivo. Você mapeia colunas (Data, Valor, etc.) e pode criar vários lançamentos por linha com contas diferentes para cada valor.</p>
+                                            <p class="font-semibold mb-2">Manual:</p>
+                                            <p>Conta débito, crédito e histórico são fixos (iguais para todas as linhas). Apenas a data vem do arquivo. Use quando todos os lançamentos vão para as mesmas contas.</p>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="flex gap-2">
-                                    <button wire:click="salvarRegra" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
-                                        Salvar Regra
-                                    </button>
+                                    @if(!empty($regraAtual['nome_regra']) || !empty($regraAtual['coluna_data']) || !empty($regraAtual['conta_debito_fixa']))
+                                        <button wire:click="salvarRegra" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
+                                            Salvar Regra
+                                        </button>
+                                    @endif
                                     <button wire:click="adicionarRegra" type="button" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
                                         + Adicionar Regra
                                     </button>
@@ -390,10 +423,11 @@
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Tipo</label>
-                                        <select wire:model="regrasAmarracao.{{ $indice }}.tipo" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <select wire:model="regrasAmarracao.{{ $indice }}.tipo" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" title="Automática: valores do arquivo. Manual: contas fixas, só data do arquivo.">
                                             <option value="automatica">Automática</option>
                                             <option value="manual">Manual</option>
                                         </select>
+                                        <p class="mt-1 text-xs text-gray-500">{{ $regra['tipo'] === 'automatica' ? 'Valores vêm das colunas do arquivo' : 'Contas fixas, apenas data do arquivo' }}</p>
                                     </div>
                                 </div>
 
@@ -503,10 +537,11 @@
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Tipo</label>
-                                        <select wire:model="regraAtual.tipo" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <select wire:model="regraAtual.tipo" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" title="Automática: valores do arquivo. Manual: contas fixas, só data do arquivo.">
                                             <option value="automatica">Automática</option>
                                             <option value="manual">Manual</option>
                                         </select>
+                                        <p class="mt-1 text-xs text-gray-500">{{ ($regraAtual['tipo'] ?? 'automatica') === 'automatica' ? 'Valores vêm das colunas do arquivo' : 'Contas fixas, apenas data do arquivo' }}</p>
                                     </div>
                                 </div>
 
@@ -607,6 +642,7 @@
                                     <thead class="bg-gray-100">
                                         <!-- Cabeçalho com nomes das colunas -->
                                         <tr>
+                                            <th class="px-2 py-2 text-center text-xs font-medium text-gray-400 uppercase tracking-wider w-12">#</th>
                                             @foreach($colunasArquivo as $coluna)
                                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[120px]">
                                                 {{ $coluna }}
@@ -615,6 +651,7 @@
                                         </tr>
                                         <!-- Linha de mapeamento -->
                                         <tr class="bg-blue-50 border-t-2 border-blue-200">
+                                            <td class="px-2 py-2 text-center border-r border-gray-200"></td>
                                             @foreach($colunasArquivo as $coluna)
                                             <td class="px-3 py-2 text-center border-r border-gray-200">
                                                 <select wire:model="mapeamentoColunas.{{ $coluna }}" class="block w-full border-blue-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-xs bg-white">
@@ -634,8 +671,10 @@
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         @if(isset($dadosPrevia) && count($dadosPrevia) > 0)
+                                            @php $linhaInicialDados = $linhaCabecalho + ($temCabecalho ? 1 : 0); @endphp
                                             @foreach(array_slice($dadosPrevia, 0, 10) as $linhaIndex => $linha)
                                             <tr class="{{ $linhaIndex % 2 == 0 ? 'bg-white' : 'bg-gray-50' }}">
+                                                <td class="px-2 py-2 text-center text-xs text-gray-400 border-r border-gray-200">{{ $linhaInicialDados + $linhaIndex }}</td>
                                                 @foreach($colunasArquivo as $colunaIndex => $coluna)
                                                 <td class="px-3 py-2 text-xs text-gray-900 border-r border-gray-200">
                                                     @if(isset($linha[$colunaIndex]))
@@ -649,7 +688,7 @@
                                             @endforeach
                                         @else
                                             <tr>
-                                                <td colspan="{{ count($colunasArquivo) }}" class="px-3 py-4 text-center text-sm text-gray-500">
+                                                <td colspan="{{ count($colunasArquivo) + 1 }}" class="px-3 py-4 text-center text-sm text-gray-500">
                                                     Clique em "Gerar Prévia" para visualizar os dados
                                                 </td>
                                             </tr>
