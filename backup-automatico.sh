@@ -24,8 +24,8 @@ if [ ! -f ".env" ]; then
 fi
 
 # Carregar variáveis do .env
-# Remove comentários e linhas vazias, depois exporta as variáveis
-export $(grep -v '^#' .env | grep -v '^$' | xargs)
+# Remove comentários, linhas vazias e variáveis read-only do bash (UID, EUID)
+export $(grep -v '^#' .env | grep -v '^$' | grep -vE '^(UID|EUID)=' | xargs)
 
 # Variáveis do banco de dados (com valores padrão)
 DB_NAME="${DB_DATABASE:-integrar_dalongaro}"
