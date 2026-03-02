@@ -1,4 +1,4 @@
-<div class="max-w-7xl mx-auto p-6">
+<div class="mx-auto p-6 w-full">
     <!-- Mensagens de Feedback -->
     @if (session()->has('success'))
         <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
@@ -67,7 +67,10 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($importacoes as $importacao)
-                        <tr class="hover:bg-gray-50">
+                        <tr 
+                            class="hover:bg-gray-50 cursor-pointer"
+                            wire:click="abrirImportacao({{ $importacao->id }})"
+                        >
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {{ $importacao->id }}
                             </td>
@@ -117,13 +120,13 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div class="flex space-x-2">
                                     <button 
-                                        wire:click="abrirImportacao({{ $importacao->id }})"
+                                        wire:click.stop="abrirImportacao({{ $importacao->id }})"
                                         class="text-blue-600 hover:text-blue-900"
                                     >
                                         Abrir
                                     </button>
                                     <button 
-                                        wire:click="excluirImportacao({{ $importacao->id }})"
+                                        wire:click.stop="excluirImportacao({{ $importacao->id }})"
                                         wire:confirm="Tem certeza que deseja excluir esta importação? Todos os {{ $importacao->lancamentos_count ?? 0 }} lançamentos serão removidos permanentemente."
                                         class="text-red-600 hover:text-red-900"
                                     >

@@ -635,9 +635,25 @@
                         <h3 class="text-lg font-semibold mb-4">Mapeamento de Colunas</h3>
                         
                         <!-- Mapeamento e Prévia Integrados -->
-                        <div class="mt-6">
+                        <div class="mt-6" x-data="{
+                            syncScroll(source, target) {
+                                if (!target) return;
+                                target.scrollLeft = source.scrollLeft;
+                            }
+                        }">
                             <h4 class="text-md font-semibold mb-3 text-gray-700">Mapeamento e Prévia do Arquivo</h4>
-                            <div class="overflow-x-auto border rounded-lg">
+
+                            <!-- Scrollbar superior sincronizada -->
+                            <div class="overflow-x-auto border-t border-l border-r rounded-t-lg" x-ref="topScroll"
+                                 @scroll="syncScroll($event.target, $refs.bottomScroll)">
+                                <div class="h-2"
+                                     style="width: {{ max((count($colunasArquivo) + 1) * 160, 600) }}px">
+                                </div>
+                            </div>
+
+                            <!-- Tabela com scrollbar inferior -->
+                            <div class="overflow-x-auto border-b border-l border-r rounded-b-lg" x-ref="bottomScroll"
+                                 @scroll="syncScroll($event.target, $refs.topScroll)">
                                 <table class="min-w-full divide-y divide-gray-200">
                                     <thead class="bg-gray-100">
                                         <!-- Cabeçalho com nomes das colunas -->
