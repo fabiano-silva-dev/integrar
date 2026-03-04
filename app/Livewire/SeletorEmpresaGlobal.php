@@ -3,7 +3,6 @@
 namespace App\Livewire;
 
 use App\Models\Empresa;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class SeletorEmpresaGlobal extends Component
@@ -15,11 +14,8 @@ class SeletorEmpresaGlobal extends Component
 
     public function mount(): void
     {
-        $user = Auth::user();
-
-        $this->empresaSelecionada = session('empresa_selecionada_id')
-            ?? ($user ? $user->empresa_id : null)
-            ?? Empresa::orderBy('nome')->value('id');
+        // Apenas usa valor da sessão — sem empresa selecionada ao logar
+        $this->empresaSelecionada = session('empresa_selecionada_id');
 
         if ($this->empresaSelecionada) {
             session(['empresa_selecionada_id' => $this->empresaSelecionada]);

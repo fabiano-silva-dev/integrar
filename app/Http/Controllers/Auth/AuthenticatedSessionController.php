@@ -27,6 +27,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $request->session()->forget('empresa_selecionada_id');
 
         return redirect()->intended(route('home'));
     }
