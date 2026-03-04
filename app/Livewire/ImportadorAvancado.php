@@ -53,13 +53,7 @@ class ImportadorAvancado extends Component
 
     public function mount()
     {
-        $user = Auth::user();
-
-        $this->empresa_id = $this->empresa_id
-            ?? session('empresa_selecionada_id')
-            ?? ($user ? $user->empresa_id : null)
-            ?? Empresa::orderBy('nome')->value('id');
-
+        $this->empresa_id = session('empresa_selecionada_id');
         $this->mensagem_status = 'Aguardando upload do arquivo...';
     }
 

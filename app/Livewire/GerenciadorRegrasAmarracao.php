@@ -5,7 +5,6 @@ namespace App\Livewire;
 use App\Models\Empresa;
 use App\Models\HistoricoPadraoLayout;
 use App\Models\RegraAmarracaoDescricao;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -47,12 +46,7 @@ class GerenciadorRegrasAmarracao extends Component
 
     public function mount()
     {
-        $user = Auth::user();
-
-        $this->empresa_id = $this->empresa_id
-            ?? session('empresa_selecionada_id')
-            ?? ($user ? $user->empresa_id : null)
-            ?? Empresa::orderBy('nome')->value('id');
+        $this->empresa_id = session('empresa_selecionada_id');
     }
 
     /** Retorna o registro de histórico padrão para o layout (e opcionalmente empresa) selecionado */

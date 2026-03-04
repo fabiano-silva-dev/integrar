@@ -79,9 +79,7 @@ class ImportadorPersonalizado extends Component
     public function carregarEmpresas()
     {
         $this->empresas = Empresa::orderBy('nome')->get();
-        $user = auth()->user();
-        $this->empresa_id = session('empresa_selecionada_id')
-            ?? ($user ? $user->empresa_id : null);
+        $this->empresa_id = session('empresa_selecionada_id');
     }
 
     public function carregarLayoutsDisponiveis()
