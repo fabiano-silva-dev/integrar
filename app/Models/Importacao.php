@@ -21,6 +21,8 @@ class Importacao extends Model
         'codigo_empresa',
         'cnpj_empresa',
         'empresa_id',
+        'layout_avancado',
+        'conta_banco',
         'user_id',
         'data_inicial',
         'data_final'

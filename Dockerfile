@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
     python3-pypdf2 \
     && rm -rf /var/lib/apt/lists/*
 
+# pdfplumber (extração PDF com layout correto; não disponível via apt)
+RUN pip3 install pdfplumber --break-system-packages
+
 # Instalar e habilitar extensões PHP necessárias
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \

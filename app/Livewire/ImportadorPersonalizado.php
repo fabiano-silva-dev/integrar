@@ -73,13 +73,15 @@ class ImportadorPersonalizado extends Component
     {
         $this->carregarEmpresas();
         $this->carregarLayoutsDisponiveis();
+        $this->carregarRegrasDisponiveis();
     }
 
     public function carregarEmpresas()
     {
         $this->empresas = Empresa::orderBy('nome')->get();
-        // Não definir empresa padrão - usuário deve escolher
-        $this->empresa_id = null;
+        $user = auth()->user();
+        $this->empresa_id = session('empresa_selecionada_id')
+            ?? ($user ? $user->empresa_id : null);
     }
 
     public function carregarLayoutsDisponiveis()
@@ -1336,6 +1338,7 @@ class ImportadorPersonalizado extends Component
         $empresaId = auth()->user() ? auth()->user()->empresa_id : 1;
         $regras = RegraAmarracaoDescricao::where('empresa_id', $empresaId)
             ->where('ativo', true)
+            ->whereNull('layout_avancado') // Regras com layout específico são só para importador-avancado
             ->orderBy('prioridade', 'desc')
             ->get();
 

@@ -22,18 +22,15 @@
 
                     <!-- Importação Dropdown - Vue Component -->
                     <vue-menu menu-title="📥 Importação" menu-width="w-56">
-                        <a href="{{ route('importador-avancado') }}" class="block px-4 py-2 hover:bg-blue-50">📄 Importador Avançado</a>
-                        <a href="{{ route('importador-personalizado') }}" class="block px-4 py-2 hover:bg-blue-50 text-red-600 font-bold">🎯 Importador Personalizado (TESTE)</a>
+                        <a href="{{ route('importador-avancado') }}" class="block px-4 py-2 hover:bg-blue-50">📄 Importação de Extratos</a>
+                        <a href="{{ route('importador-personalizado') }}" title="Importação personalizada de CSV, XLS ou XLSX" class="block px-4 py-2 hover:bg-blue-50">🎯 Importação Personalizada</a>
                         <a href="{{ route('importacoes') }}" class="block px-4 py-2 hover:bg-blue-50">🕑 Importações anteriores</a>
-                        <a href="{{ route('parametros-extratos') }}" class="block px-4 py-2 hover:bg-blue-50">📝 Parâmetros de Extrato</a>
                     </vue-menu>
 
                     <!-- Lançamentos Dropdown - Vue Component -->
                     <vue-menu menu-title="📊 Lançamentos" menu-width="w-56">
                         <a href="{{ route('tabela') }}" class="block px-4 py-2 hover:bg-blue-50">📋 Tabela de lançamentos</a>
-                        <a href="{{ route('amarracoes') }}" class="block px-4 py-2 hover:bg-blue-50">🔗 Amarrações</a>
                         <a href="{{ route('regras-amarracao') }}" class="block px-4 py-2 hover:bg-blue-50">⚙️ Regras de Amarração</a>
-                        <span class="block px-4 py-2 text-gray-400 cursor-not-allowed">🛠️ Reclassificações <span class="text-xs">(em breve)</span></span>
                     </vue-menu>
 
                     <!-- Exportação Dropdown - Vue Component -->
@@ -86,10 +83,10 @@
                 Usuários
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('importador-avancado')" :active="request()->routeIs('importador-avancado')">
-                Importador Avançado
+                Importação de Extratos
             </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('importador-personalizado')" :active="request()->routeIs('importador-personalizado')">
-                Importador Personalizado
+            <x-responsive-nav-link :href="route('importador-personalizado')" :active="request()->routeIs('importador-personalizado')" title="Importação personalizada de CSV, XLS ou XLSX">
+                Importação Personalizada
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('tabela')" :active="request()->routeIs('tabela')">
                 Tabela Lançamentos
@@ -100,9 +97,6 @@
             <x-responsive-nav-link :href="route('terceiros')" :active="request()->routeIs('terceiros')">
                 Terceiros
             </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('amarracoes')" :active="request()->routeIs('amarracoes')">
-                Amarrações
-            </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('regras-amarracao')" :active="request()->routeIs('regras-amarracao')">
                 Regras de Amarração
             </x-responsive-nav-link>
@@ -111,9 +105,6 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('exportador')" :active="request()->routeIs('exportador')">
                 Exportador
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('parametros-extratos')" :active="request()->routeIs('parametros-extratos')">
-                Parâmetros Extratos
             </x-responsive-nav-link>
         </div>
 

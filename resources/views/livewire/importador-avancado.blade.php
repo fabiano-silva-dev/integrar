@@ -3,7 +3,7 @@
         <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
             <div class="p-6 border-b border-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900 mb-4">
-                    Importador
+                    Importação de Extratos
                 </h2>
                 <p class="text-gray-600 mb-6">
                     Selecione o layout do arquivo, a empresa de destino e faça upload do arquivo para importação.
@@ -27,40 +27,47 @@
                         @enderror
                     </div>
 
-                    <!-- Seleção de Empresa -->
+                    <!-- Empresa (usa seletor global do cabeçalho) -->
                     <div>
-                        <label for="empresa" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
                             Empresa de Destino
                         </label>
-                        <select id="empresa" wire:model="empresa_id" 
-                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="">Selecione a empresa...</option>
-                            @foreach($empresas as $empresa)
-                                <option value="{{ $empresa->id }}">{{ $empresa->nome }} ({{ $empresa->cnpj }})</option>
-                            @endforeach
-                        </select>
-                        @error('empresa_id') 
-                            <span class="text-red-500 text-sm">{{ $message }}</span> 
+                        @if($empresaAtual)
+                            <div class="w-full border border-gray-200 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                                <span class="font-semibold">{{ $empresaAtual->codigo_sistema ?? '—' }}</span>
+                                <span class="text-gray-500 mx-1">-</span>
+                                <span class="text-gray-700">{{ $empresaAtual->cnpj }}</span>
+                                <span class="text-gray-500 mx-1">-</span>
+                                <span class="text-gray-900">{{ $empresaAtual->nome }}</span>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">
+                                Para trocar a empresa, use o seletor no cabeçalho (parte superior da tela).
+                            </p>
+                        @else
+                            <div class="w-full border border-red-300 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                                Nenhuma empresa está selecionada. Escolha uma empresa no seletor do cabeçalho.
+                            </div>
+                        @endif
+                        @error('empresa_id')
+                            <span class="text-red-500 text-sm">{{ $message }}</span>
                         @enderror
                     </div>
 
-                    <!-- Conta do Banco (apenas para Grafeno, SICOOB, Caixa Federal e Registros) -->
-                    @if($layout_selecionado === 'grafeno' || $layout_selecionado === 'sicoob' || $layout_selecionado === 'caixa_federal' || $layout_selecionado === 'registros')
-                        <div>
-                            <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-2">
-                                Conta do Banco <span class="text-red-500">*</span> (Código contábil da conta do banco no sistema Domínio)
-                            </label>
-                            <input type="text" id="conta_banco" wire:model="conta_banco" 
-                                   placeholder="Ex: 8" 
-                                   class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                            <p class="text-sm text-gray-500 mt-1">
-                                Esta conta será usada para lançamentos de débito (recebimentos) e crédito (pagamentos)
-                            </p>
-                            @error('conta_banco') 
-                                <span class="text-red-500 text-sm">{{ $message }}</span> 
-                            @enderror
-                        </div>
-                    @endif
+                    <!-- Conta do Banco (obrigatório na importação de extrato) -->
+                    <div>
+                        <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-2">
+                            Conta do Banco <span class="text-red-500">*</span> (Código contábil da conta do banco no sistema Domínio)
+                        </label>
+                        <input type="text" id="conta_banco" wire:model="conta_banco" 
+                               placeholder="Ex: 1.1.1.01 ou 8" 
+                               class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="text-sm text-gray-500 mt-1">
+                            Obrigatório. Usada para lançamentos de débito (recebimentos) e crédito (pagamentos).
+                        </p>
+                        @error('conta_banco') 
+                            <span class="text-red-500 text-sm">{{ $message }}</span> 
+                        @enderror
+                    </div>
 
                     <!-- Upload de Arquivo -->
                     <div>
@@ -108,12 +115,32 @@
                         @enderror
                     </div>
 
-                    <!-- Botão de Processamento -->
+                    <!-- Indicador de processamento (visível assim que o usuário clica) -->
+                    <div wire:loading.flex wire:target="processarArquivo" class="items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
+                        <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-blue-700">Iniciando importação...</span>
+                    </div>
+
+                    <!-- Botão de Processamento (bloqueado ao clicar e durante processamento) -->
                     <div class="flex justify-end">
                         <button type="submit" 
-                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                                wire:target="processarArquivo"
+                                wire:loading.attr="disabled"
+                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                                 {{ $status_importacao === 'processando' ? 'disabled' : '' }}>
-                            {{ $status_importacao === 'processando' ? 'Processando...' : 'Processar Arquivo' }}
+                            <span wire:loading.remove wire:target="processarArquivo">
+                                {{ $status_importacao === 'processando' ? 'Processando...' : 'Processar Arquivo' }}
+                            </span>
+                            <span wire:loading wire:target="processarArquivo" class="inline-flex items-center gap-2">
+                                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processando...
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -131,8 +158,8 @@
                             <span>{{ $progresso }}%</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                                 style="width: {{ $progresso }}%"></div>
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                 style="width: {{ $progresso }}%;"></div>
                         </div>
                         
                         @if($status_importacao === 'processando' && $totalLinhas > 0)

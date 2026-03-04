@@ -11,6 +11,7 @@ class Lancamento extends Model
     protected $fillable = [
         'data',
         'historico',
+        'historico_original',
         'conta_debito',
         'conta_credito',
         'valor',

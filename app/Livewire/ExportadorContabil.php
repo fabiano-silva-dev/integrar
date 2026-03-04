@@ -34,7 +34,14 @@ class ExportadorContabil extends Component
     {
         $this->dataInicio = now()->startOfMonth()->format('Y-m-d');
         $this->dataFim = now()->endOfMonth()->format('Y-m-d');
-        $this->importacoes = \App\Models\Importacao::with('empresa')->orderByDesc('created_at')->get();
+
+        $query = \App\Models\Importacao::with('empresa')->orderByDesc('created_at');
+        $empresaId = session('empresa_selecionada_id');
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        $this->importacoes = $query->get();
+
         $this->empresas = \App\Models\Empresa::orderBy('nome')->get();
         
         // Definir usuário padrão como Fabiano

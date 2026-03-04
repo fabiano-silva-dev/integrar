@@ -40,24 +40,20 @@ trait MenuTrait
                 'icon' => 'fa-upload',
                 'items' => [
                     [
-                        'name' => '📄 Importador Avançado',
+                        'name' => '📄 Importação de Extratos',
                         'url' => route('importador-avancado'),
                         'active' => request()->routeIs('importador-avancado*'),
                     ],
                     [
-                        'name' => '🎯 Importador Personalizado',
+                        'name' => '🎯 Importação Personalizada',
                         'url' => route('importador-personalizado'),
                         'active' => request()->routeIs('importador-personalizado*'),
+                        'title' => 'Importação personalizada de CSV, XLS ou XLSX',
                     ],
                     [
                         'name' => '🕑 Importações anteriores',
                         'url' => route('importacoes'),
                         'active' => request()->routeIs('importacoes*'),
-                    ],
-                    [
-                        'name' => '📝 Parâmetros de Extrato',
-                        'url' => route('parametros-extratos'),
-                        'active' => request()->routeIs('parametros-extratos*'),
                     ],
                 ],
             ],
@@ -72,22 +68,9 @@ trait MenuTrait
                         'active' => request()->routeIs('tabela*'),
                     ],
                     [
-                        'name' => '🔗 Amarrações',
-                        'url' => route('amarracoes'),
-                        'active' => request()->routeIs('amarracoes*'),
-                    ],
-                    [
                         'name' => '⚙️ Regras de Amarração',
                         'url' => route('regras-amarracao'),
                         'active' => request()->routeIs('regras-amarracao*'),
-                    ],
-                    [
-                        'name' => '🛠️ Reclassificações',
-                        'url' => '#',
-                        'active' => false,
-                        'class' => 'text-gray-400 cursor-not-allowed',
-                        'disabled' => true,
-                        'note' => '(em breve)',
                     ],
                 ],
             ],
@@ -108,6 +91,11 @@ trait MenuTrait
                 'name' => '⚙️ Administração',
                 'icon' => 'fa-cog',
                 'items' => [
+                    [
+                        'name' => '📋 Históricos padrão por layout',
+                        'url' => route('historicos-padrao-layout'),
+                        'active' => request()->routeIs('historicos-padrao-layout*'),
+                    ],
                     [
                         'name' => '🛠️ Configurações',
                         'url' => '#',
@@ -142,6 +130,18 @@ trait MenuTrait
             $menuItems = array_filter($menuItems, function($menu) {
                 return !in_array($menu['id'], ['administracao']);
             });
+        }
+
+        // Históricos padrão por layout: apenas admin
+        if ($user->role !== 'admin') {
+            $menuItems = array_map(function($menu) {
+                if (($menu['id'] ?? '') === 'administracao' && !empty($menu['items'])) {
+                    $menu['items'] = array_values(array_filter($menu['items'], function($item) {
+                        return ($item['url'] ?? '') !== route('historicos-padrao-layout');
+                    }));
+                }
+                return $menu;
+            }, $menuItems);
         }
 
         return $menuItems;

@@ -3,8 +3,10 @@
 namespace App\Livewire;
 
 use App\Models\Empresa;
+use App\Models\HistoricoPadraoLayout;
 use App\Models\Importacao;
 use App\Models\Lancamento;
+use App\Models\RegraAmarracaoDescricao;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
@@ -33,8 +35,8 @@ class ImportadorAvancado extends Component
     protected $rules = [
         'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240', // 10MB
         'empresa_id' => 'required|exists:empresas,id',
-        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros',
-        'conta_banco' => 'required_if:layout_selecionado,grafeno,sicoob,caixa_federal,registros',
+        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
+        'conta_banco' => 'required|string',
     ];
 
     protected $messages = [
@@ -46,11 +48,18 @@ class ImportadorAvancado extends Component
         'empresa_id.exists' => 'A empresa selecionada não existe.',
         'layout_selecionado.required' => 'O layout é obrigatório.',
         'layout_selecionado.in' => 'O layout selecionado não é válido.',
-        'conta_banco.required_if' => 'O campo Conta do Banco é obrigatório para este layout.',
+        'conta_banco.required' => 'A Conta do Banco é obrigatória na importação de extrato.',
     ];
 
     public function mount()
     {
+        $user = Auth::user();
+
+        $this->empresa_id = $this->empresa_id
+            ?? session('empresa_selecionada_id')
+            ?? ($user ? $user->empresa_id : null)
+            ?? Empresa::orderBy('nome')->value('id');
+
         $this->mensagem_status = 'Aguardando upload do arquivo...';
     }
 
@@ -203,6 +212,7 @@ class ImportadorAvancado extends Component
             'caixa_federal' => 'conversor_extrato_caixa_federal_pdf_csv.py',
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
+            'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
         ];
 
         return $scripts[$this->layout_selecionado] ?? 'conversor_registros_csv.py';
@@ -223,7 +233,7 @@ class ImportadorAvancado extends Component
         ]);
         
         // Se for o script do Grafeno, SICOOB, Caixa Federal ou Registros, passar a conta do banco como terceiro parâmetro
-        if (($this->layout_selecionado === 'grafeno' || $this->layout_selecionado === 'sicoob' || $this->layout_selecionado === 'caixa_federal' || $this->layout_selecionado === 'registros') && !empty($this->conta_banco)) {
+        if (in_array($this->layout_selecionado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi']) && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\"";
@@ -264,15 +274,30 @@ class ImportadorAvancado extends Component
         $contaBancoEmpresa = $empresa ? ltrim($empresa->codigo_conta_banco, '0') : null;
         $codigoSistemaEmpresa = $empresa ? $empresa->codigo_sistema : null;
         
-        // Criar registro de importação
+        // Criar registro de importação (nome = layout usado, ex: "SICREDI (PDF)")
+        $layoutsNomes = [
+            'dominio' => 'Domínio (TXT)',
+            'grafeno' => 'Grafeno (PDF)',
+            'sicoob' => 'Sicoob (PDF)',
+            'caixa_federal' => 'Caixa Econômica Federal (PDF)',
+            'ofx' => 'Formato OFX',
+            'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
+            'sicredi' => 'SICREDI (PDF)',
+        ];
+        $nomeLayout = $layoutsNomes[$this->layout_selecionado] ?? $this->layout_selecionado;
+
         $importacao = Importacao::create([
             'nome_arquivo' => $this->arquivo->getClientOriginalName(),
+            'nome' => $nomeLayout,
+            'tipo' => 'avancado',
             'total_registros' => 0,
             'registros_processados' => 0,
             'status' => 'processando',
             'usuario' => Auth::check() ? Auth::user()->name : 'Sistema',
             'user_id' => Auth::check() ? Auth::id() : null,
             'empresa_id' => $empresa->id,
+            'layout_avancado' => $this->layout_selecionado,
+            'conta_banco' => $this->conta_banco ? ltrim($this->conta_banco, '0') : null,
         ]);
 
         Log::info("Importação criada:", ['importacao_id' => $importacao->id]);
@@ -299,6 +324,7 @@ class ImportadorAvancado extends Component
 
         $cabecalho = [];
         $lancamentos_batch = [];
+        $contagemPadroes = []; // descricao_padrao => total (para sync histórico padrão)
         $batch_size = 100; // Processar em lotes de 100
         
         $inicio_processamento_linhas = microtime(true);
@@ -395,7 +421,17 @@ class ImportadorAvancado extends Component
             
             if (count($dados) >= 8) {
                 Log::info("Iniciando processamento completo da linha {$linhaNumero}");
-                
+
+                // Coletar padrão do histórico para histórico padrão do layout (extração automática)
+                $historicoRaw = trim($historico ?? '');
+                if ($historicoRaw !== '') {
+                    $base = HistoricoPadraoLayout::extrairParteRepetida($historicoRaw);
+                    if ($base !== null && $base !== '') {
+                        $chave = mb_substr($base, 0, 500);
+                        $contagemPadroes[$chave] = ($contagemPadroes[$chave] ?? 0) + 1;
+                    }
+                }
+
                 // Processar terceiro se existir
                 $terceiroId = null;
                 if (!empty($nomeEmpresa)) { // Nome da Empresa
@@ -416,8 +452,36 @@ class ImportadorAvancado extends Component
                 // Preparar dados para amarração
                 $terceiroNome = trim($nomeEmpresa ?? '');
                 $historico = $historico ?? '';
-                $contaDebito = ltrim($contaDebito, '0');
-                $contaCredito = ltrim($contaCredito, '0');
+                $historicoOriginal = $historico; // Preservar para matching no reprocessamento
+                $contaDebito = ltrim(trim($contaDebito ?? ''), '0');
+                $contaCredito = ltrim(trim($contaCredito ?? ''), '0');
+                $debPreenchido = $contaDebito !== '';
+                $credPreenchido = $contaCredito !== '';
+
+                // Valor numérico com sinal (para regras com conta contra-partida)
+                // O CSV de extrato costuma trazer valor sempre positivo; o sinal vem da posição do banco
+                $valorFloat = $this->parseValorComSinal($valor ?? '0');
+                if ($valorFloat >= 0 && ($debPreenchido || $credPreenchido)) {
+                    if ($credPreenchido && !$debPreenchido) {
+                        $valorFloat = -abs($valorFloat); // Banco no crédito = saída
+                    } elseif ($debPreenchido && !$credPreenchido) {
+                        $valorFloat = abs($valorFloat);  // Banco no débito = entrada
+                    }
+                }
+
+                // Aplicar regras de amarração por descrição (empresa + layout do importador avançado)
+                $regraAplicada = RegraAmarracaoDescricao::aplicarRegrasParaEmpresaLayout($this->empresa_id, $this->layout_selecionado, $historico, $valorFloat);
+                if ($regraAplicada) {
+                    if (!empty($regraAplicada['conta_debito'])) {
+                        $contaDebito = ltrim($regraAplicada['conta_debito'], '0');
+                    }
+                    if (!empty($regraAplicada['conta_credito'])) {
+                        $contaCredito = ltrim($regraAplicada['conta_credito'], '0');
+                    }
+                    if (!empty($regraAplicada['historico'])) {
+                        $historico = $regraAplicada['historico'];
+                    }
+                }
 
                 // Filtrar detalhes para amarração
                 $palavrasTags = array_filter(
@@ -450,30 +514,6 @@ class ImportadorAvancado extends Component
                     ]);
                 }
 
-                // Criar amarração sem detalhes da operação
-                $amarracaoId = null;
-                if (!empty($terceiroNome)) {
-                    $amarracaoId = $this->criarAmarracaoParaLancamento($terceiroNome, $contaDebito, $contaCredito, $codigoSistemaEmpresa);
-                    
-                    // Log para debug
-                    if ($linhaNumero <= 5) {
-                        Log::info("Amarração criada/encontrada:", [
-                            'linha' => $linhaNumero,
-                            'terceiro' => $terceiroNome,
-                            'conta_debito' => $contaDebito,
-                            'conta_credito' => $contaCredito,
-                            'amarracao_id' => $amarracaoId
-                        ]);
-                    }
-                } else {
-                    if ($linhaNumero <= 5) {
-                        Log::info("Nenhuma amarração criada - terceiro vazio:", [
-                            'linha' => $linhaNumero,
-                            'nome_empresa' => $nomeEmpresa
-                        ]);
-                    }
-                }
-
                 // Adicionar ao batch em vez de criar imediatamente
                 $lancamentos_batch[] = [
                     'data' => $this->formatarData($dataLancamento),
@@ -484,12 +524,14 @@ class ImportadorAvancado extends Component
                     'conta_credito_original' => $contaCredito,
                     'valor' => $this->formatarValor($valor ?? 0),
                     'historico' => $historico,
+                    'historico_original' => $historicoOriginal,
+                    'nome_empresa' => $nomeEmpresa ?? null,
                     'codigo_filial_matriz' => $codigoFilial ?? null,
                     'numero_nota' => $numeroNota ?? null,
                     'importacao_id' => $importacao->id,
                     'empresa_id' => $empresa->id,
                     'terceiro_id' => $terceiroId,
-                    'amarracao_id' => $amarracaoId,
+                    'amarracao_id' => null,
                     'linha_arquivo' => $linhaNumero,
                     'detalhes_operacao_para_amarracao' => $detalhesOperacao,
                     'processado' => true,
@@ -535,6 +577,15 @@ class ImportadorAvancado extends Component
             Log::info("Último batch inserido:", ['registros' => count($lancamentos_batch)]);
         }
 
+        // Sincronizar históricos padrão do layout (cria/atualiza na primeira importação e adiciona novas descrições em importações seguintes)
+        if (!empty($contagemPadroes)) {
+            HistoricoPadraoLayout::syncFromContagem(
+                $this->layout_selecionado,
+                $this->empresa_id,
+                $contagemPadroes
+            );
+        }
+
         $tempo_processamento_linhas = microtime(true) - $inicio_processamento_linhas;
         Log::info("Processamento de linhas concluído:", [
             'total_linhas_processadas' => $linhaNumero,
@@ -574,6 +625,17 @@ class ImportadorAvancado extends Component
             'data_inicial' => $dataInicial,
             'data_final' => $dataFinal
         ];
+    }
+
+    private function parseValorComSinal(string $valor): float
+    {
+        $valor = str_replace(['R$', ' ', "\xc2\xa0"], '', $valor);
+        $negativo = str_contains($valor, '-');
+        $valor = str_replace('-', '', $valor);
+        $valor = preg_replace('/\./', '', $valor);
+        $valor = str_replace(',', '.', $valor);
+        $v = (float) $valor;
+        return $negativo ? -$v : $v;
     }
 
     private function formatarData($data)
@@ -679,66 +741,6 @@ class ImportadorAvancado extends Component
         $this->mensagem_status = 'Aguardando upload do arquivo...';
     }
 
-    private function criarAmarracaoParaLancamento($terceiroNome, $contaDebito, $contaCredito, $codigoSistemaEmpresa)
-    {
-        try {
-            Log::info("=== INICIANDO CRIAÇÃO DE AMARRAÇÃO ===", [
-                'terceiro' => $terceiroNome,
-                'conta_debito' => $contaDebito,
-                'conta_credito' => $contaCredito,
-                'codigo_sistema' => $codigoSistemaEmpresa
-            ]);
-
-            // Verificar se já existe uma amarração similar (sem detalhes da operação)
-            $amarracaoExistente = \App\Models\Amarracao::where('terceiro', $terceiroNome)
-                ->where('conta_debito', $contaDebito)
-                ->where('conta_credito', $contaCredito)
-                ->where('codigo_sistema_empresa', $codigoSistemaEmpresa)
-                ->whereNull('detalhes_operacao') // Sem detalhes da operação
-                ->first();
-            
-            if ($amarracaoExistente) {
-                Log::info("Usando amarração existente", [
-                    'amarracao_id' => $amarracaoExistente->id,
-                    'terceiro' => $terceiroNome,
-                    'conta_debito' => $contaDebito,
-                    'conta_credito' => $contaCredito
-                ]);
-                return $amarracaoExistente->id;
-            } else {
-                // Criar nova amarração sem detalhes da operação
-                $novaAmarracao = \App\Models\Amarracao::create([
-                    'terceiro' => $terceiroNome,
-                    'detalhes_operacao' => null, // Sem detalhes da operação
-                    'conta_debito' => $contaDebito,
-                    'conta_credito' => $contaCredito,
-                    'codigo_sistema_empresa' => $codigoSistemaEmpresa,
-                ]);
-                
-                Log::info("Nova amarração criada com sucesso", [
-                    'amarracao_id' => $novaAmarracao->id,
-                    'terceiro' => $terceiroNome,
-                    'conta_debito' => $contaDebito,
-                    'conta_credito' => $contaCredito,
-                    'codigo_sistema' => $codigoSistemaEmpresa
-                ]);
-                
-                return $novaAmarracao->id;
-            }
-            
-        } catch (\Exception $e) {
-            Log::error("Erro ao criar amarração", [
-                'terceiro' => $terceiroNome,
-                'conta_debito' => $contaDebito,
-                'conta_credito' => $contaCredito,
-                'codigo_sistema' => $codigoSistemaEmpresa,
-                'erro' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return null;
-        }
-    }
-
     public function abrirLancamentos()
     {
         if ($this->importacao_id) {
@@ -750,6 +752,7 @@ class ImportadorAvancado extends Component
     public function render()
     {
         $empresas = Empresa::orderBy('nome')->get();
+        $empresaAtual = $empresas->firstWhere('id', $this->empresa_id);
         
         $layouts = [
             'dominio' => 'Domínio (TXT)',
@@ -758,11 +761,13 @@ class ImportadorAvancado extends Component
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
+            'sicredi' => 'SICREDI (PDF)',
         ];
 
         return view('livewire.importador-avancado', [
             'empresas' => $empresas,
             'layouts' => $layouts,
+            'empresaAtual' => $empresaAtual,
         ]);
     }
 }

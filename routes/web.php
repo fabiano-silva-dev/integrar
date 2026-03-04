@@ -21,11 +21,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/tabela', App\Livewire\TabelaLancamentos::class)->name('tabela');
     Route::get('/empresas', App\Livewire\GerenciadorEmpresas::class)->name('empresas');
     Route::get('/terceiros', App\Livewire\GerenciadorTerceiros::class)->name('terceiros');
-    Route::get('/amarracoes', App\Livewire\GerenciadorAmarracoes::class)->name('amarracoes');
+    Route::get('/amarracoes', fn () => redirect()->route('regras-amarracao'))->name('amarracoes');
     Route::get('/regras-amarracao', App\Livewire\GerenciadorRegrasAmarracao::class)->name('regras-amarracao');
     Route::get('/importacoes', App\Livewire\ListaImportacoes::class)->name('importacoes');
     Route::get('/exportador', App\Livewire\ExportadorContabil::class)->name('exportador');
-    Route::get('/parametros-extratos', App\Livewire\GerenciadorParametrosExtratos::class)->name('parametros-extratos');
     Route::get('/extrator-bancario', App\Livewire\ExtratorBancario::class)->name('extrator-bancario');
     Route::get('/home', App\Livewire\Home::class)->name('home');
 
@@ -34,6 +33,19 @@ Route::middleware(['auth'])->group(function () {
 
     // CRUD Empresas Operadoras (apenas admin)
     Route::get('/empresas-operadoras', App\Livewire\EmpresasOperadorasForm::class)->name('empresas-operadoras');
+
+    // Históricos padrão por layout (apenas admin)
+    Route::get('/historicos-padrao-layout', App\Livewire\GerenciadorHistoricosPadraoLayout::class)->name('historicos-padrao-layout');
+
+    // Trocar empresa no seletor global (recarrega a página para vigorar nos campos)
+    Route::get('/trocar-empresa/{id}', function (string $id) {
+        $empresa = \App\Models\Empresa::find($id);
+        if ($empresa) {
+            session(['empresa_selecionada_id' => (int) $id]);
+            session()->save();
+        }
+        return redirect()->to(request()->query('redirect', url()->previous()));
+    })->name('trocar-empresa');
 });
 
 // Rotas de download protegidas por autenticação

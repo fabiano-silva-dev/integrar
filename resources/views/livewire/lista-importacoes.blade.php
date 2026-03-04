@@ -101,7 +101,7 @@
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
                                     {{ $importacao->tipo === 'personalizado' ? 'bg-purple-100 text-purple-800' : 
                                        ($importacao->tipo === 'avancado' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800') }}">
-                                    {{ ucfirst($importacao->tipo ?? 'padrão') }}
+                                    {{ $importacao->nome ?: ucfirst($importacao->tipo ?? 'Padrão') }}
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

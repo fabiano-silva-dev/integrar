@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Lancamento;
 use App\Models\AlteracaoLog;
 use App\Models\Importacao;
+use App\Models\RegraAmarracaoDescricao;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Log;
@@ -36,15 +37,6 @@ class TabelaLancamentos extends Component
     public $ordenacao = 'data';
     public $direcao = 'asc';
 
-    // Novas propriedades para confirmação de edição
-    public $confirmarSalvarAmarracao = false;
-    public $edicaoPendente = null;
-    public $edicaoTipo = '';
-    public $edicaoCampo = '';
-    public $edicaoValor = '';
-    public $edicaoLancamentoId = null;
-    public $edicaoAmarracaoId = null;
-    
     // Propriedades para novo lançamento
     public $modalNovoLancamento = false;
     public $novoLancamento = [
@@ -210,6 +202,160 @@ class TabelaLancamentos extends Component
         $this->resetPage();
     }
 
+    /**
+     * Reprocessa amarrações por descrição nos lançamentos da importação selecionada.
+     * Aplica as regras de amarração (empresa + layout da importação) ao histórico de cada lançamento.
+     */
+    public function reprocessarAmarracoes()
+    {
+        if (empty($this->filtroImportacao)) {
+            session()->flash('error', 'Selecione uma importação para reprocessar as amarrações.');
+            return;
+        }
+
+        $importacao = Importacao::find($this->filtroImportacao);
+        if (!$importacao) {
+            session()->flash('error', 'Importação não encontrada.');
+            return;
+        }
+
+        $empresaId = $importacao->empresa_id;
+        if (!$empresaId) {
+            session()->flash('error', 'Esta importação não possui empresa vinculada.');
+            return;
+        }
+
+        $layoutAvancado = $importacao->layout_avancado ?? null;
+        $contaBanco = $importacao->conta_banco ? ltrim((string) $importacao->conta_banco, '0') : null;
+
+        if (!$contaBanco && in_array($layoutAvancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi'])) {
+            session()->flash('error', 'Esta importação não possui conta banco registrada. Importe novamente informando a conta do banco.');
+            return;
+        }
+
+        $lancamentos = Lancamento::where('importacao_id', $importacao->id)->get();
+        $atualizados = 0;
+
+        foreach ($lancamentos as $lancamento) {
+            $valorFloat = (float) str_replace(',', '.', preg_replace('/[^\d,.-]/', '', (string) $lancamento->valor));
+            if (str_contains((string) $lancamento->valor, '-')) {
+                $valorFloat = -abs($valorFloat);
+            }
+
+            $contaDeb = self::normalizarConta((string) ($lancamento->conta_debito ?? ''));
+            $contaCred = self::normalizarConta((string) ($lancamento->conta_credito ?? ''));
+            $contaBancoNorm = $contaBanco ? self::normalizarConta((string) $contaBanco) : null;
+            $debPreenchido = $contaDeb !== '';
+            $credPreenchido = $contaCred !== '';
+
+            // Inferir sinal do valor: valor no DB costuma vir sempre positivo
+            // 1) Fallback: quando só um lado preenchido, esse lado é o banco
+            if ($debPreenchido && !$credPreenchido) {
+                $valorFloat = abs($valorFloat); // Banco no débito = entrada
+            } elseif (!$debPreenchido && $credPreenchido) {
+                $valorFloat = -abs($valorFloat); // Banco no crédito = saída
+            } elseif ($valorFloat >= 0 && $contaBancoNorm !== null && $contaBancoNorm !== '') {
+                // 2) Quando ambos preenchidos, usar conta_banco (com match flexível)
+                if (self::contaCorresponde($contaCred, $contaBancoNorm) && !self::contaCorresponde($contaDeb, $contaBancoNorm)) {
+                    $valorFloat = -abs($valorFloat); // Banco no crédito = saída
+                }
+            }
+
+            // Usar historico_original (CSV antes de regra) ou nome_empresa/terceiro para matching; historico pode ter sido sobrescrito por regra anterior
+            $descricaoParaMatch = $lancamento->historico_original
+                ?? $lancamento->nome_empresa
+                ?? ($lancamento->terceiro?->nome)
+                ?? $lancamento->historico
+                ?? '';
+
+            $regraAplicada = RegraAmarracaoDescricao::aplicarRegrasParaEmpresaLayout(
+                $empresaId,
+                $layoutAvancado,
+                $descricaoParaMatch,
+                $valorFloat
+            );
+
+            if ($regraAplicada) {
+                $upd = [];
+                // Determinar onde está o banco: heurística quando só um lado preenchido, conta_banco quando ambos
+                $bancoNoDebito = $debPreenchido && !$credPreenchido;
+                $bancoNoCredito = !$debPreenchido && $credPreenchido;
+                if ($contaBancoNorm && $debPreenchido && $credPreenchido) {
+                    $bancoNoDebito = self::contaCorresponde($contaDeb, $contaBancoNorm);
+                    $bancoNoCredito = self::contaCorresponde($contaCred, $contaBancoNorm);
+                }
+
+                // Contrapartida preenche o lado oposto ao banco
+                if (!empty($regraAplicada['conta_debito']) && $bancoNoCredito) {
+                    $v = ltrim($regraAplicada['conta_debito'], '0');
+                    $upd['conta_debito'] = $v;
+                    $upd['conta_debito_original'] = $v;
+                }
+                if (!empty($regraAplicada['conta_credito']) && $bancoNoDebito) {
+                    $v = ltrim($regraAplicada['conta_credito'], '0');
+                    $upd['conta_credito'] = $v;
+                    $upd['conta_credito_original'] = $v;
+                }
+                if (!empty($regraAplicada['historico'])) {
+                    $upd['historico'] = $regraAplicada['historico'];
+                }
+                if (!empty($upd)) {
+                    $lancamento->update($upd);
+                    $atualizados++;
+                } elseif (config('app.debug') || env('REGRAS_AMARRACAO_DEBUG', false)) {
+                    Log::channel('single')->warning('[Reprocessar] Regra bateu mas nenhuma conta atualizada', [
+                        'lancamento_id' => $lancamento->id,
+                        'historico' => mb_substr($lancamento->historico ?? '', 0, 60),
+                        'banco_no_debito' => $bancoNoDebito,
+                        'banco_no_credito' => $bancoNoCredito,
+                        'conta_debito_regra' => $regraAplicada['conta_debito'] ?? null,
+                        'conta_credito_regra' => $regraAplicada['conta_credito'] ?? null,
+                        'conta_banco' => $contaBancoNorm,
+                        'deb_preenchido' => $debPreenchido,
+                        'cred_preenchido' => $credPreenchido,
+                    ]);
+                }
+            }
+        }
+
+        $totalLancamentos = $lancamentos->count();
+        $empresaSessao = session('empresa_selecionada_id');
+        $ctx = "Importação empresa_id={$empresaId}, layout={$layoutAvancado}";
+        $avisoEmpresa = ($empresaSessao && (int) $empresaSessao !== (int) $empresaId)
+            ? " Atenção: as regras devem estar na mesma empresa da importação (empresa {$empresaId}). No seletor do cabeçalho você está com empresa {$empresaSessao}."
+            : '';
+        if ($atualizados > 0) {
+            session()->flash('message', "Amarrações reprocessadas: {$atualizados} de {$totalLancamentos} lançamento(s) atualizado(s). ({$ctx})");
+        } else {
+            session()->flash('message', "Nenhum lançamento atualizado. {$totalLancamentos} lançamento(s) processado(s). ({$ctx}){$avisoEmpresa} Verifique em Regras de Amarração se as regras têm conta contra-partida e estão na mesma empresa.");
+        }
+    }
+
+    /**
+     * Normaliza conta para comparação: trim, remove zeros à esquerda.
+     */
+    private static function normalizarConta(string $conta): string
+    {
+        $c = trim($conta);
+        if ($c === '') {
+            return '';
+        }
+        return ltrim($c, '0') ?: '0';
+    }
+
+    /**
+     * Verifica se a conta do lançamento corresponde à conta banco (exata ou como prefixo/subconta).
+     */
+    private static function contaCorresponde(string $contaLancamento, string $contaBanco): bool
+    {
+        if ($contaLancamento === '' || $contaBanco === '') {
+            return false;
+        }
+        return $contaLancamento === $contaBanco
+            || str_starts_with($contaLancamento . '.', $contaBanco . '.')
+            || str_starts_with($contaBanco . '.', $contaLancamento . '.');
+    }
+
     public function ordenar($campo)
     {
         // Validar se o campo de ordenação é válido
@@ -261,29 +407,12 @@ class TabelaLancamentos extends Component
         
         $valorAnterior = $lancamento->{$campo};
         
-        // Verificar se é edição de conta débito/crédito
+        // Edição de conta débito/crédito ou outros campos
         if (in_array($campo, ['conta_debito', 'conta_credito'])) {
-            $amarracao = $lancamento->amarracao;
-            
-            // Se há amarração e ainda não foi confirmado, perguntar sobre salvar na amarração
-            if ($amarracao && !$this->confirmarSalvarAmarracao && !$this->confirmarSalvarAmarracao === false) {
-                $this->edicaoLancamentoId = $lancamento->id;
-                $this->edicaoCampo = $campo;
-                $this->edicaoValor = $valorNovo;
-                $this->edicaoTipo = 'amarracao';
-                return;
-            }
-            
-            // Executar ações conforme confirmações
-            if ($this->confirmarSalvarAmarracao && $amarracao) {
-                $amarracao->{$campo} = $valorNovo;
-                $amarracao->save();
-            }
-            
             $lancamento->{$campo} = $valorNovo;
             $lancamento->conferido = true;
             $lancamento->save();
-            
+
             AlteracaoLog::create([
                 'lancamento_id' => $lancamento->id,
                 'campo_alterado' => $campo,
@@ -292,15 +421,6 @@ class TabelaLancamentos extends Component
                 'tipo_alteracao' => 'conta',
                 'data_alteracao' => now()
             ]);
-            
-            // Resetar confirmações
-            $this->confirmarSalvarAmarracao = false;
-            $this->edicaoPendente = null;
-            $this->edicaoTipo = '';
-            $this->edicaoCampo = '';
-            $this->edicaoValor = '';
-            $this->edicaoLancamentoId = null;
-            $this->edicaoAmarracaoId = null;
             $this->cancelarEdicao();
             return;
         } else {
@@ -371,12 +491,7 @@ class TabelaLancamentos extends Component
 
         $lancamento->conferido = !$lancamento->conferido;
         $lancamento->save();
-        
-        // Criar amarração se foi marcado como conferido e não tem amarração
-        if ($lancamento->conferido && !$lancamento->amarracao_id && !empty($lancamento->detalhes_operacao_para_amarracao)) {
-            $this->criarAmarracaoParaLancamento($lancamento);
-        }
-        
+
         // Forçar atualização da view
         $this->dispatch('conferido-alterado', $id, $lancamento->conferido);
     }
@@ -390,216 +505,9 @@ class TabelaLancamentos extends Component
 
         $lancamento->conferido = true;
         $lancamento->save();
-        
-        // Criar amarração se não existir e se há detalhes da operação
-        if (!$lancamento->amarracao_id && !empty($lancamento->detalhes_operacao_para_amarracao)) {
-            $this->criarAmarracaoParaLancamento($lancamento);
-        }
-        
+
         // Forçar atualização da view
         $this->dispatch('conferido-alterado', $id, $lancamento->conferido);
-    }
-
-    private function criarAmarracaoParaLancamento($lancamento)
-    {
-        try {
-            // Buscar empresa para obter o código do sistema
-            $empresa = \App\Models\Empresa::find($lancamento->empresa_id);
-            $codigoSistemaEmpresa = $empresa ? $empresa->codigo_sistema : null;
-            
-            // Buscar terceiro
-            $terceiroNome = '';
-            if ($lancamento->terceiro_id) {
-                $terceiro = \App\Models\Terceiro::find($lancamento->terceiro_id);
-                $terceiroNome = $terceiro ? $terceiro->nome : '';
-            } else {
-                $terceiroNome = $lancamento->nome_empresa ?? '';
-            }
-            
-            // Verificar se já existe uma amarração similar (sem detalhes da operação)
-            $amarracaoExistente = \App\Models\Amarracao::where('terceiro', $terceiroNome)
-                ->where('conta_debito', $lancamento->conta_debito)
-                ->where('conta_credito', $lancamento->conta_credito)
-                ->where('codigo_sistema_empresa', $codigoSistemaEmpresa)
-                ->whereNull('detalhes_operacao') // Sem detalhes da operação
-                ->first();
-            
-            if ($amarracaoExistente) {
-                // Usar amarração existente
-                $lancamento->amarracao_id = $amarracaoExistente->id;
-                $lancamento->save();
-                
-                Log::info("Lancamento vinculado a amarração existente", [
-                    'lancamento_id' => $lancamento->id,
-                    'amarracao_id' => $amarracaoExistente->id,
-                    'terceiro' => $terceiroNome,
-                    'conta_debito' => $lancamento->conta_debito,
-                    'conta_credito' => $lancamento->conta_credito
-                ]);
-            } else {
-                // Criar nova amarração sem detalhes da operação
-                $novaAmarracao = \App\Models\Amarracao::create([
-                    'terceiro' => $terceiroNome,
-                    'detalhes_operacao' => null, // Sem detalhes da operação
-                    'conta_debito' => $lancamento->conta_debito,
-                    'conta_credito' => $lancamento->conta_credito,
-                    'codigo_sistema_empresa' => $codigoSistemaEmpresa,
-                ]);
-                
-                // Vincular lançamento à nova amarração
-                $lancamento->amarracao_id = $novaAmarracao->id;
-                $lancamento->save();
-                
-                Log::info("Nova amarração criada e vinculada ao lançamento", [
-                    'lancamento_id' => $lancamento->id,
-                    'amarracao_id' => $novaAmarracao->id,
-                    'terceiro' => $terceiroNome,
-                    'conta_debito' => $lancamento->conta_debito,
-                    'conta_credito' => $lancamento->conta_credito,
-                    'codigo_sistema' => $codigoSistemaEmpresa
-                ]);
-            }
-            
-        } catch (\Exception $e) {
-            Log::error("Erro ao criar amarração para lançamento", [
-                'lancamento_id' => $lancamento->id,
-                'erro' => $e->getMessage()
-            ]);
-        }
-    }
-
-    public function atualizarLancamentosComAmarracoes()
-    {
-        try {
-            if (empty($this->filtroImportacao)) {
-                session()->flash('error', 'Nenhuma importação selecionada.');
-                return;
-            }
-
-            Log::info("=== INICIANDO ATUALIZAÇÃO DE LANÇAMENTOS COM AMARRAÇÕES ===", [
-                'importacao_id' => $this->filtroImportacao
-            ]);
-
-            // Buscar lançamentos da importação que têm contas vazias (débito ou crédito vazio)
-            $lancamentos = Lancamento::where('importacao_id', $this->filtroImportacao)
-                ->where(function($query) {
-                    $query->where('conta_debito', '')
-                          ->orWhere('conta_credito', '')
-                          ->orWhereNull('conta_debito')
-                          ->orWhereNull('conta_credito');
-                })
-                ->with(['terceiro', 'empresa'])
-                ->get();
-
-            Log::info("Lançamentos encontrados com contas vazias", [
-                'total' => $lancamentos->count()
-            ]);
-
-            $atualizados = 0;
-            $naoEncontrados = 0;
-
-            foreach ($lancamentos as $lancamento) {
-                // Buscar terceiro através do terceiro_id
-                $terceiroNome = '';
-                if ($lancamento->terceiro_id) {
-                    $terceiro = \App\Models\Terceiro::find($lancamento->terceiro_id);
-                    $terceiroNome = $terceiro ? $terceiro->nome : '';
-                } else {
-                    $terceiroNome = $lancamento->nome_empresa ?? '';
-                }
-
-                // Buscar código do sistema da empresa
-                $codigoSistemaEmpresa = $lancamento->empresa ? $lancamento->empresa->codigo_sistema : null;
-
-                // Verificar se tem código do sistema
-                if (empty($codigoSistemaEmpresa)) {
-                    $naoEncontrados++;
-                    continue;
-                }
-
-                // Verificar se tem terceiro - obrigatório para fazer a correspondência
-                if (empty($terceiroNome)) {
-                    $naoEncontrados++;
-                    continue;
-                }
-
-                // Buscar amarração correspondente
-                // Deve ter correspondência exata: terceiro + código do sistema + contas
-                $query = \App\Models\Amarracao::where('terceiro', $terceiroNome)
-                    ->where('codigo_sistema_empresa', $codigoSistemaEmpresa);
-
-                // Se débito está vazio, buscar amarração com débito preenchido
-                if (empty($lancamento->conta_debito)) {
-                    $query->whereNotNull('conta_debito')
-                          ->where('conta_debito', '!=', '');
-                } else {
-                    $query->where('conta_debito', $lancamento->conta_debito);
-                }
-
-                // Se crédito está vazio, buscar amarração com crédito preenchido
-                if (empty($lancamento->conta_credito)) {
-                    $query->whereNotNull('conta_credito')
-                          ->where('conta_credito', '!=', '');
-                } else {
-                    $query->where('conta_credito', $lancamento->conta_credito);
-                }
-
-                $amarracao = $query->first();
-
-                if ($amarracao) {
-                    // Atualizar lançamento com a amarração encontrada
-                    $lancamento->amarracao_id = $amarracao->id;
-                    
-                    // Atualizar contas vazias com as contas da amarração
-                    if (empty($lancamento->conta_debito) && !empty($amarracao->conta_debito)) {
-                        $lancamento->conta_debito = $amarracao->conta_debito;
-                    }
-                    if (empty($lancamento->conta_credito) && !empty($amarracao->conta_credito)) {
-                        $lancamento->conta_credito = $amarracao->conta_credito;
-                    }
-                    
-                    $lancamento->save();
-
-                    $atualizados++;
-
-                    Log::info("Lançamento atualizado com amarração", [
-                        'lancamento_id' => $lancamento->id,
-                        'amarracao_id' => $amarracao->id,
-                        'terceiro' => $terceiroNome,
-                        'conta_debito_antes' => $lancamento->getOriginal('conta_debito'),
-                        'conta_credito_antes' => $lancamento->getOriginal('conta_credito'),
-                        'conta_debito_depois' => $lancamento->conta_debito,
-                        'conta_credito_depois' => $lancamento->conta_credito
-                    ]);
-                } else {
-                    $naoEncontrados++;
-
-                    Log::info("Nenhuma amarração encontrada para lançamento", [
-                        'lancamento_id' => $lancamento->id,
-                        'terceiro' => $terceiroNome,
-                        'codigo_sistema' => $codigoSistemaEmpresa,
-                        'conta_debito' => $lancamento->conta_debito,
-                        'conta_credito' => $lancamento->conta_credito
-                    ]);
-                }
-            }
-
-            Log::info("=== ATUALIZAÇÃO CONCLUÍDA ===", [
-                'total_processados' => $lancamentos->count(),
-                'atualizados' => $atualizados,
-                'nao_encontrados' => $naoEncontrados
-            ]);
-
-            session()->flash('message', "Atualização concluída! {$atualizados} lançamentos com correspondência exata de terceiro e amarração foram atualizados, {$naoEncontrados} não encontraram amarração correspondente.");
-
-        } catch (\Exception $e) {
-            Log::error("Erro ao atualizar lançamentos com amarrações", [
-                'erro' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            session()->flash('error', 'Erro ao atualizar lançamentos: ' . $e->getMessage());
-        }
     }
 
     public function updatingPerPage()
@@ -610,6 +518,12 @@ class TabelaLancamentos extends Component
     private function getLancamentosQuery()
     {
         $query = Lancamento::with(['importacao', 'terceiro']);
+
+        // Filtrar pela empresa selecionada no seletor global
+        $empresaId = session('empresa_selecionada_id');
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
 
         if (!empty($this->filtroData)) {
             $query->whereDate('data', $this->filtroData);
@@ -1003,65 +917,32 @@ class TabelaLancamentos extends Component
         $query = $this->getLancamentosQuery();
         $lancamentos = $query->paginate($this->perPage);
         
-        // Carregar importações com nome da empresa
-        $importacoes = Importacao::with('empresa')
-            ->orderBy('created_at', 'desc')
-            ->get()
+        // Carregar importações com nome da empresa (filtradas pela empresa do seletor global)
+        $empresaId = session('empresa_selecionada_id');
+        $importacoesQuery = Importacao::with('empresa')->orderBy('created_at', 'desc');
+        if ($empresaId) {
+            $importacoesQuery->where('empresa_id', $empresaId);
+        }
+        $importacoes = $importacoesQuery->get()
             ->map(function ($importacao) {
                 $empresaNome = $importacao->empresa ? $importacao->empresa->nome : 'Sem empresa';
                 return [
                     'id' => $importacao->id,
                     'nome_arquivo' => $importacao->nome_arquivo,
                     'empresa_nome' => $empresaNome,
+                    'layout_avancado' => $importacao->layout_avancado,
                     'display_text' => "ID: {$importacao->id} - {$importacao->nome_arquivo} - {$empresaNome}"
                 ];
             });
 
+        $importacaoSelecionada = $importacoes->firstWhere('id', (int) $this->filtroImportacao);
+        $mostrarReprocessar = $importacaoSelecionada && !empty($importacaoSelecionada['layout_avancado']);
+
         return view('livewire.tabela-lancamentos', [
             'lancamentos' => $lancamentos,
-            'importacoes' => $importacoes
+            'importacoes' => $importacoes,
+            'mostrarReprocessar' => $mostrarReprocessar,
         ]);
     }
 
-    // Métodos para confirmar as ações do modal
-    public function confirmarSalvarContaAmarracao()
-    {
-        $this->confirmarSalvarAmarracao = true;
-        $this->salvarEdicao();
-    }
-    public function cancelarConfirmacaoEdicao()
-    {
-        // Se há dados pendentes de edição, salvar sem atualizar a amarração
-        if ($this->edicaoLancamentoId && $this->edicaoCampo && $this->edicaoValor) {
-            $lancamento = Lancamento::find($this->edicaoLancamentoId);
-            if ($lancamento) {
-                $campo = $this->edicaoCampo;
-                $valorNovo = $this->edicaoValor;
-                $valorAnterior = $lancamento->{$campo};
-                
-                $lancamento->{$campo} = $valorNovo;
-                $lancamento->conferido = true;
-                $lancamento->save();
-                
-                AlteracaoLog::create([
-                    'lancamento_id' => $lancamento->id,
-                    'campo_alterado' => $campo,
-                    'valor_anterior' => $valorAnterior,
-                    'valor_novo' => $valorNovo,
-                    'tipo_alteracao' => 'conta',
-                    'data_alteracao' => now()
-                ]);
-            }
-        }
-        
-        // Limpar todas as propriedades
-        $this->confirmarSalvarAmarracao = false;
-        $this->edicaoPendente = null;
-        $this->edicaoTipo = '';
-        $this->edicaoCampo = '';
-        $this->edicaoValor = '';
-        $this->edicaoLancamentoId = null;
-        $this->edicaoAmarracaoId = null;
-        $this->cancelarEdicao();
-    }
 }

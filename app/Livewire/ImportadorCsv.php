@@ -5,7 +5,6 @@ namespace App\Livewire;
 use App\Models\Lancamento;
 use App\Models\Importacao;
 use App\Models\Terceiro;
-use App\Models\Amarracao;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
@@ -153,72 +152,11 @@ class ImportadorCsv extends Component
                         $empresaImportacao = $empresa;
                     }
 
-                    // LÓGICA DE BUSCA PROGRESSIVA DE AMARRAÇÕES
-                    $amarracao = null;
-                    if (count($palavrasTags) >= 2) {
-                        $tags_completas = trim(implode(',', $palavrasTags), '"');
-                        $tags_completas = str_replace('"', '', $tags_completas);
-                        $tags_completas = trim($tags_completas);
-                        if ($contaBancoEmpresa && $contaDebito === $contaBancoEmpresa) {
-                            $amarracao = Amarracao::where('terceiro', $terceiroNome)
-                                ->where('detalhes_operacao', $tags_completas)
-                                ->where('conta_debito', $contaBancoEmpresa)
-                                ->first();
-                        } else {
-                            $amarracao = Amarracao::where('terceiro', $terceiroNome)
-                                ->where('detalhes_operacao', $tags_completas)
-                                ->where(function($q) use ($contaBancoEmpresa) {
-                                    if ($contaBancoEmpresa) {
-                                        $q->where('conta_debito', '!=', $contaBancoEmpresa);
-                                    }
-                                })
-                                ->first();
-                        }
-                        // Busca progressiva reduzindo tags
-                        if (!$amarracao && count($palavrasTags) > 2) {
-                            $tags_para_testar = $palavrasTags;
-                            while (count($tags_para_testar) > 2 && !$amarracao) {
-                                array_pop($tags_para_testar);
-                                $tags_reduzidas = trim(implode(',', $tags_para_testar), '"');
-                                $tags_reduzidas = str_replace('"', '', $tags_reduzidas);
-                                $tags_reduzidas = trim($tags_reduzidas);
-                                if ($contaBancoEmpresa && $contaDebito === $contaBancoEmpresa) {
-                                    $amarracao = Amarracao::where('terceiro', $terceiroNome)
-                                        ->where('detalhes_operacao', $tags_reduzidas)
-                                        ->where('conta_debito', $contaBancoEmpresa)
-                                        ->first();
-                                } else {
-                                    $amarracao = Amarracao::where('terceiro', $terceiroNome)
-                                        ->where('detalhes_operacao', $tags_reduzidas)
-                                        ->where(function($q) use ($contaBancoEmpresa) {
-                                            if ($contaBancoEmpresa) {
-                                                $q->where('conta_debito', '!=', $contaBancoEmpresa);
-                                            }
-                                        })
-                                        ->first();
-                                }
-                            }
-                        }
-                        if (!$amarracao) {
-                            $amarracao_id = Amarracao::insertGetId([
-                                'terceiro' => $terceiroNome,
-                                'detalhes_operacao' => $tags_completas,
-                                'conta_debito' => $contaDebito,
-                                'conta_credito' => $contaCredito,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ]);
-                            $amarracao = Amarracao::find($amarracao_id);
-                        }
-                    }
-                    $contaDebitoFinal = $amarracao ? $amarracao->conta_debito : $contaDebito;
-                    $contaCreditoFinal = $amarracao ? $amarracao->conta_credito : $contaCredito;
-
                     Lancamento::create([
                         'data' => $this->parseData($dataLancamento),
                         'usuario' => $usuario ?? '',
-                        'conta_debito' => $contaDebitoFinal,
-                        'conta_credito' => $contaCreditoFinal,
+                        'conta_debito' => $contaDebito,
+                        'conta_credito' => $contaCredito,
                         'conta_debito_original' => $contaDebito,
                         'conta_credito_original' => $contaCredito,
                         'valor' => $this->parseValor($valor ?? 0),
@@ -228,7 +166,7 @@ class ImportadorCsv extends Component
                         'numero_nota' => $numeroNota ?? null,
                         'importacao_id' => $importacao->id,
                         'terceiro_id' => $terceiroId,
-                        'amarracao_id' => $amarracao->id
+                        'amarracao_id' => null,
                     ]);
                     $importados++;
                 }

@@ -74,16 +74,20 @@
                 <button wire:click="limparFiltros" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-xs shadow transition-all">Limpar</button>
             </div>
             <div class="flex gap-2">
-                @if($filtroImportacao)
-                    <button wire:click="atualizarLancamentosComAmarracoes" 
-                            wire:confirm="Tem certeza que deseja atualizar todos os lançamentos em branco desta importação conforme as amarrações existentes?"
-                            class="px-5 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                        Atualizar com Amarrações
-                    </button>
+                @if($mostrarReprocessar)
+                <button wire:click="reprocessarAmarracoes" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg text-white text-xs shadow transition-all flex items-center" title="Aplica novamente as regras de amarração por descrição nos lançamentos da importação selecionada">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Reprocessar amarrações
+                </button>
                 @endif
+                <a href="{{ route('regras-amarracao') }}" target="_blank" rel="noopener noreferrer" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.172-1.171 4.828-4.828a4 4 0 00-5.656-5.656l-4 4a4 4 0 101.414 1.414l4-4z"></path>
+                    </svg>
+                    Amarrações
+                </a>
                 <button wire:click="abrirModalNovoLancamento" class="px-5 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -233,24 +237,6 @@
             </div>
         @endif
 
-        @php
-            $showModalAmarracao = $confirmarSalvarAmarracao || $edicaoTipo === 'amarracao';
-        @endphp
-        <div x-data="{ showAmarracao: @js($edicaoTipo === 'amarracao') }" @keydown.window.enter.prevent="if(showAmarracao){ $refs.btnNaoAmarracao.focus(); }">
-            <template x-if="showAmarracao">
-                <div class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-40">
-                    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-                        <h3 class="text-lg font-semibold mb-4">Salvar na amarração</h3>
-                        <p class="mb-4">Deseja salvar essa conta na amarração?</p>
-                        <div class="flex justify-end gap-2">
-                            <button @click="$wire.confirmarSalvarContaAmarracao(); showAmarracao=false" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Sim</button>
-                            <button x-ref="btnNaoAmarracao" @click="$wire.cancelarConfirmacaoEdicao(); showAmarracao=false" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Não</button>
-                        </div>
-                    </div>
-                </div>
-            </template>
-        </div>
-
         <!-- Tabela -->
         <div>
             <table class="min-w-full table-auto divide-y divide-gray-200">
@@ -339,8 +325,6 @@
                             $debitoOriginal = $lancamento->conta_debito_original;
                             $creditoAtual = $lancamento->conta_credito;
                             $creditoOriginal = $lancamento->conta_credito_original;
-                            $temAmarracaoDebito = isset($lancamento->amarracao) && $lancamento->amarracao->conta_debito && $lancamento->amarracao->conta_debito !== $debitoAtual;
-                            $temAmarracaoCredito = isset($lancamento->amarracao) && $lancamento->amarracao->conta_credito && $lancamento->amarracao->conta_credito !== $creditoAtual;
                         @endphp
                         <tr class="hover:bg-gray-50 {{ $temAlteracaoConta ? 'bg-yellow-50' : '' }} {{ $lancamento->conferido ? 'bg-green-50' : '' }}" 
                             wire:click="toggleConferido({{ $lancamento->id }})" 
@@ -650,16 +634,17 @@ document.addEventListener('livewire:init', () => {
         setTimeout(aplicarCursorPointer, 50);
     });
     
-    // Fechar menu de ações quando clicar fora (evento único)
+    // Fechar menu de ações quando clicar fora (só no componente desta tabela, não no seletor do cabeçalho)
     document.addEventListener('click', function(event) {
         const menuButtons = document.querySelectorAll('[wire\\:click*="abrirMenuAcoes"]');
         const isMenuButton = Array.from(menuButtons).some(button => button.contains(event.target));
         
         if (!isMenuButton && !event.target.closest('.absolute')) {
-            if (window.Livewire) {
-                const wireId = document.querySelector('[wire\\:id]')?.getAttribute('wire:id');
+            if (window.Livewire && menuButtons.length > 0) {
+                const root = menuButtons[0].closest('[wire\\:id]');
+                const wireId = root?.getAttribute('wire:id');
                 const component = wireId ? window.Livewire.find(wireId) : null;
-                if (component) {
+                if (component && typeof component.call === 'function') {
                     component.call('fecharMenuAcoes');
                 }
             }

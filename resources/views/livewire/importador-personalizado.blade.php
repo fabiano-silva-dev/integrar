@@ -321,7 +321,7 @@
                     </div>
 
                     <!-- Seleção de Regras Existentes -->
-                    @if($empresa_id && $regrasDisponiveis->count() > 0)
+                    @if($empresa_id && count($regrasDisponiveis) > 0)
                     <div class="bg-yellow-50 rounded-lg p-4">
                         <h3 class="text-lg font-semibold mb-4">Regras Salvas</h3>
                         <div class="space-y-4">

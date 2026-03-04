@@ -28,6 +28,6 @@ docker exec integrar-app php artisan view:cache
 
 echo "✅ Limpeza e reconstrução concluídas!"
 
-
+docker exec integrar-app php artisan migrate --force
 
 
