@@ -37,21 +37,28 @@ class ListaImportacoes extends Component
 
     public function abrirImportacao($importacaoId)
     {
-        return redirect()->route('tabela', ['importacao' => $importacaoId]);
+        $importacao = $this->getImportacaoDaEmpresaSelecionada((int) $importacaoId);
+
+        if (!$importacao) {
+            session()->flash('error', 'Importação não encontrada para a empresa selecionada.');
+            return;
+        }
+
+        return redirect()->route('tabela', ['importacao' => $importacao->id]);
     }
 
     public function excluirImportacao($importacaoId)
     {
-        $importacao = Importacao::find($importacaoId);
+        $importacao = $this->getImportacaoDaEmpresaSelecionada((int) $importacaoId);
         
         if (!$importacao) {
-            session()->flash('error', 'Importação não encontrada.');
+            session()->flash('error', 'Importação não encontrada para a empresa selecionada.');
             return;
         }
 
         try {
             // Excluir todos os lançamentos da importação
-            $lancamentosExcluidos = \App\Models\Lancamento::where('importacao_id', $importacaoId)->delete();
+            $lancamentosExcluidos = \App\Models\Lancamento::where('importacao_id', $importacao->id)->delete();
             
             // Excluir a importação
             $importacao->delete();
@@ -66,6 +73,11 @@ class ListaImportacoes extends Component
     private function getImportacoesQuery()
     {
         $query = Importacao::query();
+        $empresaSelecionadaId = session('empresa_selecionada_id');
+
+        if (!empty($empresaSelecionadaId)) {
+            $query->where('empresa_id', (int) $empresaSelecionadaId);
+        }
 
         if (!empty($this->filtroStatus)) {
             $query->where('status', $this->filtroStatus);
@@ -80,6 +92,18 @@ class ListaImportacoes extends Component
         }
 
         return $query->orderBy('created_at', 'desc');
+    }
+
+    private function getImportacaoDaEmpresaSelecionada(int $importacaoId): ?Importacao
+    {
+        $query = Importacao::query()->where('id', $importacaoId);
+        $empresaSelecionadaId = session('empresa_selecionada_id');
+
+        if (!empty($empresaSelecionadaId)) {
+            $query->where('empresa_id', (int) $empresaSelecionadaId);
+        }
+
+        return $query->first();
     }
 
     public function render()

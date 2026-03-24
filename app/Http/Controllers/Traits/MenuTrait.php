@@ -7,9 +7,19 @@ use Illuminate\Support\Facades\Session;
 
 trait MenuTrait
 {
+    private function podeAcessarItemMenu(array $item, string $role): bool
+    {
+        if (!isset($item['roles']) || !is_array($item['roles']) || empty($item['roles'])) {
+            return true;
+        }
+
+        return in_array($role, $item['roles'], true);
+    }
+
     public function getMenuOptions()
     {
         $user = Auth::user();
+        $role = $user->role ?? 'operador';
         
         $menuItems = [
             [
@@ -26,6 +36,7 @@ trait MenuTrait
                         'name' => '👥 Usuários',
                         'url' => route('usuarios'),
                         'active' => request()->routeIs('usuarios*'),
+                        'roles' => ['admin', 'gerente'],
                     ],
                     [
                         'name' => '🤝 Terceiros',
@@ -95,6 +106,7 @@ trait MenuTrait
                         'name' => '📋 Históricos padrão por layout',
                         'url' => route('historicos-padrao-layout'),
                         'active' => request()->routeIs('historicos-padrao-layout*'),
+                        'roles' => ['admin'],
                     ],
                     [
                         'name' => '🛠️ Configurações',
@@ -124,25 +136,15 @@ trait MenuTrait
             ],
         ];
 
-        // Filtrar itens baseado no papel do usuário
-        if ($user->role === 'operador') {
-            // Remover itens administrativos para operadores
-            $menuItems = array_filter($menuItems, function($menu) {
-                return !in_array($menu['id'], ['administracao']);
-            });
-        }
+        // Filtra links sem acesso e remove menus vazios.
+        $menuItems = array_values(array_filter(array_map(function ($menu) use ($role) {
+            $items = $menu['items'] ?? [];
+            $menu['items'] = array_values(array_filter($items, function ($item) use ($role) {
+                return $this->podeAcessarItemMenu($item, $role);
+            }));
 
-        // Históricos padrão por layout: apenas admin
-        if ($user->role !== 'admin') {
-            $menuItems = array_map(function($menu) {
-                if (($menu['id'] ?? '') === 'administracao' && !empty($menu['items'])) {
-                    $menu['items'] = array_values(array_filter($menu['items'], function($item) {
-                        return ($item['url'] ?? '') !== route('historicos-padrao-layout');
-                    }));
-                }
-                return $menu;
-            }, $menuItems);
-        }
+            return !empty($menu['items']) ? $menu : null;
+        }, $menuItems)));
 
         return $menuItems;
     }
