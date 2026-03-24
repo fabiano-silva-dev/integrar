@@ -16,53 +16,56 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import csv
 
 try:
-    import PyPDF2
+    import pdfplumber
 except ImportError:
-    print("PyPDF2 não encontrado. Instalando...")
-    os.system("pip install PyPDF2")
-    import PyPDF2
+    print("Erro: pdfplumber não encontrado. Instale com: pip install pdfplumber")
+    sys.exit(1)
+
 
 def extrair_texto_pdf(caminho_pdf, debug=False):
     """
-    Extrai texto de um arquivo PDF
-    
-    Args:
-        caminho_pdf (str): Caminho para o arquivo PDF
-        debug (bool): Se True, exibe informações detalhadas
-        
-    Returns:
-        str: Texto extraído do PDF
+    Extrai texto de todas as páginas do PDF usando pdfplumber.
+    Retorna (texto_com_pipes, linhas) para permitir detecção de formato.
     """
+    linhas = []
     try:
-        with open(caminho_pdf, 'rb') as arquivo:
-            leitor_pdf = PyPDF2.PdfReader(arquivo)
-            texto_completo = ""
-            
+        with pdfplumber.open(caminho_pdf) as pdf:
             if debug:
-                print(f"PDF possui {len(leitor_pdf.pages)} páginas")
-            
-            for numero_pagina, pagina in enumerate(leitor_pdf.pages, 1):
-                if debug:
-                    print(f"\n--- PÁGINA {numero_pagina} ---")
-                texto_pagina = pagina.extract_text()
-                texto_pagina = texto_pagina.replace('\n', '|')
-                texto_completo += texto_pagina
-                
-                if debug:
-                    # Exibir linha por linha
-                    linhas = texto_pagina.split('|')
-                    for i, linha in enumerate(linhas, 1):
-                        if linha.strip():  # Só exibe linhas não vazias
+                print(f"PDF possui {len(pdf.pages)} páginas")
+            for numero_pagina, page in enumerate(pdf.pages, 1):
+                text = page.extract_text()
+                if text:
+                    pag_linhas = [ln.strip() for ln in text.split('\n') if ln.strip()]
+                    if debug:
+                        print(f"\n--- PÁGINA {numero_pagina} ---")
+                        for i, linha in enumerate(pag_linhas, 1):
                             print(f"Linha {i}: {linha}")
-                
-            return texto_completo
-            
+                    linhas.extend(pag_linhas)
+        texto = '|'.join(linhas) if linhas else None
+        return texto, linhas
     except FileNotFoundError:
         print(f"Erro: Arquivo '{caminho_pdf}' não encontrado.")
-        return None
+        return None, []
     except Exception as e:
         print(f"Erro ao processar o PDF: {e}")
-        return None
+        return None, []
+
+
+def detectar_formato_sicoob(texto_ou_linhas):
+    """
+    Detecta o layout do extrato SICOOB pelo cabeçalho:
+    - '4col': DATA | DOCUMENTO | HISTÓRICO | VALOR (limarin)
+    - '3col': DATA | HISTÓRICO | VALOR (fabiane)
+    """
+    if isinstance(texto_ou_linhas, str):
+        trecho = texto_ou_linhas[:3000].upper()
+    else:
+        trecho = ' '.join(str(x) for x in texto_ou_linhas[:80]).upper()
+    # Normalizar acentos para comparação
+    trecho_norm = trecho.replace('Ó', 'O').replace('Í', 'I')
+    if 'DOCUMENTO' in trecho_norm and 'HISTORICO' in trecho_norm:
+        return '4col'
+    return '3col'
 
 def organizar_lancamentos_por_data(texto):
     """
@@ -175,44 +178,28 @@ def exibir_lancamentos_organizados(lancamentos_por_data, debug=False):
         total_lancamentos = sum(len(lancamentos) for lancamentos in lancamentos_por_data.values())
         print(f"📊 Total de lançamentos: {total_lancamentos}")
 
-def extrair_data_valor(lancamento):
+def extrair_data_valor(lancamento, formato='3col'):
     """
-    Extrai data, valor e tipo de um lançamento no novo formato
-    Valor negativo para D, positivo para C.
-    Args:
-        lancamento (str): String do lançamento
-    Returns:
-        tuple: (data_processada, valor_processado, tipo_operacao)
+    Extrai data, valor e tipo de um lançamento.
+    4col: DATA DOCUMENTO HISTÓRICO VALOR - data dd/mm/yyyy, valor com D/C (450,00D)
+    3col: DATA HISTÓRICO VALOR - data dd/mm, valor e C/D podem estar separados
     """
-    import re
-    
-    # Dividir a linha pelos separadores |
     partes = lancamento.split('|')
-    
-    # Primeira parte contém data e valor
     primeira_parte = partes[0].strip()
+    segunda_parte = partes[1].strip() if len(partes) > 1 else ""
 
-    if len(partes) > 1:
-        segunda_parte = partes[1].strip()
-    else:
-        segunda_parte = ""
-    
-    # Padrão para data (dd/mm)
-    padrao_data = r'^(\d{2}/\d{2})'
-    
-    # Extrair data
-    match_data = re.search(padrao_data, primeira_parte)
-    if match_data:
-        data_dd_mm = match_data.group(1)
-        data_processada = f"{data_dd_mm}/2025"
+    # Data: dd/mm/yyyy ou dd/mm
+    match_full = re.match(r'^(\d{2}/\d{2}/\d{4})', primeira_parte)
+    match_short = re.match(r'^(\d{2}/\d{2})(?!/)', primeira_parte)
+    if match_full:
+        data_processada = match_full.group(1)
+    elif match_short:
+        data_processada = f"{match_short.group(1)}/2025"
     else:
         data_processada = None
-    
 
-    # Padrão para valor monetário (com D ou C concatenado ou separado)
+    # Valor: com D/C concatenado (4col: 450,00D) ou separado (3col: | C |)
     padrao_valor = r'(\d{1,3}(?:\.\d{3})*,\d{2})(?:\s*\|\s*([DC])|([DC]))'
-    
-    # Procurar por valores monetários na primeira parte
     match_valor = re.search(padrao_valor, primeira_parte + "|" + segunda_parte)
 
     valor_processado = None
@@ -308,7 +295,38 @@ def extrair_saldo_final_resumo(lancamento):
     
     return None
 
-def processar_lancamentos_com_data_valor(lancamentos_por_data):
+def extrair_documento_historico_4col(lancamento_completo):
+    """
+    Layout 4col: DATA | DOCUMENTO | HISTÓRICO | VALOR.
+    O HISTÓRICO pode ter várias linhas (ex: DÉB.TRANSF..., INTERCREDIS, FAV.: ..., etc.).
+    Inclui todas as partes do lancamento na coluna historico.
+    """
+    partes = [p.strip() for p in lancamento_completo.strip().split('|') if p.strip()]
+    primeira = partes[0] if partes else ''
+
+    restante = re.sub(r'^\d{2}/\d{2}(/\d{4})?\s+', '', primeira)
+    restante = re.sub(r'\s+\d{1,3}(?:\.\d{3})*,\d{2}[DC]?\s*$', '', restante).strip()
+    tokens = restante.split()
+    if not tokens:
+        documento = ''
+        historico_primeira = ''
+    elif len(tokens) == 1:
+        documento = tokens[0]
+        historico_primeira = ''
+    else:
+        documento = tokens[0]
+        historico_primeira = ' '.join(tokens[1:])
+
+    # Juntar historico da primeira linha + todas as linhas de continuação
+    continuacoes = partes[1:] if len(partes) > 1 else []
+    historico_full = historico_primeira
+    for c in continuacoes:
+        if c and c not in ('C', 'D'):
+            historico_full = (historico_full + ' ' + c).strip()
+    return documento, historico_full
+
+
+def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col'):
     """
     Processa os lançamentos extraindo data, valor, tipo, cnpj/cpf, documento e pagador/recebedor
     """
@@ -334,11 +352,16 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data):
     for data in datas_ordenadas:
         lancamentos = lancamentos_por_data[data]
         for lancamento in lancamentos:
-            data_processada, valor_processado, tipo_operacao = extrair_data_valor(lancamento)
+            data_processada, valor_processado, tipo_operacao = extrair_data_valor(lancamento, formato)
             cnpj_cpf = extrair_cnpj_cpf(lancamento)
-            documento = extrair_documento(lancamento)
+            if formato == '4col':
+                documento, historico_4col = extrair_documento_historico_4col(lancamento)
+                if not documento:
+                    documento = extrair_documento(lancamento)
+            else:
+                documento = extrair_documento(lancamento)
+                historico_4col = None
             pagador_recebedor = extrair_pagador_recebedor(lancamento, cnpj_cpf)
-            print(f"Data: {data_processada}, Valor: {valor_processado}, Tipo: {tipo_operacao}")
             
             # Verificar se é saldo anterior
             if "SALDO ANTERIOR" in lancamento and valor_processado is not None:
@@ -361,7 +384,7 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data):
                 valor_processado is not None and 
                 tipo_operacao is not None and
                 valor_processado != 0):
-                lancamentos_processados.append({
+                item = {
                     'data': data_processada,
                     'valor': valor_processado,
                     'tipo': tipo_operacao,
@@ -369,7 +392,10 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data):
                     'documento': documento,
                     'pagador_recebedor': pagador_recebedor,
                     'lancamento_completo': lancamento
-                })
+                }
+                if formato == '4col':
+                    item['historico_4col'] = historico_4col
+                lancamentos_processados.append(item)
     
     # Se não encontrou o saldo final no resumo, usar o último saldo do dia
     if ultimo_saldo_dia is None:
@@ -457,6 +483,29 @@ def exibir_lancamentos_processados(lancamentos_processados, saldo_anterior, ulti
             valor_formatado = f"{sinal}{valor:.2f}"
             print(f"{i:3d}. {data:<10}  {valor_formatado:>12}  {tipo:<4}  {cnpj_cpf:<20}  {documento:<15}  {pagador_recebedor:<20}  {texto}")
         print("-" * 80)
+
+def normalizar_historico_sicoob(lancamento_completo, pagador_recebedor, documento, formato='3col', historico_4col=None):
+    """
+    Gera histórico limpo para amarração.
+    4col: usa históricocoluna (DÉB.IOF) separada do documento (IOF/2-1) — conforme layout da imagem
+    3col: descrição + tipo Pix + nome + DOC
+    """
+    if formato == '4col' and historico_4col:
+        # historico_4col já contém a descrição completa (incl. linhas de continuação)
+        return historico_4col.strip()
+
+    # 3col ou fallback
+    partes = [p.strip() for p in lancamento_completo.strip().split('|') if p.strip()]
+    primeira = partes[0] if partes else ''
+    primeira = re.sub(r'^\d{2}/\d{2}(/\d{4})?\s*', '', primeira)
+    primeira = re.sub(r'\s*-?\d{1,3}(?:\.\d{3})*,\d{2}\s*[DC]?\s*$', '', primeira).strip()
+    tipo_pix = next((p for p in partes[1:] if p in ('Pagamento Pix', 'Recebimento Pix')), '')
+    pedacos = [primeira, tipo_pix, pagador_recebedor.strip()] if pagador_recebedor else [primeira, tipo_pix]
+    historico = ' '.join(p for p in pedacos if p).strip()
+    if documento:
+        historico += f" DOC: {documento}"
+    return historico or lancamento_completo
+
 
 def extrair_documento(texto):
     """
@@ -588,23 +637,19 @@ def extrair_texto_e_organizar(caminho_pdf, debug=False):
         caminho_pdf (str): Caminho para o arquivo PDF
         debug (bool): Se True, exibe informações detalhadas
     """
-    # Extrair texto
-    texto = extrair_texto_pdf(caminho_pdf, debug)
-    
+    texto, linhas = extrair_texto_pdf(caminho_pdf, debug)
+
     if texto:
         if debug:
             print("\n" + "=" * 50)
             print("EXTRAÇÃO CONCLUÍDA!")
             print(f"Total de caracteres extraídos: {len(texto)}")
-        
-        # Organizar lançamentos por data
+        formato = detectar_formato_sicoob(linhas)
+        if debug:
+            print(f"Formato detectado: {formato} colunas")
         lancamentos_por_data = organizar_lancamentos_por_data(texto)
-        
-        # Exibir lançamentos organizados (apenas em debug)
         exibir_lancamentos_organizados(lancamentos_por_data, debug)
-        
-        # Processar data e valor
-        lancamentos_processados, saldo_anterior, ultimo_saldo_dia = processar_lancamentos_com_data_valor(lancamentos_por_data)
+        lancamentos_processados, saldo_anterior, ultimo_saldo_dia = processar_lancamentos_com_data_valor(lancamentos_por_data, formato)
         
         # Exibir lançamentos processados
         exibir_lancamentos_processados(lancamentos_processados, saldo_anterior, ultimo_saldo_dia, debug)
@@ -762,10 +807,13 @@ def main():
     if not caminho_pdf.lower().endswith('.pdf'):
         print("Erro: O arquivo deve ser um PDF (.pdf)")
         sys.exit(1)
-    texto = extrair_texto_pdf(caminho_pdf, debug)
+    texto, linhas = extrair_texto_pdf(caminho_pdf, debug)
     if texto:
+        formato = detectar_formato_sicoob(linhas)
+        if debug:
+            print(f"Formato detectado: {formato} colunas")
         lancamentos_por_data = organizar_lancamentos_por_data(texto)
-        lancamentos_processados, saldo_anterior, ultimo_saldo_dia = processar_lancamentos_com_data_valor(lancamentos_por_data)
+        lancamentos_processados, saldo_anterior, ultimo_saldo_dia = processar_lancamentos_com_data_valor(lancamentos_por_data, formato)
         # Padronizar saída para o formato esperado pelo importador avançado
         def formatar_valor_brl(valor):
             try:
@@ -792,35 +840,30 @@ def main():
                 data = l['data']
                 valor = l['valor']
                 nome = l.get('pagador_recebedor', '')
-                cnpj_cpf = l.get('cnpj_cpf', '')
                 documento = l.get('documento', '')
-                
-                # Aplicar lógica de contas baseada no valor (igual ao Grafeno)
+                lancamento_completo = l.get('lancamento_completo', '').strip()
+                historico_4col = l.get('historico_4col', '') if formato == '4col' else None
+
+                # Histórico: 4col usa coluna HISTÓRICO isolada (ex: DÉB.IOF); 3col monta descrição
+                historico = normalizar_historico_sicoob(lancamento_completo, nome, documento, formato, historico_4col)
+
                 if valor > 0:
-                    # Recebimento (positivo): conta do banco no débito, outra conta vazia
                     conta_debito = conta_banco
                     conta_credito = ''
-                    historico = f"RCTO REF {nome.upper()}"
                 else:
-                    # Pagamento (negativo): conta do banco no crédito, outra conta vazia
                     conta_debito = ''
                     conta_credito = conta_banco
-                    historico = f"PGTO REF {nome.upper()}"
-                
-                # Se tem CNPJ/CPF e não está duplicado no nome, adicionar ao histórico
-                if cnpj_cpf and cnpj_cpf not in nome:
-                    historico += f" {cnpj_cpf}"
-                
+
                 writer.writerow([
-                    data,                    # Data do Lançamento
-                    'Sistema',               # Usuário
-                    conta_debito,            # Conta Débito
-                    conta_credito,           # Conta Crédito
-                    formatar_valor_brl(valor), # Valor do Lançamento
-                    historico,               # Histórico
-                    '',                      # Código da Filial/Matriz
-                    nome,                    # Nome da Empresa
-                    documento                # Número da Nota
+                    data,
+                    'Sistema',
+                    conta_debito,
+                    conta_credito,
+                    formatar_valor_brl(valor),
+                    historico,
+                    '',
+                    nome,
+                    documento
                 ])
         print(f"CSV padronizado gerado em: {caminho_csv}")
 
