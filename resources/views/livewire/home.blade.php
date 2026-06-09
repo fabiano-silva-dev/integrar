@@ -23,7 +23,7 @@
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">🔄 Conversão</h2>
             <ul class="space-y-2">
-                <li><a href="{{ route('conversao-pdf-ofx-sicoob') }}" class="flex items-center gap-2 hover:underline">📄 PDF para OFX (Sicoob)</a></li>
+                <li><a href="{{ route('conversao-pdf-ofx') }}" class="flex items-center gap-2 hover:underline">📄 PDF para OFX</a></li>
             </ul>
         </div>
         <!-- Lançamentos -->
@@ -45,6 +45,10 @@
         <div class="bg-white rounded-lg shadow p-6 col-span-1 md:col-span-2">
             <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">⚙️ Administração</h2>
             <ul class="flex flex-wrap gap-6">
+                @if(auth()->user()?->role === 'admin')
+                    <li><a href="{{ route('conversoes-extrato') }}" class="flex items-center gap-2 hover:underline">🕑 Histórico de conversões</a></li>
+                    <li><a href="{{ route('historicos-padrao-layout') }}" class="flex items-center gap-2 hover:underline">📋 Históricos padrão por layout</a></li>
+                @endif
                 <li class="flex items-center gap-2 text-gray-400">🛠️ Configurações <span class="text-xs">(em breve)</span></li>
                 <li class="flex items-center gap-2 text-gray-400">📜 Logs <span class="text-xs">(em breve)</span></li>
                 <li class="flex items-center gap-2 text-gray-400">🔑 Acessos <span class="text-xs">(em breve)</span></li>

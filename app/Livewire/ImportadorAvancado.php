@@ -20,6 +20,7 @@ class ImportadorAvancado extends Component
 
     public $arquivo;
     public $empresa_id;
+    public $familia_layout = '';
     public $layout_selecionado = '';
     public $conta_banco = '';
     public $status_importacao = 'pendente';
@@ -35,7 +36,7 @@ class ImportadorAvancado extends Component
     protected $rules = [
         'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240', // 10MB
         'empresa_id' => 'required|exists:empresas,id',
-        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
+        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi',
         'conta_banco' => 'required|string',
     ];
 
@@ -62,6 +63,19 @@ class ImportadorAvancado extends Component
         $this->resetValidation();
         $this->validateOnly('arquivo');
         $this->mensagem_status = 'Arquivo selecionado. Escolha o layout e a empresa.';
+    }
+
+    public function updatedFamiliaLayout($familia)
+    {
+        $layoutsPorFamilia = $this->obterLayoutsPorFamilia();
+        $opcoes = $layoutsPorFamilia[$familia] ?? [];
+
+        if (count($opcoes) === 1) {
+            $this->layout_selecionado = array_key_first($opcoes);
+            return;
+        }
+
+        $this->layout_selecionado = '';
     }
 
     public function processarArquivo()
@@ -204,6 +218,7 @@ class ImportadorAvancado extends Component
             'grafeno' => 'conversor_extrato_grafeno_pdf_csv.py',
             'sicoob' => 'conversor_extrato_sicoob_pdf_csv.py',
             'caixa_federal' => 'conversor_extrato_caixa_federal_pdf_csv.py',
+            'caixa' => 'conversor_extrato_caixa_pdf_csv.py',
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
@@ -227,7 +242,7 @@ class ImportadorAvancado extends Component
         ]);
         
         // Se for o script do Grafeno, SICOOB, Caixa Federal ou Registros, passar a conta do banco como terceiro parâmetro
-        if (in_array($this->layout_selecionado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi']) && !empty($this->conta_banco)) {
+        if (in_array($this->layout_selecionado, ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi']) && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\"";
@@ -274,6 +289,7 @@ class ImportadorAvancado extends Component
             'grafeno' => 'Grafeno (PDF)',
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
+            'caixa' => 'Caixa Internet Banking (PDF)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
@@ -731,8 +747,36 @@ class ImportadorAvancado extends Component
 
     public function resetarImportacao()
     {
-        $this->reset(['arquivo', 'empresa_id', 'layout_selecionado', 'conta_banco', 'status_importacao', 'progresso', 'mensagem_status', 'arquivo_processado', 'caminho_csv_final', 'importacao_id', 'total_registros_importados']);
+        $this->reset(['arquivo', 'empresa_id', 'familia_layout', 'layout_selecionado', 'conta_banco', 'status_importacao', 'progresso', 'mensagem_status', 'arquivo_processado', 'caminho_csv_final', 'importacao_id', 'total_registros_importados']);
         $this->mensagem_status = 'Aguardando upload do arquivo...';
+    }
+
+    private function obterLayoutsPorFamilia(): array
+    {
+        return [
+            'dominio' => [
+                'dominio' => 'Domínio (TXT)',
+            ],
+            'grafeno' => [
+                'grafeno' => 'Grafeno (PDF)',
+            ],
+            'sicoob' => [
+                'sicoob' => 'Sicoob (PDF)',
+            ],
+            'caixa' => [
+                'caixa_federal' => 'Caixa Econômica Federal (PDF) - Modelo antigo',
+                'caixa' => 'Caixa Internet Banking (PDF) - Modelo novo',
+            ],
+            'sicredi' => [
+                'sicredi' => 'SICREDI (PDF)',
+            ],
+            'ofx' => [
+                'ofx' => 'Formato OFX',
+            ],
+            'registros' => [
+                'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
+            ],
+        ];
     }
 
     public function abrirLancamentos()
@@ -747,20 +791,38 @@ class ImportadorAvancado extends Component
     {
         $empresas = Empresa::orderBy('nome')->get();
         $empresaAtual = $empresas->firstWhere('id', $this->empresa_id);
-        
-        $layouts = [
-            'dominio' => 'Domínio (TXT)',
-            'grafeno' => 'Grafeno (PDF)',
-            'sicoob' => 'Sicoob (PDF)',
-            'caixa_federal' => 'Caixa Econômica Federal (PDF)',
-            'ofx' => 'Formato OFX',
-            'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
-            'sicredi' => 'SICREDI (PDF)',
+        $layoutsPorFamilia = $this->obterLayoutsPorFamilia();
+        $familiasLayout = [
+            'dominio' => 'Domínio',
+            'grafeno' => 'Grafeno',
+            'sicoob' => 'Sicoob',
+            'caixa' => 'Caixa',
+            'sicredi' => 'Sicredi',
+            'ofx' => 'OFX',
+            'registros' => 'Connectere',
         ];
+
+        if (!empty($this->layout_selecionado) && empty($this->familia_layout)) {
+            $familiaEncontrada = collect($layoutsPorFamilia)->first(function ($layouts) {
+                return array_key_exists($this->layout_selecionado, $layouts);
+            });
+
+            if ($familiaEncontrada) {
+                $this->familia_layout = array_key_first(
+                    array_filter(
+                        $layoutsPorFamilia,
+                        function ($layouts) {
+                            return array_key_exists($this->layout_selecionado, $layouts);
+                        }
+                    )
+                );
+            }
+        }
 
         return view('livewire.importador-avancado', [
             'empresas' => $empresas,
-            'layouts' => $layouts,
+            'familiasLayout' => $familiasLayout,
+            'layoutsDisponiveis' => $layoutsPorFamilia[$this->familia_layout] ?? [],
             'empresaAtual' => $empresaAtual,
         ]);
     }

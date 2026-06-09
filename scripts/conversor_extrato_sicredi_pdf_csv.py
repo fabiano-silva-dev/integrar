@@ -18,6 +18,73 @@ except ImportError:
     sys.exit(1)
 
 
+def extrair_dados_conta_sicredi(linhas):
+    """
+    Extrai associado, cooperativa e conta do cabeçalho do extrato Sicredi.
+
+    Exemplo:
+      Associado: LIMARINDRAGO AUTOMOVEIS LTDA.
+      Cooperativa: 0434
+      Conta: 33025-3
+    """
+    texto_cabecalho = '\n'.join(linhas[:20])
+
+    titular = ''
+    cooperativa = ''
+    numero_conta = ''
+
+    match_associado = re.search(r'Associado:\s*(.+)', texto_cabecalho, re.IGNORECASE)
+    if match_associado:
+        titular = match_associado.group(1).strip()
+
+    match_coop = re.search(r'Cooperativa:\s*([\d\-]+)', texto_cabecalho, re.IGNORECASE)
+    if match_coop:
+        cooperativa = match_coop.group(1).strip()
+
+    match_conta = re.search(r'Conta:\s*([\d.\-]+)', texto_cabecalho, re.IGNORECASE)
+    if match_conta:
+        numero_conta = match_conta.group(1).strip()
+
+    acct_id = numero_conta.replace('.', '') if numero_conta else '00000000'
+
+    return {
+        'titular': titular,
+        'cooperativa': cooperativa,
+        'branch_id': cooperativa,
+        'numero_conta': numero_conta,
+        'acct_id': acct_id,
+    }
+
+
+def extrair_periodo_sicredi(linhas):
+    """
+    Extrai período do cabeçalho Sicredi.
+    Ex.: Extrato (Período de 01/01/2026 a 31/01/2026)
+    """
+    texto_cabecalho = '\n'.join(linhas[:20])
+    match = re.search(
+        r'Per[ií]odo de\s*(\d{2}/\d{2}/\d{4})\s*a\s*(\d{2}/\d{2}/\d{4})',
+        texto_cabecalho,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None, None
+
+    return match.group(1), match.group(2)
+
+
+def extrair_saldo_anterior_sicredi(linhas):
+    for linha in linhas[:30]:
+        match = re.search(r'SALDO ANTERIOR\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})', linha, re.IGNORECASE)
+        if match:
+            valor = match.group(1).replace('.', '').replace(',', '.')
+            try:
+                return abs(float(valor))
+            except ValueError:
+                pass
+    return None
+
+
 def extrair_texto_pdf(caminho_pdf):
     """
     Extrai texto de todas as páginas do PDF usando pdfplumber.
@@ -74,17 +141,20 @@ def parsear_lancamentos(linhas):
         
         try:
             valor_limpo = valor_str.replace('.', '').replace(',', '.')
+            saldo_limpo = saldo_str.replace('.', '').replace(',', '.')
             valor_float = float(valor_limpo)
+            saldo_float = float(saldo_limpo)
             if valor_float != 0:
                 lancamentos.append({
                     'data': data,
                     'descricao': descricao,
                     'documento': documento,
-                    'valor': valor_float
+                    'valor': valor_float,
+                    'saldo': saldo_float,
                 })
         except ValueError:
             pass
-    
+
     return lancamentos
 
 

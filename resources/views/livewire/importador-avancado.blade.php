@@ -10,18 +10,48 @@
                 </p>
 
                 <form wire:submit.prevent="processarArquivo" class="space-y-6">
-                    <!-- Seleção de Layout -->
+                    <!-- Família de Layout -->
                     <div>
-                        <label for="layout" class="block text-sm font-medium text-gray-700 mb-2">
-                            Layout do Arquivo
+                        <label for="familia_layout" class="block text-sm font-medium text-gray-700 mb-2">
+                            Instituição / Origem do Arquivo
                         </label>
-                        <select id="layout" wire:model="layout_selecionado" 
+                        <select id="familia_layout" wire:model.live="familia_layout"
                                 class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="">Selecione o layout...</option>
-                            @foreach($layouts as $valor => $nome)
+                            <option value="">Selecione a origem...</option>
+                            @foreach($familiasLayout as $valor => $nome)
                                 <option value="{{ $valor }}">{{ $nome }}</option>
                             @endforeach
                         </select>
+                    </div>
+
+                    @if(!empty($familia_layout))
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                @foreach($layoutsDisponiveis as $valor => $nome)
+                                    <label class="relative border rounded-lg p-3 cursor-pointer transition-all
+                                        {{ $layout_selecionado === $valor ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
+                                        <div class="flex items-start gap-3">
+                                            <input type="radio"
+                                                wire:model.live="layout_selecionado"
+                                                value="{{ $valor }}"
+                                                class="mt-1 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
+                                                @if(str_contains($nome, 'novo'))
+                                                    <p class="text-xs text-green-600 mt-1">Recomendado para extratos recentes da Caixa.</p>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    <div>
                         @error('layout_selecionado') 
                             <span class="text-red-500 text-sm">{{ $message }}</span> 
                         @enderror

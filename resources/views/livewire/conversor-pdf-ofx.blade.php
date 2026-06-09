@@ -3,16 +3,59 @@
         <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
             <div class="p-6 border-b border-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                    PDF para OFX — Sicoob
+                    PDF para OFX
                 </h2>
                 <p class="text-gray-600 mb-6">
-                    Envie o extrato PDF do Sicoob (mesmo formato usado na importação) e baixe o arquivo OFX gerado.
+                    Selecione a instituição do extrato, envie o PDF e baixe o arquivo OFX gerado.
                 </p>
 
                 <form wire:submit.prevent="converter" class="space-y-6">
                     <div>
+                        <label for="familia_layout" class="block text-sm font-medium text-gray-700 mb-2">
+                            Instituição / Origem do Arquivo
+                        </label>
+                        <select id="familia_layout" wire:model.live="familia_layout"
+                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">Selecione a origem...</option>
+                            @foreach($familiasLayout as $valor => $nome)
+                                <option value="{{ $valor }}">{{ $nome }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    @if(!empty($familia_layout))
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                @foreach($layoutsDisponiveis as $valor => $nome)
+                                    <label class="relative border rounded-lg p-3 cursor-pointer transition-all
+                                        {{ $layout_selecionado === $valor ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
+                                        <div class="flex items-start gap-3">
+                                            <input type="radio"
+                                                wire:model.live="layout_selecionado"
+                                                value="{{ $valor }}"
+                                                class="mt-1 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    <div>
+                        @error('layout_selecionado')
+                            <span class="text-red-500 text-sm">{{ $message }}</span>
+                        @enderror
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Arquivo PDF do extrato Sicoob
+                            Arquivo PDF do extrato
                         </label>
                         <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-indigo-400 transition-colors">
                             <div class="space-y-1 text-center">
@@ -25,7 +68,7 @@
                                         <input id="arquivo" wire:model="arquivo" type="file" class="sr-only" accept=".pdf">
                                     </label>
                                 </div>
-                                <p class="text-xs text-gray-500">PDF do extrato Sicoob até 10MB</p>
+                                <p class="text-xs text-gray-500">PDF do extrato até 10MB</p>
                                 @if($arquivo)
                                     <p class="text-sm text-green-600 font-medium">{{ $arquivo->getClientOriginalName() }}</p>
                                 @endif
@@ -75,7 +118,7 @@
                                 <h4 class="text-sm font-medium text-green-800 mb-2">Conversão concluída</h4>
                                 <ul class="text-sm text-green-700 space-y-1">
                                     @if($cooperativa_extraida)
-                                        <li>Cooperativa: <strong>{{ $cooperativa_extraida }}</strong></li>
+                                        <li>Agência/Cooperativa: <strong>{{ $cooperativa_extraida }}</strong></li>
                                     @endif
                                     @if($numero_conta_extraido)
                                         <li>Conta extraída do PDF: <strong>{{ $numero_conta_extraido }}</strong></li>
