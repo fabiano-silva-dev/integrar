@@ -51,6 +51,65 @@ def extrair_texto_pdf(caminho_pdf, debug=False):
         return None, []
 
 
+def extrair_periodo_sicoob(linhas):
+    """
+    Extrai o período do cabeçalho do extrato Sicoob.
+    Ex.: PERÍODO: 01/01/2026 - 31/01/2026
+    """
+    texto_cabecalho = '\n'.join(linhas[:40])
+    match = re.search(
+        r'PER[IÍ]ODO:\s*(\d{2}/\d{2}/\d{4})\s*-\s*(\d{2}/\d{2}/\d{4})',
+        texto_cabecalho,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None, None, None
+
+    inicio = match.group(1)
+    fim = match.group(2)
+    ano = inicio.split('/')[-1]
+    return inicio, fim, ano
+
+
+def extrair_dados_conta_sicoob(linhas):
+    """
+    Extrai cooperativa e conta do cabeçalho do extrato Sicoob.
+
+    Exemplo no PDF:
+      COOP.: 3067-8 / SICOOB - CREDIAUC/SC
+      CONTA: 53.513-3 / LIMARIN VEICULOS LTDA.
+    """
+    texto_cabecalho = '\n'.join(linhas[:40])
+
+    cooperativa = ''
+    numero_conta = ''
+    titular = ''
+
+    match_coop = re.search(r'COOP\.?:\s*([\d\-]+)', texto_cabecalho, re.IGNORECASE)
+    if match_coop:
+        cooperativa = match_coop.group(1).strip()
+
+    match_conta = re.search(
+        r'CONTA:\s*([\d.\-]+)\s*/\s*(.+)',
+        texto_cabecalho,
+        re.IGNORECASE,
+    )
+    if match_conta:
+        numero_conta = match_conta.group(1).strip()
+        titular = match_conta.group(2).strip()
+
+    # Padrão OFX Sicoob: BRANCHID=3067-8, ACCTID=53513-3
+    acct_id = numero_conta.replace('.', '') if numero_conta else '00000000'
+
+    return {
+        'cooperativa': cooperativa,
+        'branch_id': cooperativa,
+        'numero_conta': numero_conta,
+        'titular': titular,
+        'acct_id': acct_id,
+    }
+
+
 def detectar_formato_sicoob(texto_ou_linhas):
     """
     Detecta o layout do extrato SICOOB pelo cabeçalho:
@@ -123,8 +182,15 @@ def organizar_lancamentos_por_data(texto):
     lancamentos_por_data = {}
     lancamento_atual = []
     data_atual = None
-    
+    valor_pendente = None
+    padrao_valor_isolado = r'^\d{1,3}(?:\.\d{3})*,\d{2}$'
+
     for linha in linhas_limpas:
+        linha = linha.strip()
+        if re.match(padrao_valor_isolado, linha):
+            valor_pendente = linha
+            continue
+
         # Verificar se a linha começa com uma data (dd/mm)
         if re.match(padrao_data, linha):
             # Se já temos um lançamento em andamento, salvá-lo
@@ -134,10 +200,15 @@ def organizar_lancamentos_por_data(texto):
                 # Juntar as linhas do lançamento em uma única string
                 lancamento_completo = ' | '.join(lancamento_atual)
                 lancamentos_por_data[data_atual].append(lancamento_completo)
-            
+
             # Iniciar novo lançamento
             data_atual = linha[:5]  # Pegar apenas dd/mm
             lancamento_atual = [linha]
+            # Valor isolado pertence ao lançamento apenas se a linha da data
+            # não trouxer valor embutido (ex.: 02/01 DÉB.TIT... seguido de 13.540,50).
+            if valor_pendente and not re.search(r'\d{1,3}(?:\.\d{3})*,\d{2}[DC]?', linha):
+                lancamento_atual.append(valor_pendente)
+            valor_pendente = None
         else:
             # Adicionar linha ao lançamento atual
             if data_atual:
@@ -178,7 +249,7 @@ def exibir_lancamentos_organizados(lancamentos_por_data, debug=False):
         total_lancamentos = sum(len(lancamentos) for lancamentos in lancamentos_por_data.values())
         print(f"📊 Total de lançamentos: {total_lancamentos}")
 
-def extrair_data_valor(lancamento, formato='3col'):
+def extrair_data_valor(lancamento, formato='3col', ano_referencia=None):
     """
     Extrai data, valor e tipo de um lançamento.
     4col: DATA DOCUMENTO HISTÓRICO VALOR - data dd/mm/yyyy, valor com D/C (450,00D)
@@ -194,7 +265,8 @@ def extrair_data_valor(lancamento, formato='3col'):
     if match_full:
         data_processada = match_full.group(1)
     elif match_short:
-        data_processada = f"{match_short.group(1)}/2025"
+        ano = ano_referencia or str(datetime.now().year)
+        data_processada = f"{match_short.group(1)}/{ano}"
     else:
         data_processada = None
 
@@ -211,27 +283,39 @@ def extrair_data_valor(lancamento, formato='3col'):
         valor_limpo = valor_str.replace('.', '').replace(',', '.')
         try:
             valor_float = float(valor_limpo)
-            
+
             # Buscar tipo: concatenado ou na segunda parte
             tipo = tipo_concat
             if not tipo and len(partes) > 1:
                 # Procurar D ou C na segunda parte
-                segunda_parte = partes[1].strip()
-                if segunda_parte in ['D', 'C']:
-                    tipo = segunda_parte
-            
+                segunda_parte_tipo = partes[1].strip()
+                if segunda_parte_tipo in ['D', 'C']:
+                    tipo = segunda_parte_tipo
+
             if tipo == 'D':
                 valor_float = -valor_float
             elif tipo == 'C':
                 valor_float = abs(valor_float)
             else:
                 tipo = None
-                
+
             valor_processado = valor_float
             tipo_operacao = tipo
         except ValueError:
             pass
-    
+    elif len(partes) > 2:
+        valor_isolado = partes[1].strip()
+        tipo_separado = partes[2].strip()
+        if re.match(r'^\d{1,3}(?:\.\d{3})*,\d{2}$', valor_isolado) and tipo_separado in ('D', 'C'):
+            try:
+                valor_float = float(valor_isolado.replace('.', '').replace(',', '.'))
+                if tipo_separado == 'D':
+                    valor_float = -valor_float
+                valor_processado = valor_float
+                tipo_operacao = tipo_separado
+            except ValueError:
+                pass
+
     return data_processada, valor_processado, tipo_operacao
 
 def extrair_cnpj_cpf(texto):
@@ -326,13 +410,14 @@ def extrair_documento_historico_4col(lancamento_completo):
     return documento, historico_full
 
 
-def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col'):
+def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col', ano_referencia=None):
     """
     Processa os lançamentos extraindo data, valor, tipo, cnpj/cpf, documento e pagador/recebedor
     """
     lancamentos_processados = []
     saldo_anterior = None
     ultimo_saldo_dia = None
+    ultimo_saldo_do_dia_valido = None
     
     # Filtrar datas válidas antes de ordenar
     datas_validas = []
@@ -352,7 +437,11 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col'):
     for data in datas_ordenadas:
         lancamentos = lancamentos_por_data[data]
         for lancamento in lancamentos:
-            data_processada, valor_processado, tipo_operacao = extrair_data_valor(lancamento, formato)
+            data_processada, valor_processado, tipo_operacao = extrair_data_valor(
+                lancamento,
+                formato,
+                ano_referencia,
+            )
             cnpj_cpf = extrair_cnpj_cpf(lancamento)
             if formato == '4col':
                 documento, historico_4col = extrair_documento_historico_4col(lancamento)
@@ -365,12 +454,13 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col'):
             
             # Verificar se é saldo anterior
             if "SALDO ANTERIOR" in lancamento and valor_processado is not None:
-                saldo_anterior = valor_processado
+                saldo_anterior = abs(valor_processado)
                 continue
             
-            # Verificar se é saldo do dia (mas não o último, apenas para referência)
+            # Registrar saldos do dia úteis (ignorar bloco de resumo da última página)
             if "SALDO DO DIA" in lancamento and valor_processado is not None:
-                # Não usar este valor como saldo final, apenas para referência
+                if "RESUMO" not in lancamento.upper():
+                    ultimo_saldo_do_dia_valido = abs(valor_processado)
                 continue
             
             # Verificar se é o saldo final real (que aparece no resumo)
@@ -397,19 +487,9 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col'):
                     item['historico_4col'] = historico_4col
                 lancamentos_processados.append(item)
     
-    # Se não encontrou o saldo final no resumo, usar o último saldo do dia
-    if ultimo_saldo_dia is None:
-        for data in reversed(datas_ordenadas):
-            lancamentos = lancamentos_por_data[data]
-            for lancamento in lancamentos:
-                if "SALDO DO DIA" in lancamento:
-                    data_processada, valor_processado, tipo_operacao = extrair_data_valor(lancamento)
-                    if valor_processado is not None:
-                        ultimo_saldo_dia = valor_processado
-                        break
-            if ultimo_saldo_dia is not None:
-                break
-    
+    if ultimo_saldo_dia is None and ultimo_saldo_do_dia_valido is not None:
+        ultimo_saldo_dia = ultimo_saldo_do_dia_valido
+
     return lancamentos_processados, saldo_anterior, ultimo_saldo_dia
 
 def exibir_lancamentos_processados(lancamentos_processados, saldo_anterior, ultimo_saldo_dia, debug=False):

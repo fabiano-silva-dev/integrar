@@ -69,6 +69,19 @@ trait MenuTrait
                 ],
             ],
             [
+                'id' => 'conversao',
+                'name' => '🔄 Conversão',
+                'icon' => 'fa-exchange-alt',
+                'items' => [
+                    [
+                        'name' => '📄 PDF para OFX (Sicoob)',
+                        'url' => route('conversao-pdf-ofx-sicoob'),
+                        'active' => request()->routeIs('conversao-pdf-ofx-sicoob*'),
+                        'title' => 'Converte extrato PDF do Sicoob para arquivo OFX',
+                    ],
+                ],
+            ],
+            [
                 'id' => 'lancamentos',
                 'name' => '📊 Lançamentos',
                 'icon' => 'fa-chart-bar',

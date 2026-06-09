@@ -18,6 +18,7 @@ Route::middleware(['auth'])->group(function () {
     });
     Route::get('/importador-avancado', App\Livewire\ImportadorAvancado::class)->name('importador-avancado');
     Route::get('/importador-personalizado', App\Livewire\ImportadorPersonalizado::class)->name('importador-personalizado');
+    Route::get('/conversao/pdf-ofx-sicoob', App\Livewire\ConversorPdfOfxSicoob::class)->name('conversao-pdf-ofx-sicoob');
     Route::get('/tabela', App\Livewire\TabelaLancamentos::class)->name('tabela');
     Route::get('/empresas', App\Livewire\GerenciadorEmpresas::class)->name('empresas');
     Route::get('/terceiros', App\Livewire\GerenciadorTerceiros::class)->name('terceiros');

@@ -19,6 +19,13 @@
                 <li><a href="{{ route('importacoes') }}" class="flex items-center gap-2 hover:underline">🕑 Importações anteriores</a></li>
             </ul>
         </div>
+        <!-- Conversão -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">🔄 Conversão</h2>
+            <ul class="space-y-2">
+                <li><a href="{{ route('conversao-pdf-ofx-sicoob') }}" class="flex items-center gap-2 hover:underline">📄 PDF para OFX (Sicoob)</a></li>
+            </ul>
+        </div>
         <!-- Lançamentos -->
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">📊 Lançamentos</h2>
