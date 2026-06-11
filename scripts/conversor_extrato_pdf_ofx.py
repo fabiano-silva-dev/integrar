@@ -44,6 +44,14 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_bradesco_pdf_ofx.py',
     },
+    'cresol': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_cresol_pdf_ofx.py',
+    },
+    'banco_brasil': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_banco_brasil_pdf_ofx.py',
+    },
 }
 
 

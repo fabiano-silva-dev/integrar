@@ -32,7 +32,7 @@ class ConversorPdfOfx extends Component
 
     protected $rules = [
         'arquivo' => 'required|file|extensions:pdf|max:10240',
-        'layout_selecionado' => 'required|in:grafeno,sicoob,caixa_federal,caixa,sicredi,santander,itau,bradesco',
+        'layout_selecionado' => 'required|in:grafeno,sicoob,caixa_federal,caixa,sicredi,santander,itau,bradesco,cresol,banco_brasil',
     ];
 
     protected $messages = [

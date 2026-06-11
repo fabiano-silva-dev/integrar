@@ -35,6 +35,12 @@ class ConversaoPdfOfxService
             'bradesco' => [
                 'bradesco' => 'Bradesco (PDF)',
             ],
+            'cresol' => [
+                'cresol' => 'Cresol (PDF)',
+            ],
+            'banco_brasil' => [
+                'banco_brasil' => 'Banco do Brasil (PDF)',
+            ],
         ];
     }
 
@@ -48,6 +54,8 @@ class ConversaoPdfOfxService
             'santander' => 'Santander',
             'itau' => 'Itaú',
             'bradesco' => 'Bradesco',
+            'cresol' => 'Cresol',
+            'banco_brasil' => 'Banco do Brasil',
         ];
     }
 
