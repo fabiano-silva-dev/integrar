@@ -222,8 +222,12 @@ mostrar_resumo_inicial() {
     echo -e "${YELLOW}NÃO FAZ (você precisa fazer manualmente):${NC}"
     echo "  • Trocar senhas MySQL / .env"
     echo "  • Restaurar banco de dados"
-    echo "  • Alterar docker-compose.yml"
+    echo "  • Alterar docker-compose.yml (portas 127.0.0.1 — Docker ignora UFW)"
     echo "  • Desabilitar /register"
+
+    echo ""
+    echo -e "${YELLOW}IMPORTANTE:${NC} UFW sozinho NÃO bloqueia portas do Docker em 0.0.0.0."
+    echo "  Use 127.0.0.1:8081 e 127.0.0.1:8082 no docker-compose.yml + docker compose up -d"
 
   if command -v ufw >/dev/null 2>&1; then
         echo ""
@@ -383,7 +387,8 @@ auditar_docker() {
 
     for porta in "${PORTAS_BLOQUEAR[@]}"; do
         if porta_exposta_publicamente "$porta"; then
-            log_warning "Porta $porta escutando no host (Docker) — UFW bloqueia externo, mas ideal remover do compose"
+            log_error "Porta $porta em 0.0.0.0 — Docker IGNORA o UFW! Corrija o docker-compose.yml:"
+            log_error "  troque \"808X:...\" por \"127.0.0.1:808X:...\" e rode: docker compose up -d"
         else
             log_success "Porta $porta não exposta publicamente no host"
         fi
@@ -476,6 +481,7 @@ mostrar_acoes_manuais() {
   [ ] Restaurar banco: ./script-manutencao/verificar_restaurar_banco.sh
   [ ] Trocar senha do admin@admin.com
   [ ] Desabilitar /register em produção
+  [ ] Se 8081/8082 ainda abertas: docker-compose com 127.0.0.1 e docker compose up -d
   [ ] Validar de fora: ./script-manutencao/testar_seguranca_externo.sh
 
   phpMyAdmin seguro (no seu PC):
