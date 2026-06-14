@@ -6,12 +6,10 @@
                 <a href="{{ route('home') }}" class="text-xl sm:text-2xl font-bold text-blue-700 flex items-center gap-2">
                     @if(($operadoraAtual ?? null)?->logo)
                         <img src="{{ Storage::url($operadoraAtual->logo) }}" alt="" class="h-8 w-auto rounded">
+                        <span>{{ ($operadoraAtual ?? null)?->nome_fantasia ?: (($operadoraAtual ?? null)?->razao_social ?: 'IntegraExpert') }}</span>
                     @else
-                        <svg class="block h-8 w-auto fill-current text-blue-700" viewBox="0 0 24 24">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
+                        <img src="{{ asset('images/brand/logo.png') }}" srcset="{{ asset('images/brand/logo@2x.png') }} 2x, {{ asset('images/brand/logo@3x.png') }} 3x" alt="IntegraExpert" class="h-8 w-auto">
                     @endif
-                    {{ ($operadoraAtual ?? null)?->nome_fantasia ?: (($operadoraAtual ?? null)?->razao_social ?: 'IntegraExpert') }}
                 </a>
             </div>
 

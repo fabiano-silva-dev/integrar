@@ -9,6 +9,22 @@ export default {
         './resources/views/**/*.blade.php',
     ],
 
+    safelist: [
+        'bg-slate-900',
+        'bg-slate-800',
+        'text-slate-300',
+        'text-slate-400',
+        'bg-indigo-600',
+        'bg-violet-700',
+        'from-indigo-600',
+        'to-violet-700',
+        'bg-gradient-to-br',
+        'lg:pl-64',
+        'lg:pl-[4.5rem]',
+        'w-64',
+        'w-[4.5rem]',
+    ],
+
     theme: {
         extend: {
             fontFamily: {

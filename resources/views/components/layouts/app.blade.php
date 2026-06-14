@@ -7,47 +7,16 @@
 
     <title>IntegraExpert</title>
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+    <x-favicons />
 
-    <!-- Tailwind CSS CDN -->
-    <!-- Remover o Tailwind CDN -->
-    
-    <!-- Livewire Styles -->
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
+
     @livewireStyles
-    
-    <!-- Forçar reload dos assets -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-sans antialiased">
-    <div class="min-h-screen bg-gray-100">
-        @php
-            $menuData = \App\Http\Controllers\MenuController::getMenuData();
-            $menuItems = $menuData['menuItems'];
-            $userData = $menuData['userData'];
-            $empresas = $menuData['empresas'];
-            $empresaAtual = $menuData['empresaAtual'];
-            $operadoras = $menuData['operadoras'];
-            $operadoraAtual = $menuData['operadoraAtual'];
-        @endphp
-        @include('layouts.menu-blade', [
-            'menuItems' => $menuItems,
-            'userData' => $userData,
-            'empresas' => $empresas,
-            'empresaAtual' => $empresaAtual,
-            'operadoras' => $operadoras,
-            'operadoraAtual' => $operadoraAtual,
-        ])
-
-        <!-- Page Content -->
-        <main>
-            {{ $slot }}
-        </main>
-    </div>
+    @include('layouts.shell')
 
     @livewireScripts
 </body>

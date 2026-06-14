@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+[x-cloak] {
+    display: none !important;
+}
+
 /* Classes customizadas para o importador personalizado */
 .multiples-valores-row {
     display: flex !important;

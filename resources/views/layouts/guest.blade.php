@@ -7,6 +7,8 @@
 
         <title>IntegraExpert</title>
 
+        <x-favicons />
+
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
@@ -16,8 +18,8 @@
     </head>
     <body class="font-sans text-gray-900 antialiased">
         <div class="min-h-screen flex flex-col justify-center items-center bg-gray-100">
-            <div class="mb-8">
-                <x-application-logo />
+            <div class="mb-8 px-4">
+                <x-application-logo class="mx-auto" />
             </div>
 
             <div class="w-full sm:max-w-md px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
