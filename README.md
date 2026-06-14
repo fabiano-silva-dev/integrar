@@ -50,15 +50,65 @@ Uma aplicação web desenvolvida em Laravel + Livewire para processamento e gere
 
 ## 🛠️ Tecnologias
 
-- **Backend**: Laravel 11 (PHP 8.2)
+- **Backend**: Laravel 12 (PHP 8.2+)
 - **Frontend**: Livewire 3 + Tailwind CSS
 - **Banco de Dados**: MySQL 5.7
-- **Containerização**: Docker + Docker Compose
+- **Servidor de produção**: Apache + PHP-FPM + MySQL + systemd
+
+## 🚀 Instalação nativa em produção (sem Docker)
+
+O script `instalar-nativo-producao.sh` automatiza a migração em servidores
+Debian/Ubuntu. Ele pede confirmação antes de cada ação e pode:
+
+- instalar Apache, PHP-FPM, MySQL, Composer, Node.js e dependências Python;
+- gerar um dump consistente do MySQL que está no Docker;
+- parar os containers sem remover os volumes;
+- criar o banco e usuário MySQL nativos e restaurar o dump;
+- configurar `.env`, permissões, Composer, Vite e o ambiente Python;
+- configurar o VirtualHost do Apache, worker da fila e agendador Laravel no systemd;
+- executar migrações, otimizações e testes de saúde.
+
+Antes de alterar o servidor, simule todo o fluxo:
+
+```bash
+sudo ./instalar-nativo-producao.sh \
+  --dry-run \
+  --yes \
+  --domain integrar.exemplo.com \
+  --db-name integrar \
+  --db-user integrar
+```
+
+Para executar a migração com confirmação em cada etapa:
+
+```bash
+sudo ./instalar-nativo-producao.sh --domain integrar.exemplo.com
+```
+
+Caso o container antigo não esteja disponível, indique um dump:
+
+```bash
+sudo ./instalar-nativo-producao.sh \
+  --domain integrar.exemplo.com \
+  --backup-file /backup/integrar.sql
+```
+
+> **Atenção:** mantenha os volumes Docker até validar a aplicação nativa. O
+> script executa `docker compose down`, mas nunca remove volumes. Configure
+> HTTPS (por exemplo, com Certbot) antes de liberar o domínio ao público.
+
+Os testes isolados do instalador não exigem root e não alteram o sistema:
+
+```bash
+bash tests/scripts/test_instalar_nativo_producao.sh
+```
 
 ## 📋 Pré-requisitos
 
-- Docker
-- Docker Compose
+- Debian ou Ubuntu com systemd
+- acesso root (`sudo`)
+- DNS do domínio apontado para o servidor
+- Docker apenas durante a migração, caso o banco atual esteja em container
 
 ## 🚀 Instalação
 
