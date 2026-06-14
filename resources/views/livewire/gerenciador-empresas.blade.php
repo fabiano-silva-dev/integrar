@@ -18,7 +18,13 @@
                     </div>
                 @endif
 
-                <form wire:submit.prevent="salvar" class="space-y-4">
+                @if ($precisaSelecionarEscritorio)
+                    <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded mb-4">
+                        Selecione um escritório no menu superior para cadastrar ou editar empresas.
+                    </div>
+                @endif
+
+                <form wire:submit.prevent="salvar" class="space-y-4" @if($precisaSelecionarEscritorio) style="opacity:0.5;pointer-events:none" @endif>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="nome" class="block text-sm font-medium text-gray-700">Nome da Empresa</label>
@@ -31,7 +37,7 @@
                             <label for="cnpj" class="block text-sm font-medium text-gray-700">CNPJ</label>
                             <input type="text" id="cnpj" wire:model="cnpj" 
                                    class="mt-1 block w-full border border-gray-400 bg-white rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition duration-150 ease-in-out"
-                                   placeholder="00.000.000/0000-00">
+                                   placeholder="00.000.000/0000-00 ou só números">
                             @error('cnpj') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 

@@ -7,6 +7,9 @@ use App\Models\HistoricoPadraoLayout;
 use App\Models\Importacao;
 use App\Models\Lancamento;
 use App\Models\RegraAmarracaoDescricao;
+use App\Rules\EmpresaDoEscritorio;
+use App\Services\OperadoraContext;
+use App\Services\OperadoraStorage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
@@ -33,12 +36,15 @@ class ImportadorAvancado extends Component
     public $importacao_id = null;
     public $total_registros_importados = 0;
 
-    protected $rules = [
-        'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240', // 10MB
-        'empresa_id' => 'required|exists:empresas,id',
-        'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi',
-        'conta_banco' => 'required|string',
-    ];
+    protected function rules()
+    {
+        return [
+            'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240',
+            'empresa_id' => ['required', new EmpresaDoEscritorio()],
+            'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi',
+            'conta_banco' => 'required|string',
+        ];
+    }
 
     protected $messages = [
         'arquivo.required' => 'O arquivo é obrigatório.',
@@ -85,6 +91,7 @@ class ImportadorAvancado extends Component
         ini_set('memory_limit', '512M');
         
         $this->validate();
+        OperadoraContext::resolveEmpresa($this->empresa_id);
 
         try {
             $inicio_processamento = microtime(true);
@@ -100,7 +107,7 @@ class ImportadorAvancado extends Component
 
             // Salvar arquivo temporário
             $inicio_salvar = microtime(true);
-            $caminho_original = $this->arquivo->store('temp');
+            $caminho_original = $this->arquivo->store(OperadoraStorage::ensureDirectory('temp'));
             $caminho_completo = Storage::path($caminho_original);
             
             // Verificar se o arquivo foi salvo corretamente
@@ -139,7 +146,8 @@ class ImportadorAvancado extends Component
             
             // Gerar nome do arquivo de saída
             $nome_arquivo_saida = 'converted_' . time() . '.csv';
-            $caminho_saida = Storage::path('temp/' . $nome_arquivo_saida);
+            $dirTemp = OperadoraStorage::ensureDirectory('temp');
+            $caminho_saida = Storage::path($dirTemp . '/' . $nome_arquivo_saida);
 
             $this->progresso = 30;
             $this->mensagem_status = 'Executando conversão Python...';
@@ -230,8 +238,8 @@ class ImportadorAvancado extends Component
     private function executarScriptPython($script, $entrada, $saida)
     {
         // Buscar código da empresa
-        $empresa = Empresa::find($this->empresa_id);
-        $codigoEmpresa = $empresa ? $empresa->codigo_sistema : null;
+        $empresa = OperadoraContext::resolveEmpresa($this->empresa_id);
+        $codigoEmpresa = $empresa->codigo_sistema;
         
         Log::info("=== DEBUG SCRIPT PYTHON ===", [
             'layout_selecionado' => $this->layout_selecionado,
@@ -279,9 +287,9 @@ class ImportadorAvancado extends Component
             throw new \Exception("Arquivo CSV gerado não encontrado: {$caminho_csv}");
         }
         
-        $empresa = Empresa::find($this->empresa_id);
-        $contaBancoEmpresa = $empresa ? ltrim($empresa->codigo_conta_banco, '0') : null;
-        $codigoSistemaEmpresa = $empresa ? $empresa->codigo_sistema : null;
+        $empresa = OperadoraContext::resolveEmpresa($this->empresa_id);
+        $contaBancoEmpresa = ltrim($empresa->codigo_conta_banco ?? '', '0');
+        $codigoSistemaEmpresa = $empresa->codigo_sistema;
         
         // Criar registro de importação (nome = layout usado, ex: "SICREDI (PDF)")
         $layoutsNomes = [

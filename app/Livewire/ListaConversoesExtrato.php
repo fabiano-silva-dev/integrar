@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\ConversaoExtrato;
+use App\Services\OperadoraStorage;
 use App\Services\ConversaoPdfOfxService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -57,9 +58,9 @@ class ListaConversoesExtrato extends Component
             return null;
         }
 
-        $caminho = storage_path('app/exports/' . basename($conversao->nome_arquivo_ofx));
+        $caminho = OperadoraStorage::resolveAbsolutePath('exports', $conversao->nome_arquivo_ofx);
 
-        if (!file_exists($caminho)) {
+        if (!$caminho || !file_exists($caminho)) {
             session()->flash('error', 'Arquivo OFX não encontrado no servidor.');
             return null;
         }

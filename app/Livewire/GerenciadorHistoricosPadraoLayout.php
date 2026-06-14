@@ -5,6 +5,8 @@ namespace App\Livewire;
 use App\Models\Empresa;
 use App\Models\HistoricoPadraoDescricao;
 use App\Models\HistoricoPadraoLayout;
+use App\Rules\EmpresaDoEscritorio;
+use App\Services\OperadoraStorage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -41,7 +43,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
         $r = [
             'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
             'nome_sugerido' => 'required|string|max:255',
-            'empresa_id' => 'nullable|exists:empresas,id',
+            'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
         ];
         if (!$this->historico_padrao_layout_id && !$this->analise_concluida) {
             $r['arquivo'] = 'required|file|extensions:csv,txt,pdf,ofx|max:10240';
@@ -111,7 +113,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             set_time_limit(120);
             $this->mensagem_status = 'Salvando arquivo...';
 
-            $caminho_original = $this->arquivo->store('temp');
+            $caminho_original = $this->arquivo->store(OperadoraStorage::ensureDirectory('temp'));
             $caminho_completo = Storage::path($caminho_original);
 
             if (!file_exists($caminho_completo)) {
@@ -125,7 +127,8 @@ class GerenciadorHistoricosPadraoLayout extends Component
             }
 
             $nome_saida = 'historicos_padrao_' . time() . '.csv';
-            $caminho_saida = Storage::path('temp/' . $nome_saida);
+            $dirTemp = OperadoraStorage::ensureDirectory('temp');
+            $caminho_saida = Storage::path($dirTemp . '/' . $nome_saida);
 
             $this->mensagem_status = 'Executando conversão do layout...';
 
@@ -226,7 +229,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
         if ($this->historico_padrao_layout_id) {
             $this->validate([
                 'nome_sugerido' => 'required|string|max:255',
-                'empresa_id' => 'nullable|exists:empresas,id',
+                'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
             ]);
             $layout = HistoricoPadraoLayout::find($this->historico_padrao_layout_id);
             if (!$layout) {
@@ -260,7 +263,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             $this->validate([
                 'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
                 'nome_sugerido' => 'required|string|max:255',
-                'empresa_id' => 'nullable|exists:empresas,id',
+                'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
             ]);
 
             if (empty($this->descricoes_extraidas)) {

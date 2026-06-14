@@ -3,6 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\Lancamento;
+use App\Rules\CnpjValido;
+use App\Services\OperadoraContext;
+use App\Services\OperadoraStorage;
 use Livewire\Component;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -212,9 +215,12 @@ class ExportadorContabil extends Component
         Log::info("updatedEmpresaSelecionada chamado", ['value' => $value]);
         
         if (!empty($value)) {
-            $empresa = \App\Models\Empresa::find($value);
-            if ($empresa) {
-                $this->codigoEmpresa = $empresa->codigo_sistema ?? '';
+            $empresa = \App\Models\Empresa::find((int) $value);
+            if (!$empresa) {
+                Log::warning("Empresa não encontrada ou sem acesso", ['empresa_id' => $value]);
+                return;
+            }
+            $this->codigoEmpresa = $empresa->codigo_sistema ?? '';
                 // Limpar máscara do CNPJ ao selecionar empresa
                 $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa->cnpj ?? '');
                 $this->cnpjEmpresa = $cnpjLimpo;
@@ -225,9 +231,6 @@ class ExportadorContabil extends Component
                     'cnpjEmpresa' => $this->cnpjEmpresa,
                     'cnpj_original' => $empresa->cnpj
                 ]);
-            } else {
-                Log::warning("Empresa não encontrada", ['empresa_id' => $value]);
-            }
         } else {
             Log::info("Valor vazio recebido em updatedEmpresaSelecionada");
         }
@@ -262,7 +265,7 @@ class ExportadorContabil extends Component
         ]);
 
         // Limpar máscara do CNPJ antes da validação
-        $cnpjLimpo = preg_replace('/[^0-9]/', '', $this->cnpjEmpresa);
+        $cnpjLimpo = CnpjValido::digits($this->cnpjEmpresa);
         
         Log::info('CNPJ processado', [
             'cnpj_original' => $this->cnpjEmpresa,
@@ -279,7 +282,7 @@ class ExportadorContabil extends Component
         // Validações específicas para layout Domínio
         if ($this->layoutExport === 'dominio') {
             $regras['codigoEmpresa'] = 'required|string|max:7';
-            $regras['cnpjEmpresa'] = 'required|string|max:14';
+            $regras['cnpjEmpresa'] = ['required', 'string', 'size:14', new CnpjValido()];
             $regras['tipoNota'] = 'required|in:01,02,03,04,05';
             $regras['sistema'] = 'required|in:0,1,2';
             
@@ -376,7 +379,7 @@ class ExportadorContabil extends Component
             Log::info('Nome do arquivo gerado: ' . $nomeArquivo);
             
             Log::info('Salvando arquivo no storage');
-            Storage::put("exports/{$nomeArquivo}", $conteudo);
+            OperadoraStorage::put('exports', $nomeArquivo, $conteudo);
             
             $this->arquivoGerado = $nomeArquivo;
             $this->quantidadeRegistros = $lancamentos->count();
@@ -644,9 +647,9 @@ class ExportadorContabil extends Component
         ]);
         
         if (!empty($this->arquivoGerado)) {
-            if (Storage::exists("exports/{$this->arquivoGerado}")) {
+            if (OperadoraStorage::exists('exports', $this->arquivoGerado)) {
                 Log::info('Arquivo encontrado, iniciando download');
-                return Storage::download("exports/{$this->arquivoGerado}");
+                return OperadoraStorage::download('exports', $this->arquivoGerado);
             } else {
                 Log::error('Arquivo não encontrado no storage', [
                     'arquivo' => $this->arquivoGerado,

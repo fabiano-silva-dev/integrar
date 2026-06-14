@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
+
+        $middleware->web(append: [
+            \App\Http\Middleware\SetOperadoraContext::class,
+        ]);
         
         // Registrar o middleware de proxy
         $middleware->append(\App\Http\Middleware\TrustProxies::class);

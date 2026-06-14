@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Terceiro;
+use App\Rules\CnpjOuCpfValido;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -30,13 +31,16 @@ class GerenciadorTerceiros extends Component
         'filtroAtivo' => ['except' => ''],
     ];
 
-    protected $rules = [
-        'nome' => 'required|string|max:255',
-        'cnpj_cpf' => 'nullable|string|max:20',
-        'tipo' => 'required|in:empresa,cliente,funcionario,fornecedor',
-        'observacoes' => 'nullable|string',
-        'ativo' => 'boolean'
-    ];
+    protected function rules()
+    {
+        return [
+            'nome' => 'required|string|max:255',
+            'cnpj_cpf' => ['nullable', 'string', 'max:18', new CnpjOuCpfValido()],
+            'tipo' => 'required|in:empresa,cliente,funcionario,fornecedor',
+            'observacoes' => 'nullable|string',
+            'ativo' => 'boolean',
+        ];
+    }
 
     public function atualizarFiltros()
     {
@@ -54,7 +58,7 @@ class GerenciadorTerceiros extends Component
     public function abrirModal($terceiroId = null)
     {
         if ($terceiroId) {
-            $terceiro = Terceiro::find($terceiroId);
+            $terceiro = Terceiro::findOrFail($terceiroId);
             if ($terceiro) {
                 $this->editandoId = $terceiro->id;
                 $this->nome = $terceiro->nome;
@@ -72,12 +76,14 @@ class GerenciadorTerceiros extends Component
     {
         $this->validate();
 
+        $cnpjCpf = CnpjOuCpfValido::format($this->cnpj_cpf);
+
         if ($this->editandoId) {
-            $terceiro = Terceiro::find($this->editandoId);
+            $terceiro = Terceiro::findOrFail($this->editandoId);
             if ($terceiro) {
                 $terceiro->update([
                     'nome' => $this->nome,
-                    'cnpj_cpf' => $this->cnpj_cpf,
+                    'cnpj_cpf' => $cnpjCpf,
                     'tipo' => $this->tipo,
                     'observacoes' => $this->observacoes,
                     'ativo' => $this->ativo
@@ -86,7 +92,7 @@ class GerenciadorTerceiros extends Component
         } else {
             Terceiro::create([
                 'nome' => $this->nome,
-                'cnpj_cpf' => $this->cnpj_cpf,
+                'cnpj_cpf' => $cnpjCpf,
                 'tipo' => $this->tipo,
                 'observacoes' => $this->observacoes,
                 'ativo' => $this->ativo
@@ -98,7 +104,7 @@ class GerenciadorTerceiros extends Component
 
     public function excluir($terceiroId)
     {
-        $terceiro = Terceiro::find($terceiroId);
+        $terceiro = Terceiro::findOrFail($terceiroId);
         if ($terceiro) {
             $terceiro->delete();
         }
@@ -106,7 +112,7 @@ class GerenciadorTerceiros extends Component
 
     public function toggleAtivo($terceiroId)
     {
-        $terceiro = Terceiro::find($terceiroId);
+        $terceiro = Terceiro::findOrFail($terceiroId);
         if ($terceiro) {
             $terceiro->update(['ativo' => !$terceiro->ativo]);
         }

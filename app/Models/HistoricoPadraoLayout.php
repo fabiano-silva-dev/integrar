@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HistoricoPadraoLayout extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToOperadora;
 
     protected $table = 'historicos_padrao_layout';
 
@@ -17,6 +18,7 @@ class HistoricoPadraoLayout extends Model
         'layout_avancado',
         'nome_sugerido',
         'empresa_id',
+        'empresa_operadora_id',
     ];
 
     /**

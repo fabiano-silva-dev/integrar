@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,12 +10,13 @@ use Illuminate\Support\Facades\Log;
 
 class RegraAmarracaoDescricao extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToOperadora;
 
     protected $table = 'regras_amarracoes_descricoes';
 
     protected $fillable = [
         'empresa_id',
+        'empresa_operadora_id',
         'layout_avancado',
         'palavra_chave',
         'parte_digitavel',

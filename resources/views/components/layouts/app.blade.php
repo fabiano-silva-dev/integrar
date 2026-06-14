@@ -26,12 +26,22 @@
 <body class="font-sans antialiased">
     <div class="min-h-screen bg-gray-100">
         @php
-            // Usar o controller para obter dados do menu
             $menuData = \App\Http\Controllers\MenuController::getMenuData();
             $menuItems = $menuData['menuItems'];
             $userData = $menuData['userData'];
+            $empresas = $menuData['empresas'];
+            $empresaAtual = $menuData['empresaAtual'];
+            $operadoras = $menuData['operadoras'];
+            $operadoraAtual = $menuData['operadoraAtual'];
         @endphp
-        @include('layouts.menu-blade', ['menuItems' => $menuItems, 'userData' => $userData])
+        @include('layouts.menu-blade', [
+            'menuItems' => $menuItems,
+            'userData' => $userData,
+            'empresas' => $empresas,
+            'empresaAtual' => $empresaAtual,
+            'operadoras' => $operadoras,
+            'operadoraAtual' => $operadoraAtual,
+        ])
 
         <!-- Page Content -->
         <main>

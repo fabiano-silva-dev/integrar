@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Importacao;
 use App\Models\Empresa;
 use App\Models\Lancamento;
+use App\Rules\CnpjValido;
+use App\Services\OperadoraStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -92,11 +94,15 @@ class ExportadorContabilController extends Controller
 
         // Validações específicas para layout Domínio
         if ($request->layout_export === 'dominio') {
+            $request->merge([
+                'cnpj_empresa' => CnpjValido::digits($request->cnpj_empresa ?? ''),
+            ]);
+
             $request->validate([
                 'codigo_empresa' => 'required|string|max:7',
-                'cnpj_empresa' => 'required|string|max:14',
+                'cnpj_empresa' => ['required', 'string', 'size:14', new CnpjValido()],
                 'tipo_nota' => 'required|in:01,02,03,04,05',
-                'sistema' => 'required|in:0,1,2'
+                'sistema' => 'required|in:0,1,2',
             ]);
         }
 
@@ -130,7 +136,7 @@ class ExportadorContabilController extends Controller
             
             $nomeArquivo = $this->gerarNomeArquivo($request);
             
-            Storage::put("exports/{$nomeArquivo}", $conteudo);
+            OperadoraStorage::put('exports', $nomeArquivo, $conteudo);
             
             Log::info('Exportação concluída com sucesso', [
                 'arquivo' => $nomeArquivo,

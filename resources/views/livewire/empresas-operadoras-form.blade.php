@@ -1,9 +1,15 @@
 <div class="max-w-5xl mx-auto py-10">
     <div class="bg-white rounded-2xl shadow-xl p-10 border border-gray-200">
         <div class="flex items-center gap-3 mb-8">
-            <span class="inline-block bg-blue-100 p-2 rounded-full"><img src="/favicon.ico" class="h-8 w-8"></span>
-            <h2 class="text-3xl font-extrabold text-blue-800">Empresas Operadoras</h2>
+            <h2 class="text-3xl font-extrabold text-blue-800">🏛️ Escritórios (Operadoras)</h2>
         </div>
+
+        @if (session()->has('message'))
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{{ session('message') }}</div>
+        @endif
+        @if (session()->has('error'))
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{{ session('error') }}</div>
+        @endif
 
         <form wire:submit.prevent="salvarEmpresa" class="mb-12">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -18,7 +24,7 @@
                 </div>
                 <div x-data="{ cnpj: @entangle('cnpj') }">
                     <label class="block font-semibold mb-2 text-gray-700">CNPJ <span class="text-red-500">*</span></label>
-                    <input type="text" x-mask="99.999.999/9999-99" x-model="cnpj" wire:model.defer="cnpj" maxlength="18" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" required>
+                    <input type="text" x-mask="99.999.999/9999-99" x-model="cnpj" wire:model.defer="cnpj" maxlength="18" placeholder="00.000.000/0000-00 ou só números" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" required>
                     @error('cnpj') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
                 </div>
                 <div>
@@ -48,6 +54,27 @@
                     @endif
                     @error('logo') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
                 </div>
+                <div>
+                    <label class="block font-semibold mb-2 text-gray-700">Plano</label>
+                    <select wire:model.defer="plano" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm">
+                        <option value="basico">Básico</option>
+                        <option value="profissional">Profissional</option>
+                        <option value="enterprise">Enterprise</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-2 text-gray-700">Limite de empresas</label>
+                    <input type="number" wire:model.defer="limite_empresas" min="1" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" placeholder="Ilimitado">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-2 text-gray-700">Limite de usuários</label>
+                    <input type="number" wire:model.defer="limite_usuarios" min="1" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" placeholder="Ilimitado">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-2 text-gray-700">Subdomínio</label>
+                    <input type="text" wire:model.defer="subdominio" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" placeholder="ex: dalongaro">
+                    @error('subdominio') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
+                </div>
             </div>
             <div class="mt-8 flex justify-end gap-2">
                 <button type="submit" class="bg-blue-700 text-white px-8 py-2 rounded-lg font-semibold hover:bg-blue-800 shadow">{{ $modoEdicao ? 'Atualizar' : 'Cadastrar' }}</button>
@@ -67,6 +94,7 @@
                             <th class="px-4 py-3 font-bold">CNPJ</th>
                             <th class="px-4 py-3 font-bold">Telefone</th>
                             <th class="px-4 py-3 font-bold">E-mail</th>
+                            <th class="px-4 py-3 font-bold">Plano</th>
                             <th class="px-4 py-3 font-bold">Ações</th>
                         </tr>
                     </thead>
@@ -82,13 +110,14 @@
                                 <td class="px-4 py-2">{{ $empresa->cnpj }}</td>
                                 <td class="px-4 py-2">{{ $empresa->telefone }}</td>
                                 <td class="px-4 py-2">{{ $empresa->email }}</td>
+                                <td class="px-4 py-2 capitalize">{{ $empresa->plano ?? 'basico' }}</td>
                                 <td class="px-4 py-2 flex gap-2">
                                     <button wire:click="editarEmpresa({{ $empresa->id }})" class="text-blue-700 hover:underline font-semibold">Editar</button>
                                     <button wire:click="excluirEmpresa({{ $empresa->id }})" class="text-red-600 hover:underline font-semibold" onclick="return confirm('Tem certeza que deseja excluir?')">Excluir</button>
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="text-center text-gray-400 py-6">Nenhuma empresa cadastrada.</td></tr>
+                            <tr><td colspan="7" class="text-center text-gray-400 py-6">Nenhuma empresa cadastrada.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

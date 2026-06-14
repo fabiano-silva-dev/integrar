@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Lancamento;
 use App\Models\Importacao;
 use App\Models\Terceiro;
+use App\Rules\CnpjValido;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
@@ -143,7 +144,8 @@ class ImportadorCsv extends Component
                     if (!empty($codigoEmpresa)) {
                         $empresa = \App\Models\Empresa::where('codigo_sistema', $codigoEmpresa)->first();
                     } elseif (!empty($cnpjEmpresa)) {
-                        $empresa = \App\Models\Empresa::where('cnpj', $cnpjEmpresa)->first();
+                        $cnpjNormalizado = CnpjValido::format($cnpjEmpresa);
+                        $empresa = \App\Models\Empresa::where('cnpj', $cnpjNormalizado)->first();
                     }
                     $contaBancoEmpresa = $empresa ? ltrim($empresa->codigo_conta_banco, '0') : null;
                     

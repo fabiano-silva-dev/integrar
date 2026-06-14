@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\EmpresasOperadora;
+use App\Rules\CnpjValido;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -25,6 +26,10 @@ class EmpresasOperadorasForm extends Component
     public $logo;
     public $logo_atual;
     public $configuracoes;
+    public $plano = 'basico';
+    public $limite_empresas;
+    public $limite_usuarios;
+    public $subdominio;
     public $modoEdicao = false;
 
     protected function rules()
@@ -35,13 +40,9 @@ class EmpresasOperadorasForm extends Component
             'cnpj' => [
                 'required',
                 'string',
-                'size:18',
+                'max:18',
+                new CnpjValido(),
                 Rule::unique('empresas_operadoras', 'cnpj')->ignore($this->empresa_id),
-                function($attribute, $value, $fail) {
-                    if (!$this->validaCnpj($value)) {
-                        $fail('CNPJ inválido.');
-                    }
-                }
             ],
             'inscricao_estadual' => 'nullable|string|max:255',
             'telefone' => 'nullable|string|max:20',
@@ -49,13 +50,23 @@ class EmpresasOperadorasForm extends Component
             'responsavel' => 'nullable|string|max:255',
             'logo' => 'nullable|image|max:2048',
             'configuracoes' => 'nullable',
+            'plano' => 'required|in:basico,profissional,enterprise',
+            'limite_empresas' => 'nullable|integer|min:1',
+            'limite_usuarios' => 'nullable|integer|min:1',
+            'subdominio' => [
+                'nullable',
+                'string',
+                'max:100',
+                'alpha_dash',
+                Rule::unique('empresas_operadoras', 'subdominio')->ignore($this->empresa_id),
+            ],
         ];
     }
 
     public function mount()
     {
         $user = Auth::user();
-        if (!$user || $user->role !== 'admin') {
+        if (!$user || !$user->isSuperAdmin()) {
             abort(403, 'Acesso não autorizado.');
         }
         $this->carregarEmpresas();
@@ -79,12 +90,17 @@ class EmpresasOperadorasForm extends Component
         $this->logo = null;
         $this->logo_atual = null;
         $this->configuracoes = null;
+        $this->plano = 'basico';
+        $this->limite_empresas = null;
+        $this->limite_usuarios = null;
+        $this->subdominio = null;
         $this->modoEdicao = false;
     }
 
     public function salvarEmpresa()
     {
         $dados = $this->validate();
+        $dados['cnpj'] = CnpjValido::format($dados['cnpj']);
         if ($this->logo) {
             $dados['logo'] = $this->logo->store('logos', 'public');
         } elseif ($this->logo_atual) {
@@ -114,39 +130,33 @@ class EmpresasOperadorasForm extends Component
         $this->logo_atual = $empresa->logo;
         $this->logo = null;
         $this->configuracoes = $empresa->configuracoes;
+        $this->plano = $empresa->plano ?? 'basico';
+        $this->limite_empresas = $empresa->limite_empresas;
+        $this->limite_usuarios = $empresa->limite_usuarios;
+        $this->subdominio = $empresa->subdominio;
         $this->modoEdicao = true;
     }
 
     public function excluirEmpresa($id)
     {
         $empresa = EmpresasOperadora::find($id);
+
+        if (!$empresa) {
+            return;
+        }
+
+        if ($empresa->users()->exists() || $empresa->empresas()->exists()) {
+            session()->flash('error', 'Não é possível excluir escritório com usuários ou empresas vinculados.');
+            return;
+        }
+
         if ($empresa->logo) {
             Storage::disk('public')->delete($empresa->logo);
         }
         $empresa->delete();
         $this->resetarCampos();
         $this->carregarEmpresas();
-    }
-
-    public function validaCnpj($cnpj)
-    {
-        $cnpj = preg_replace('/[^0-9]/', '', $cnpj);
-        if (strlen($cnpj) != 14) return false;
-        if (preg_match('/(\d)\1{13}/', $cnpj)) return false;
-        $t = 12;
-        $d = 0;
-        $c = 0;
-        for ($i = 0; $i < 2; $i++) {
-            $d = 0;
-            $c = 0;
-            for ($j = 0; $j < $t; $j++) {
-                $d += $cnpj[$j] * ((($t + 1) - $j));
-            }
-            $d = ((10 * $d) % 11) % 10;
-            if ($cnpj[$t] != $d) return false;
-            $t++;
-        }
-        return true;
+        session()->flash('message', 'Escritório excluído com sucesso.');
     }
 
     public function render()

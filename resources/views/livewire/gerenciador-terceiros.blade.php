@@ -133,7 +133,7 @@
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">CNPJ/CPF</label>
-                        <input type="text" wire:model="cnpj_cpf" class="w-full rounded-md border-gray-300 shadow-sm">
+                        <input type="text" wire:model="cnpj_cpf" placeholder="CPF ou CNPJ, com ou sem máscara" class="w-full rounded-md border-gray-300 shadow-sm">
                         @error('cnpj_cpf') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                     </div>
                     

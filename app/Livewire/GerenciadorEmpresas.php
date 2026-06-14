@@ -3,6 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\Empresa;
+use App\Rules\CnpjValido;
+use App\Services\OperadoraContext;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -21,12 +24,25 @@ class GerenciadorEmpresas extends Component
     public $confirmando_exclusao = false;
     public $empresa_para_excluir = null;
 
-    protected $rules = [
-        'nome' => 'required|min:3|max:255',
-        'cnpj' => 'required|min:14|max:18|unique:empresas,cnpj',
-        'codigo_sistema' => 'nullable|max:50',
-        'codigo_conta_banco' => 'nullable|max:50',
-    ];
+    protected function rules()
+    {
+        $operadoraId = OperadoraContext::id() ?? 0;
+
+        return [
+            'nome' => 'required|min:3|max:255',
+            'cnpj' => [
+                'required',
+                'string',
+                'max:18',
+                new CnpjValido(),
+                Rule::unique('empresas', 'cnpj')
+                    ->where('empresa_operadora_id', $operadoraId)
+                    ->ignore($this->empresa_id),
+            ],
+            'codigo_sistema' => 'nullable|max:50',
+            'codigo_conta_banco' => 'nullable|max:50',
+        ];
+    }
 
     public function updatedBusca()
     {
@@ -35,17 +51,20 @@ class GerenciadorEmpresas extends Component
 
     public function salvar()
     {
-        if ($this->modo_edicao) {
-            $this->rules['cnpj'] = 'required|min:14|max:18|unique:empresas,cnpj,' . $this->empresa_id;
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
+            session()->flash('error', 'Selecione um escritório no menu superior para gerenciar empresas.');
+            return;
         }
 
         $this->validate();
 
+        $cnpj = CnpjValido::format($this->cnpj);
+
         if ($this->modo_edicao) {
-            $empresa = Empresa::find($this->empresa_id);
+            $empresa = Empresa::findOrFail($this->empresa_id);
             $empresa->update([
                 'nome' => $this->nome,
-                'cnpj' => $this->cnpj,
+                'cnpj' => $cnpj,
                 'codigo_sistema' => $this->codigo_sistema,
                 'codigo_conta_banco' => $this->codigo_conta_banco,
             ]);
@@ -53,7 +72,7 @@ class GerenciadorEmpresas extends Component
         } else {
             Empresa::create([
                 'nome' => $this->nome,
-                'cnpj' => $this->cnpj,
+                'cnpj' => $cnpj,
                 'codigo_sistema' => $this->codigo_sistema,
                 'codigo_conta_banco' => $this->codigo_conta_banco,
             ]);
@@ -65,7 +84,7 @@ class GerenciadorEmpresas extends Component
 
     public function editar($id)
     {
-        $empresa = Empresa::find($id);
+        $empresa = Empresa::findOrFail($id);
         $this->empresa_id = $empresa->id;
         $this->nome = $empresa->nome;
         $this->cnpj = $empresa->cnpj;
@@ -87,9 +106,8 @@ class GerenciadorEmpresas extends Component
 
     public function excluir()
     {
-        $empresa = Empresa::find($this->empresa_para_excluir);
+        $empresa = Empresa::findOrFail($this->empresa_para_excluir);
         
-        // Verificar se há importações ou lançamentos associados
         if ($empresa->importacoes()->count() > 0 || $empresa->lancamentos()->count() > 0) {
             session()->flash('error', 'Não é possível excluir uma empresa que possui importações ou lançamentos associados.');
             $this->confirmando_exclusao = false;
@@ -134,7 +152,8 @@ class GerenciadorEmpresas extends Component
             ->paginate(10);
 
         return view('livewire.gerenciador-empresas', [
-            'empresas' => $empresas
+            'empresas' => $empresas,
+            'precisaSelecionarEscritorio' => OperadoraContext::superAdminPrecisaSelecionarEscritorio(),
         ]);
     }
 }

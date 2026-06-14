@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Services\ConversaoPdfOfxService;
+use App\Services\OperadoraStorage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -95,7 +96,7 @@ class ConversorPdfOfx extends Component
             );
             $this->conversao_id = $conversao->id;
 
-            $caminhoOriginal = $this->arquivo->store('temp');
+            $caminhoOriginal = $this->arquivo->store(OperadoraStorage::ensureDirectory('temp'));
             $caminhoEntrada = Storage::path($caminhoOriginal);
 
             if (!file_exists($caminhoEntrada)) {
@@ -107,10 +108,8 @@ class ConversorPdfOfx extends Component
                 $nomeOfx = pathinfo($nomeOriginal, PATHINFO_FILENAME) . '.ofx';
             }
 
-            $caminhoSaida = Storage::path('exports/' . $nomeOfx);
-            if (!is_dir(dirname($caminhoSaida))) {
-                Storage::makeDirectory('exports');
-            }
+            $dirExports = OperadoraStorage::ensureDirectory('exports');
+            $caminhoSaida = Storage::path($dirExports . '/' . $nomeOfx);
 
             $this->progresso = 40;
             $this->mensagem_status = 'Convertendo PDF para OFX...';
@@ -159,9 +158,9 @@ class ConversorPdfOfx extends Component
             return null;
         }
 
-        $caminho = storage_path('app/exports/' . basename($this->arquivo_gerado));
+        $caminho = OperadoraStorage::resolveAbsolutePath('exports', $this->arquivo_gerado);
 
-        if (!file_exists($caminho)) {
+        if (!$caminho || !file_exists($caminho)) {
             $this->mensagem_status = 'Erro: arquivo não encontrado para download.';
             $this->status = 'erro';
 

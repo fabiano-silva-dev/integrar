@@ -23,8 +23,14 @@
                     </div>
                 @endif
 
+                @if ($precisaSelecionarEscritorio)
+                    <div class="mb-4 p-4 bg-amber-100 border border-amber-400 text-amber-800 rounded-md">
+                        Selecione um escritório no menu superior para visualizar e gerenciar usuários.
+                    </div>
+                @endif
+
                 <!-- Form -->
-                <div class="bg-gray-50 p-8 rounded-lg mb-6 mx-4">
+                <div class="bg-gray-50 p-8 rounded-lg mb-6 mx-4" @if($precisaSelecionarEscritorio) style="opacity:0.5;pointer-events:none" @endif>
                     <form wire:submit.prevent="salvarUsuario" autocomplete="off">
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div>

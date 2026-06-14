@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\User;
+use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -17,12 +18,15 @@ class GerenciadorUsuarios extends Component
     public $role = 'operador';
     public $modoEdicao = false;
 
-    protected $rules = [
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|max:255|unique:users,email,' . null,
-        'password' => 'nullable|min:6',
-        'role' => 'required|in:admin,gerente,operador',
-    ];
+    protected function rules()
+    {
+        return [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email,' . ($this->usuario_id ?? 'NULL'),
+            'password' => $this->usuario_id ? 'nullable|min:6' : 'required|min:6',
+            'role' => 'required|in:admin,gerente,operador',
+        ];
+    }
 
     protected $messages = [
         'name.required' => 'O nome é obrigatório.',
@@ -38,15 +42,25 @@ class GerenciadorUsuarios extends Component
     public function mount()
     {
         $user = Auth::user();
-        if (!$user || !in_array($user->role, ['admin', 'gerente'])) {
+
+        if (!$user || (!$user->isSuperAdmin() && !in_array($user->role, ['admin', 'gerente']))) {
             abort(403, 'Acesso não autorizado.');
         }
+
         $this->carregarUsuarios();
     }
 
     public function carregarUsuarios()
     {
-        $this->usuarios = User::all();
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
+            $this->usuarios = collect();
+
+            return;
+        }
+
+        $this->usuarios = User::doEscritorio()
+            ->where('role', '!=', 'super_admin')
+            ->get();
     }
 
     public function resetarCampos()
@@ -61,16 +75,16 @@ class GerenciadorUsuarios extends Component
 
     public function salvarUsuario()
     {
-        // Ajustar regra de validação para edição
-        if ($this->usuario_id) {
-            $this->rules['email'] = 'required|email|max:255|unique:users,email,' . $this->usuario_id;
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
+            session()->flash('error', 'Selecione um escritório no menu superior para gerenciar usuários.');
+            return;
         }
-        
+
         $dados = $this->validate();
         
         try {
             if ($this->usuario_id) {
-                $usuario = User::find($this->usuario_id);
+                $usuario = User::doEscritorio()->findOrFail($this->usuario_id);
                 $usuario->name = $this->name;
                 $usuario->email = $this->email;
                 $usuario->role = $this->role;
@@ -94,7 +108,7 @@ class GerenciadorUsuarios extends Component
 
     public function editarUsuario($id)
     {
-        $usuario = User::find($id);
+        $usuario = User::doEscritorio()->findOrFail($id);
         $this->usuario_id = $usuario->id;
         $this->name = $usuario->name;
         $this->email = $usuario->email;
@@ -103,14 +117,11 @@ class GerenciadorUsuarios extends Component
         $this->modoEdicao = true;
     }
 
-
-
     public function excluirUsuario($id)
     {
         try {
-            $usuario = User::find($id);
+            $usuario = User::doEscritorio()->findOrFail($id);
             
-            // Não permitir excluir o próprio usuário
             if ($usuario->id === Auth::id()) {
                 session()->flash('error', 'Você não pode excluir seu próprio usuário!');
                 return;
@@ -127,6 +138,8 @@ class GerenciadorUsuarios extends Component
 
     public function render()
     {
-        return view('livewire.gerenciador-usuarios');
+        return view('livewire.gerenciador-usuarios', [
+            'precisaSelecionarEscritorio' => OperadoraContext::superAdminPrecisaSelecionarEscritorio(),
+        ]);
     }
 }

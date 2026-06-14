@@ -160,7 +160,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">CNPJ da Empresa</label>
-                        <input type="text" wire:model="cnpjEmpresa" placeholder="00.000.000/0000-00" class="w-full rounded-md border-gray-300 shadow-sm">
+                        <input type="text" wire:model="cnpjEmpresa" placeholder="00.000.000/0000-00 ou só números" class="w-full rounded-md border-gray-300 shadow-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Nota</label>

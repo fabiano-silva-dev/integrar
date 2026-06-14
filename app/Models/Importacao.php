@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Importacao extends Model
 {
+    use BelongsToOperadora;
+
     protected $table = 'importacoes';
     
     protected $fillable = [
@@ -21,6 +24,7 @@ class Importacao extends Model
         'codigo_empresa',
         'cnpj_empresa',
         'empresa_id',
+        'empresa_operadora_id',
         'layout_avancado',
         'conta_banco',
         'user_id',

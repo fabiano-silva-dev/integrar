@@ -13,6 +13,10 @@ trait MenuTrait
             return true;
         }
 
+        if ($role === 'super_admin') {
+            return true;
+        }
+
         return in_array($role, $item['roles'], true);
     }
 
@@ -115,6 +119,12 @@ trait MenuTrait
                 'name' => '⚙️ Administração',
                 'icon' => 'fa-cog',
                 'items' => [
+                    [
+                        'name' => '🏛️ Escritórios',
+                        'url' => route('empresas-operadoras'),
+                        'active' => request()->routeIs('empresas-operadoras*'),
+                        'roles' => ['super_admin'],
+                    ],
                     [
                         'name' => '📋 Históricos padrão por layout',
                         'url' => route('historicos-padrao-layout'),

@@ -34,8 +34,10 @@ Route::middleware(['auth'])->group(function () {
     // Rota de exemplo para navegação Vue
 
 
-    // CRUD Empresas Operadoras (apenas admin)
-    Route::get('/empresas-operadoras', App\Livewire\EmpresasOperadorasForm::class)->name('empresas-operadoras');
+    // CRUD Empresas Operadoras (apenas super admin)
+    Route::get('/empresas-operadoras', App\Livewire\EmpresasOperadorasForm::class)
+        ->middleware('role:super_admin')
+        ->name('empresas-operadoras');
 
     // Históricos padrão por layout (apenas admin)
     Route::get('/historicos-padrao-layout', App\Livewire\GerenciadorHistoricosPadraoLayout::class)->name('historicos-padrao-layout');
@@ -43,39 +45,51 @@ Route::middleware(['auth'])->group(function () {
     // Trocar empresa no seletor global (recarrega a página para vigorar nos campos)
     Route::get('/trocar-empresa/{id}', function (string $id) {
         $empresa = \App\Models\Empresa::find($id);
-        if ($empresa) {
-            session(['empresa_selecionada_id' => (int) $id]);
-            session()->save();
+        if (!$empresa) {
+            abort(404, 'Empresa não encontrada.');
         }
+        session(['empresa_selecionada_id' => (int) $id]);
+        session()->save();
         return redirect()->to(request()->query('redirect', url()->previous()));
     })->name('trocar-empresa');
+
+    // Trocar escritório (super admin)
+    Route::get('/trocar-operadora/{id?}', function (?string $id = null) {
+        if (!$id || $id === '0') {
+            \App\Services\OperadoraContext::clear();
+        } else {
+            $operadora = \App\Models\EmpresasOperadora::find($id);
+            if (!$operadora) {
+                abort(404, 'Escritório não encontrado.');
+            }
+            \App\Services\OperadoraContext::set((int) $id);
+        }
+        session()->save();
+        return redirect()->to(request()->query('redirect', url()->previous()));
+    })->name('trocar-operadora');
 });
 
 // Rotas de download protegidas por autenticação
 Route::middleware(['auth'])->group(function () {
     Route::get('/download/{arquivo}', function ($arquivo) {
-        // Validar nome do arquivo para prevenir path traversal
         $arquivo = basename($arquivo);
-        
-        $path = storage_path("app/exports/{$arquivo}");
-        
-        if (!file_exists($path)) {
+        $path = \App\Services\OperadoraStorage::resolveAbsolutePath('exports', $arquivo);
+
+        if (!$path) {
             abort(404, 'Arquivo não encontrado');
         }
-        
+
         return response()->download($path);
     })->name('download.arquivo');
 
     Route::get('/download-arquivo/{arquivo}', function ($arquivo) {
-        // Validar nome do arquivo para prevenir path traversal
         $arquivo = basename($arquivo);
-        
-        $path = storage_path("app/exports/{$arquivo}");
-        
-        if (!file_exists($path)) {
+        $path = \App\Services\OperadoraStorage::resolveAbsolutePath('exports', $arquivo);
+
+        if (!$path) {
             abort(404, 'Arquivo não encontrado');
         }
-        
+
         return response()->download($path);
     })->name('download.arquivo.api');
 });

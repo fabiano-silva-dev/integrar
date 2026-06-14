@@ -121,7 +121,7 @@ class ConversorExcelService
     public function limparArquivosTemporarios($maxIdade = 3600) // 1 hora
     {
         try {
-            $diretorio = storage_path('app/temp');
+            $diretorio = OperadoraStorage::tempDirectory();
             if (!is_dir($diretorio)) {
                 return;
             }

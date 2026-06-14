@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Services\ConversorExcelService;
+use App\Services\OperadoraStorage;
 
 class ImportadorPersonalizado extends Component
 {
@@ -568,7 +569,7 @@ class ImportadorPersonalizado extends Component
             $conversor = new ConversorExcelService();
             
             // Criar diretório temp se não existir
-            $diretorioTemp = storage_path("app/temp");
+            $diretorioTemp = OperadoraStorage::tempDirectory();
             if (!is_dir($diretorioTemp)) {
                 mkdir($diretorioTemp, 0755, true);
             }
@@ -687,7 +688,7 @@ class ImportadorPersonalizado extends Component
             $conversor = new ConversorExcelService();
             
             // Criar diretório temp se não existir
-            $diretorioTemp = storage_path("app/temp");
+            $diretorioTemp = OperadoraStorage::tempDirectory();
             if (!is_dir($diretorioTemp)) {
                 mkdir($diretorioTemp, 0755, true);
             }

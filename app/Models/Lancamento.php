@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Lancamento extends Model
 {
+    use BelongsToOperadora;
+
     protected $fillable = [
         'data',
         'historico',
@@ -26,6 +29,7 @@ class Lancamento extends Model
         'conta_credito_original',
         'conferido',
         'empresa_id',
+        'empresa_operadora_id',
         'arquivo_origem',
         'linha_arquivo',
         'processado',

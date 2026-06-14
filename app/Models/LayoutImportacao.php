@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LayoutImportacao extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToOperadora;
 
     protected $table = 'layouts_importacao';
 
@@ -20,6 +21,7 @@ class LayoutImportacao extends Model
         'tem_cabecalho',
         'configuracoes',
         'empresa_id',
+        'empresa_operadora_id',
         'user_id',
     ];
 

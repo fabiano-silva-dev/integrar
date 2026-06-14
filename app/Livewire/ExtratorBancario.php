@@ -5,6 +5,8 @@ namespace App\Livewire;
 use Livewire\Component;
 use App\Models\Lancamento;
 use App\Models\Empresa;
+use App\Rules\EmpresaDoEscritorio;
+use App\Services\OperadoraStorage;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -23,14 +25,17 @@ class ExtratorBancario extends Component
     public $editandoLancamento = null;
     public $valorEditado = '';
 
-    protected $rules = [
-        'contaBanco' => 'required',
-        'saldoInicial' => 'required|numeric',
-        'saldoFinal' => 'required|numeric',
-        'dataInicial' => 'required|date',
-        'dataFinal' => 'required|date|after_or_equal:dataInicial',
-        'empresaId' => 'required|exists:empresas,id',
-    ];
+    protected function rules()
+    {
+        return [
+            'contaBanco' => 'required',
+            'saldoInicial' => 'required|numeric',
+            'saldoFinal' => 'required|numeric',
+            'dataInicial' => 'required|date',
+            'dataFinal' => 'required|date|after_or_equal:dataInicial',
+            'empresaId' => ['required', new EmpresaDoEscritorio()],
+        ];
+    }
 
     protected $messages = [
         'contaBanco.required' => 'A conta do banco é obrigatória',
@@ -232,9 +237,8 @@ class ExtratorBancario extends Component
         }
 
         $filename = 'extrato_bancario_' . $this->contaBanco . '_' . date('Y-m-d_H-i-s') . '.csv';
-        $filepath = storage_path('app/exports/' . $filename);
+        $filepath = OperadoraStorage::exportsDirectory() . '/' . $filename;
 
-        // Criar diretório se não existir
         if (!file_exists(dirname($filepath))) {
             mkdir(dirname($filepath), 0755, true);
         }

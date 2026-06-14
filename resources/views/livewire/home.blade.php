@@ -45,6 +45,9 @@
         <div class="bg-white rounded-lg shadow p-6 col-span-1 md:col-span-2">
             <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">⚙️ Administração</h2>
             <ul class="flex flex-wrap gap-6">
+                @if(auth()->user()?->isSuperAdmin())
+                    <li><a href="{{ route('empresas-operadoras') }}" class="flex items-center gap-2 hover:underline">🏢 Escritórios (Operadoras)</a></li>
+                @endif
                 @if(auth()->user()?->role === 'admin')
                     <li><a href="{{ route('conversoes-extrato') }}" class="flex items-center gap-2 hover:underline">🕑 Histórico de conversões</a></li>
                     <li><a href="{{ route('historicos-padrao-layout') }}" class="flex items-center gap-2 hover:underline">📋 Históricos padrão por layout</a></li>
