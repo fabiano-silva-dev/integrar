@@ -82,11 +82,13 @@ class TenantIsolationTest extends TestCase
         Terceiro::factory()->create([
             'nome' => 'Terceiro A',
             'empresa_operadora_id' => $this->operadoraA->id,
+            'empresa_id' => $this->empresaA->id,
         ]);
 
         Terceiro::factory()->create([
             'nome' => 'Terceiro B',
             'empresa_operadora_id' => $this->operadoraB->id,
+            'empresa_id' => $this->empresaB->id,
         ]);
 
         $this->actingAs($this->userA);
@@ -95,6 +97,37 @@ class TenantIsolationTest extends TestCase
 
         $this->assertCount(1, $terceiros);
         $this->assertEquals('Terceiro A', $terceiros->first()->nome);
+    }
+
+    public function test_terceiros_sao_isolados_por_empresa_no_mesmo_escritorio(): void
+    {
+        $empresaA2 = Empresa::factory()->create([
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'nome' => 'Empresa A2',
+        ]);
+
+        Terceiro::factory()->create([
+            'nome' => 'Fornecedor XYZ',
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'empresa_id' => $this->empresaA->id,
+        ]);
+
+        Terceiro::factory()->create([
+            'nome' => 'Fornecedor XYZ',
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'empresa_id' => $empresaA2->id,
+        ]);
+
+        $this->actingAs($this->userA);
+
+        $terceirosEmpresaA = Terceiro::where('empresa_id', $this->empresaA->id)->get();
+        $terceirosEmpresaA2 = Terceiro::where('empresa_id', $empresaA2->id)->get();
+
+        $this->assertCount(1, $terceirosEmpresaA);
+        $this->assertCount(1, $terceirosEmpresaA2);
+        $this->assertEquals('Fornecedor XYZ', $terceirosEmpresaA->first()->nome);
+        $this->assertEquals('Fornecedor XYZ', $terceirosEmpresaA2->first()->nome);
+        $this->assertNotEquals($terceirosEmpresaA->first()->id, $terceirosEmpresaA2->first()->id);
     }
 
     public function test_super_admin_ve_todos_os_escritorios_sem_contexto(): void

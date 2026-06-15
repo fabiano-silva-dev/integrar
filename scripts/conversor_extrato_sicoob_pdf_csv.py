@@ -913,7 +913,8 @@ def main():
                 'Histórico',
                 'Código da Filial/Matriz',
                 'Nome da Empresa',
-                'Número da Nota'
+                'Número da Nota',
+                'CNPJ/CPF',
             ])
             
             for l in lancamentos_processados:
@@ -921,6 +922,7 @@ def main():
                 valor = l['valor']
                 nome = l.get('pagador_recebedor', '')
                 documento = l.get('documento', '')
+                cnpj_cpf = l.get('cnpj_cpf', '')
                 lancamento_completo = l.get('lancamento_completo', '').strip()
                 historico_4col = l.get('historico_4col', '') if formato == '4col' else None
 
@@ -943,7 +945,8 @@ def main():
                     historico,
                     '',
                     nome,
-                    documento
+                    documento,
+                    cnpj_cpf,
                 ])
         print(f"CSV padronizado gerado em: {caminho_csv}")
 

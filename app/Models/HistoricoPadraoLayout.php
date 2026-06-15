@@ -73,6 +73,7 @@ class HistoricoPadraoLayout extends Model
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
+            'banrisul' => 'Banrisul (PDF) - Conta corrente',
         ];
         $nome = $nomeSugerido ?? ($nomesLayout[$layoutAvancado] ?? $layoutAvancado);
 

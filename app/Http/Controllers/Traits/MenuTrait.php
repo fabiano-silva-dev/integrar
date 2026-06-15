@@ -43,12 +43,6 @@ trait MenuTrait
                         'active' => request()->routeIs('usuarios*'),
                         'roles' => ['admin', 'gerente'],
                     ],
-                    [
-                        'name' => 'Terceiros',
-                        'icon' => 'user-group',
-                        'url' => route('terceiros'),
-                        'active' => request()->routeIs('terceiros*'),
-                    ],
                 ],
             ],
             [
@@ -109,11 +103,25 @@ trait MenuTrait
                         'url' => route('tabela'),
                         'active' => request()->routeIs('tabela*'),
                     ],
+                ],
+            ],
+            [
+                'id' => 'regras-amarracao',
+                'name' => 'Regras de Amarração',
+                'icon' => 'link',
+                'items' => [
                     [
-                        'name' => 'Regras de Amarração',
-                        'icon' => 'link',
+                        'name' => 'Descrições',
+                        'icon' => 'document',
                         'url' => route('regras-amarracao'),
                         'active' => request()->routeIs('regras-amarracao*'),
+                        'title' => 'Regras de amarração por descrição do extrato',
+                    ],
+                    [
+                        'name' => 'Terceiros',
+                        'icon' => 'user-group',
+                        'url' => route('terceiros'),
+                        'active' => request()->routeIs('terceiros*'),
                     ],
                 ],
             ],

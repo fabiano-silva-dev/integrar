@@ -6,6 +6,7 @@ use App\Models\Lancamento;
 use App\Models\AlteracaoLog;
 use App\Models\Importacao;
 use App\Models\RegraAmarracaoDescricao;
+use App\Models\Terceiro;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +28,8 @@ class TabelaLancamentos extends Component
     public $filtroValor = '';
     public $filtroConferido = '';
     public $perPage = 50;
+    public $buscaTerceiroEdicao = '';
+    public $buscaTerceiroNovo = '';
     
     // Edição inline
     public $editandoId = null;
@@ -46,6 +49,7 @@ class TabelaLancamentos extends Component
         'conta_credito' => '',
         'valor' => '',
         'nome_empresa' => '',
+        'terceiro_id' => null,
         'historico' => '',
         'codigo_filial_matriz' => '',
         'arquivo_origem' => '',
@@ -61,6 +65,7 @@ class TabelaLancamentos extends Component
         'conta_credito' => '',
         'valor' => '',
         'nome_empresa' => '',
+        'terceiro_id' => null,
         'historico' => '',
         'codigo_filial_matriz' => '',
         'arquivo_origem' => '',
@@ -228,7 +233,7 @@ class TabelaLancamentos extends Component
         $layoutAvancado = $importacao->layout_avancado ?? null;
         $contaBanco = $importacao->conta_banco ? ltrim((string) $importacao->conta_banco, '0') : null;
 
-        if (!$contaBanco && in_array($layoutAvancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi'])) {
+        if (!$contaBanco && in_array($layoutAvancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi', 'banrisul'])) {
             session()->flash('error', 'Esta importação não possui conta banco registrada. Importe novamente informando a conta do banco.');
             return;
         }
@@ -611,10 +616,80 @@ class TabelaLancamentos extends Component
             'conta_credito' => '',
             'valor' => '',
             'nome_empresa' => '',
+            'terceiro_id' => null,
             'historico' => '',
             'codigo_filial_matriz' => '',
             'arquivo_origem' => '',
         ];
+        $this->buscaTerceiroNovo = '';
+    }
+
+    public function selecionarTerceiroEdicao(int $terceiroId): void
+    {
+        $terceiro = Terceiro::find($terceiroId);
+        if (!$terceiro) {
+            return;
+        }
+
+        $this->dadosEdicao['terceiro_id'] = $terceiro->id;
+        $this->dadosEdicao['nome_empresa'] = $terceiro->nome;
+        $this->buscaTerceiroEdicao = '';
+    }
+
+    public function limparTerceiroEdicao(): void
+    {
+        $this->dadosEdicao['terceiro_id'] = null;
+        $this->dadosEdicao['nome_empresa'] = '';
+        $this->buscaTerceiroEdicao = '';
+    }
+
+    public function selecionarTerceiroNovo(int $terceiroId): void
+    {
+        $terceiro = Terceiro::find($terceiroId);
+        if (!$terceiro) {
+            return;
+        }
+
+        $this->novoLancamento['terceiro_id'] = $terceiro->id;
+        $this->novoLancamento['nome_empresa'] = $terceiro->nome;
+        $this->buscaTerceiroNovo = '';
+    }
+
+    public function limparTerceiroNovo(): void
+    {
+        $this->novoLancamento['terceiro_id'] = null;
+        $this->novoLancamento['nome_empresa'] = '';
+        $this->buscaTerceiroNovo = '';
+    }
+
+    private function buscarTerceirosSugestoes(?string $termo): array
+    {
+        $termo = trim($termo ?? '');
+        if (mb_strlen($termo) < 2) {
+            return [];
+        }
+
+        $empresaId = session('empresa_selecionada_id');
+        if (!$empresaId) {
+            return [];
+        }
+
+        return Terceiro::query()
+            ->where('empresa_id', $empresaId)
+            ->where('ativo', true)
+            ->where(function ($query) use ($termo) {
+                $query->where('nome', 'like', '%' . $termo . '%')
+                    ->orWhere('cnpj_cpf', 'like', '%' . $termo . '%');
+            })
+            ->orderBy('nome')
+            ->limit(10)
+            ->get(['id', 'nome', 'cnpj_cpf'])
+            ->map(fn (Terceiro $terceiro) => [
+                'id' => $terceiro->id,
+                'nome' => $terceiro->nome,
+                'cnpj_cpf' => $terceiro->cnpj_cpf,
+            ])
+            ->all();
     }
 
     public function carregarDadosImportacao()
@@ -671,6 +746,7 @@ class TabelaLancamentos extends Component
                 'conta_credito_original' => $this->novoLancamento['conta_credito'],
                 'valor' => $this->novoLancamento['valor'],
                 'nome_empresa' => $this->novoLancamento['nome_empresa'],
+                'terceiro_id' => $this->novoLancamento['terceiro_id'] ?: null,
                 'historico' => $this->novoLancamento['historico'],
                 'codigo_filial_matriz' => $this->novoLancamento['codigo_filial_matriz'],
                 'arquivo_origem' => $this->novoLancamento['arquivo_origem'],
@@ -734,11 +810,13 @@ class TabelaLancamentos extends Component
             'conta_debito' => $lancamento->conta_debito,
             'conta_credito' => $lancamento->conta_credito,
             'valor' => $lancamento->valor,
-            'nome_empresa' => $lancamento->nome_empresa,
+            'nome_empresa' => $lancamento->terceiro?->nome ?? $lancamento->nome_empresa,
+            'terceiro_id' => $lancamento->terceiro_id,
             'historico' => $lancamento->historico,
             'codigo_filial_matriz' => $lancamento->codigo_filial_matriz,
             'arquivo_origem' => $lancamento->arquivo_origem,
         ];
+        $this->buscaTerceiroEdicao = '';
 
         $this->modalEditarLancamento = true;
         $this->fecharMenuAcoes();
@@ -779,6 +857,7 @@ class TabelaLancamentos extends Component
                 'conta_credito' => $lancamento->conta_credito,
                 'valor' => $lancamento->valor,
                 'nome_empresa' => $lancamento->nome_empresa,
+                'terceiro_id' => $lancamento->terceiro_id,
                 'historico' => $lancamento->historico,
                 'codigo_filial_matriz' => $lancamento->codigo_filial_matriz,
                 'arquivo_origem' => $lancamento->arquivo_origem,
@@ -791,6 +870,7 @@ class TabelaLancamentos extends Component
                 'conta_credito' => $this->dadosEdicao['conta_credito'],
                 'valor' => $this->dadosEdicao['valor'],
                 'nome_empresa' => $this->dadosEdicao['nome_empresa'],
+                'terceiro_id' => $this->dadosEdicao['terceiro_id'] ?: null,
                 'historico' => $this->dadosEdicao['historico'],
                 'codigo_filial_matriz' => $this->dadosEdicao['codigo_filial_matriz'],
                 'arquivo_origem' => $this->dadosEdicao['arquivo_origem'],
@@ -834,10 +914,12 @@ class TabelaLancamentos extends Component
             'conta_credito' => '',
             'valor' => '',
             'nome_empresa' => '',
+            'terceiro_id' => null,
             'historico' => '',
             'codigo_filial_matriz' => '',
             'arquivo_origem' => '',
         ];
+        $this->buscaTerceiroEdicao = '';
     }
 
     public function excluirLancamento($lancamentoId)
@@ -942,6 +1024,8 @@ class TabelaLancamentos extends Component
             'lancamentos' => $lancamentos,
             'importacoes' => $importacoes,
             'mostrarReprocessar' => $mostrarReprocessar,
+            'terceirosBuscaEdicao' => $this->buscarTerceirosSugestoes($this->buscaTerceiroEdicao),
+            'terceirosBuscaNovo' => $this->buscarTerceirosSugestoes($this->buscaTerceiroNovo),
         ]);
     }
 

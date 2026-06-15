@@ -165,7 +165,8 @@ with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
         'Histórico',
         'Código da Filial/Matriz',
         'Nome da Empresa',
-        'Número da Nota'
+        'Número da Nota',
+        'CNPJ/CPF',
     ])
     
     for l in lancamentos:
@@ -200,7 +201,8 @@ with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
             historico_final,         # Histórico
             '',                      # Código da Filial/Matriz
             nome_limpo,              # Nome da Empresa
-            ''                       # Número da Nota
+            '',                      # Número da Nota
+            cnpj_cpf_final or '',    # CNPJ/CPF
         ])
 
 print(f'CSV padronizado gerado em: {csv_path}')

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Empresa;
 use App\Models\EmpresasOperadora;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -18,6 +19,7 @@ class TerceiroFactory extends Factory
             'tipo' => 'fornecedor',
             'ativo' => true,
             'empresa_operadora_id' => EmpresasOperadora::factory(),
+            'empresa_id' => Empresa::factory(),
         ];
     }
 }

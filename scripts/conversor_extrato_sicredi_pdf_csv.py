@@ -192,6 +192,23 @@ def extrair_nome_empresa(descricao):
     return descricao
 
 
+def extrair_cnpj_cpf(descricao):
+    """Extrai CPF/CNPJ da descrição de PIX do Sicredi."""
+    descricao = (descricao or '').strip()
+    if not descricao:
+        return ''
+
+    match = re.match(
+        r'(?:RECEBIMENTO|PAGAMENTO)\s+PIX(?:\s+SICREDI)?\s+(\d{11,14})\s+',
+        descricao,
+        re.IGNORECASE,
+    )
+    if match:
+        return match.group(1)
+
+    return ''
+
+
 def formatar_valor_brl(valor):
     """Formata valor para padrão brasileiro (1.234,56)."""
     try:
@@ -231,13 +248,15 @@ def main():
             'Histórico',
             'Código da Filial/Matriz',
             'Nome da Empresa',
-            'Número da Nota'
+            'Número da Nota',
+            'CNPJ/CPF',
         ])
         
         for l in lancamentos:
             valor = l['valor']
             nome = extrair_nome_empresa(l['descricao'])
             documento = l['documento']
+            cnpj_cpf = extrair_cnpj_cpf(l['descricao'])
             # Histórico = descrição original do PDF (para amarração por descrição)
             historico = l['descricao'].strip()
             if documento and documento not in ('PIX_CRED', 'PIX_CRE'):
@@ -259,7 +278,8 @@ def main():
                 historico,
                 '',
                 nome,
-                documento
+                documento,
+                cnpj_cpf,
             ])
     
     print(f"CSV gerado em: {csv_path}")

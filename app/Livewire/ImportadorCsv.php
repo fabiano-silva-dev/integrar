@@ -110,13 +110,12 @@ class ImportadorCsv extends Component
                 if (count($dados) >= 9) {
                     // Processar terceiro se existir
                     $terceiroId = null;
-                    if (!empty($nomeEmpresa)) { // Nome da Empresa
-                        $terceiro = Terceiro::firstOrCreate(
-                            ['nome' => trim($nomeEmpresa)],
-                            [
-                                'tipo' => 'empresa',
-                                'ativo' => true
-                            ]
+                    if (!empty($nomeEmpresa)) {
+                        $cnpjCpfTerceiro = Terceiro::resolverDocumentoDaLinha($get, $nomeEmpresa, $historico);
+                        $terceiro = Terceiro::sincronizarNaImportacao(
+                            trim($nomeEmpresa),
+                            (int) $importacao->empresa_id,
+                            $cnpjCpfTerceiro
                         );
                         $terceiroId = $terceiro->id;
                     }

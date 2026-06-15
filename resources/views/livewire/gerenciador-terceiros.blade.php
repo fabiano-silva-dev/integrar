@@ -5,12 +5,25 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold text-gray-800">Gerenciador de Terceiros</h2>
-                    <p class="text-gray-600 mt-1">Gerencie empresas, clientes, funcionários e fornecedores</p>
+                    <p class="text-gray-600 mt-1">Gerencie empresas, clientes, funcionários e fornecedores da empresa selecionada</p>
                 </div>
-                <button wire:click="abrirModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                <button wire:click="abrirModal()" @disabled(!$empresaAtual) class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
                     Novo Terceiro
                 </button>
             </div>
+            @if($empresaAtual)
+                <div class="mt-4 border border-gray-200 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                    <span class="font-semibold">{{ $empresaAtual->codigo_sistema ?? '—' }}</span>
+                    <span class="text-gray-500 mx-1">-</span>
+                    <span class="text-gray-700">{{ $empresaAtual->cnpj }}</span>
+                    <span class="text-gray-500 mx-1">-</span>
+                    <span class="text-gray-900">{{ $empresaAtual->nome }}</span>
+                </div>
+            @else
+                <div class="mt-4 border border-red-300 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                    Nenhuma empresa selecionada. Escolha uma empresa no seletor do cabeçalho para ver e cadastrar terceiros.
+                </div>
+            @endif
         </div>
 
         <!-- Filtros -->

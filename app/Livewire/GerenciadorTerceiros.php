@@ -2,8 +2,10 @@
 
 namespace App\Livewire;
 
+use App\Models\Empresa;
 use App\Models\Terceiro;
 use App\Rules\CnpjOuCpfValido;
+use App\Services\OperadoraContext;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -13,6 +15,7 @@ class GerenciadorTerceiros extends Component
 
     protected $layout = 'components.layouts.app';
 
+    public $empresa_id = null;
     public $filtroNome = '';
     public $filtroTipo = '';
     public $filtroAtivo = '';
@@ -42,6 +45,11 @@ class GerenciadorTerceiros extends Component
         ];
     }
 
+    public function mount()
+    {
+        $this->empresa_id = session('empresa_selecionada_id');
+    }
+
     public function atualizarFiltros()
     {
         $this->resetPage();
@@ -58,7 +66,11 @@ class GerenciadorTerceiros extends Component
     public function abrirModal($terceiroId = null)
     {
         if ($terceiroId) {
-            $terceiro = Terceiro::findOrFail($terceiroId);
+            if (!$this->empresa_id) {
+                return;
+            }
+
+            $terceiro = Terceiro::where('empresa_id', $this->empresa_id)->findOrFail($terceiroId);
             if ($terceiro) {
                 $this->editandoId = $terceiro->id;
                 $this->nome = $terceiro->nome;
@@ -74,12 +86,23 @@ class GerenciadorTerceiros extends Component
 
     public function salvar()
     {
+        if (!$this->empresa_id) {
+            $this->addError('nome', 'Selecione uma empresa no cabeçalho antes de cadastrar terceiros.');
+            return;
+        }
+
+        $empresa = OperadoraContext::resolveEmpresa($this->empresa_id);
+        if (!$empresa) {
+            $this->addError('nome', 'Empresa inválida para o escritório atual.');
+            return;
+        }
+
         $this->validate();
 
         $cnpjCpf = CnpjOuCpfValido::format($this->cnpj_cpf);
 
         if ($this->editandoId) {
-            $terceiro = Terceiro::findOrFail($this->editandoId);
+            $terceiro = Terceiro::where('empresa_id', $empresa->id)->findOrFail($this->editandoId);
             if ($terceiro) {
                 $terceiro->update([
                     'nome' => $this->nome,
@@ -95,7 +118,8 @@ class GerenciadorTerceiros extends Component
                 'cnpj_cpf' => $cnpjCpf,
                 'tipo' => $this->tipo,
                 'observacoes' => $this->observacoes,
-                'ativo' => $this->ativo
+                'ativo' => $this->ativo,
+                'empresa_id' => $empresa->id,
             ]);
         }
 
@@ -104,7 +128,11 @@ class GerenciadorTerceiros extends Component
 
     public function excluir($terceiroId)
     {
-        $terceiro = Terceiro::findOrFail($terceiroId);
+        if (!$this->empresa_id) {
+            return;
+        }
+
+        $terceiro = Terceiro::where('empresa_id', $this->empresa_id)->findOrFail($terceiroId);
         if ($terceiro) {
             $terceiro->delete();
         }
@@ -112,7 +140,11 @@ class GerenciadorTerceiros extends Component
 
     public function toggleAtivo($terceiroId)
     {
-        $terceiro = Terceiro::findOrFail($terceiroId);
+        if (!$this->empresa_id) {
+            return;
+        }
+
+        $terceiro = Terceiro::where('empresa_id', $this->empresa_id)->findOrFail($terceiroId);
         if ($terceiro) {
             $terceiro->update(['ativo' => !$terceiro->ativo]);
         }
@@ -137,6 +169,12 @@ class GerenciadorTerceiros extends Component
     {
         $query = Terceiro::query();
 
+        if ($this->empresa_id) {
+            $query->where('empresa_id', $this->empresa_id);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
         if (!empty($this->filtroNome)) {
             $query->where('nome', 'like', '%' . $this->filtroNome . '%');
         }
@@ -155,9 +193,13 @@ class GerenciadorTerceiros extends Component
     public function render()
     {
         $terceiros = $this->getTerceirosQuery()->paginate(15);
+        $empresaAtual = $this->empresa_id
+            ? Empresa::find($this->empresa_id)
+            : null;
 
         return view('livewire.gerenciador-terceiros', [
-            'terceiros' => $terceiros
+            'terceiros' => $terceiros,
+            'empresaAtual' => $empresaAtual,
         ]);
     }
 }

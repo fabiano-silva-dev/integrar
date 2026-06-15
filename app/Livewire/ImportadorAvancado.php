@@ -7,6 +7,7 @@ use App\Models\HistoricoPadraoLayout;
 use App\Models\Importacao;
 use App\Models\Lancamento;
 use App\Models\RegraAmarracaoDescricao;
+use App\Models\Terceiro;
 use App\Rules\EmpresaDoEscritorio;
 use App\Services\OperadoraContext;
 use App\Services\OperadoraStorage;
@@ -42,7 +43,7 @@ class ImportadorAvancado extends Component
         return [
             'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240',
             'empresa_id' => ['required', new EmpresaDoEscritorio()],
-            'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi',
+            'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi,banrisul',
             'conta_banco' => 'required|string',
         ];
     }
@@ -206,6 +207,7 @@ class ImportadorAvancado extends Component
             'caixa_federal' => '.pdf',
             'caixa' => '.pdf',
             'sicredi' => '.pdf',
+            'banrisul' => '.pdf',
             'ofx' => '.ofx',
             'registros' => '.csv',
         ];
@@ -226,6 +228,7 @@ class ImportadorAvancado extends Component
             'caixa_federal' => 'Extrato antigo da Caixa (PDF)',
             'caixa' => 'Extrato do Caixa Internet Banking (PDF)',
             'sicredi' => 'Extrato em PDF do Sicredi',
+            'banrisul' => 'Extrato em PDF do Banrisul (conta corrente)',
             'ofx' => 'Arquivo OFX do internet banking',
             'registros' => 'CSV exportado do Connectere (Contas Financeiras)',
         ];
@@ -422,6 +425,7 @@ class ImportadorAvancado extends Component
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
+            'banrisul' => 'conversor_extrato_banrisul_pdf_csv.py',
         ];
 
         return $scripts[$this->layout_selecionado] ?? 'conversor_registros_csv.py';
@@ -442,7 +446,7 @@ class ImportadorAvancado extends Component
         ]);
         
         // Passar conta do banco para conversores que aceitam o 3º parâmetro
-        $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'ofx'];
+        $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'banrisul', 'ofx'];
         if (in_array($this->layout_selecionado, $scriptsComContaBanco, true) && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
@@ -498,6 +502,7 @@ class ImportadorAvancado extends Component
             'ofx' => 'OFX — qualquer banco',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
+            'banrisul' => 'Banrisul (PDF) - Conta corrente',
         ];
         $nomeLayout = $layoutsNomes[$this->layout_selecionado] ?? $this->layout_selecionado;
 
@@ -649,18 +654,21 @@ class ImportadorAvancado extends Component
 
                 // Processar terceiro se existir
                 $terceiroId = null;
-                if (!empty($nomeEmpresa)) { // Nome da Empresa
-                    $terceiro = \App\Models\Terceiro::firstOrCreate(
-                        ['nome' => trim($nomeEmpresa)],
-                        [
-                            'tipo' => 'empresa',
-                            'ativo' => true
-                        ]
+                if (!empty($nomeEmpresa)) {
+                    $cnpjCpfTerceiro = Terceiro::resolverDocumentoDaLinha($get, $nomeEmpresa, $historico);
+                    $terceiro = Terceiro::sincronizarNaImportacao(
+                        trim($nomeEmpresa),
+                        $empresa->id,
+                        $cnpjCpfTerceiro
                     );
                     $terceiroId = $terceiro->id;
                     
                     if ($linhaNumero <= 5) {
-                        Log::info("Terceiro processado:", ['terceiro_id' => $terceiroId, 'nome' => $nomeEmpresa]);
+                        Log::info("Terceiro processado:", [
+                            'terceiro_id' => $terceiroId,
+                            'nome' => $nomeEmpresa,
+                            'cnpj_cpf' => $cnpjCpfTerceiro,
+                        ]);
                     }
                 }
 
@@ -980,6 +988,9 @@ class ImportadorAvancado extends Component
             'sicredi' => [
                 'sicredi' => 'SICREDI (PDF)',
             ],
+            'banrisul' => [
+                'banrisul' => 'Banrisul (PDF) - Conta corrente',
+            ],
             'ofx' => [
                 'ofx' => 'OFX — qualquer banco',
             ],
@@ -1008,6 +1019,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'Sicoob',
             'caixa' => 'Caixa',
             'sicredi' => 'Sicredi',
+            'banrisul' => 'Banrisul',
             'ofx' => 'OFX',
             'registros' => 'Connectere',
         ];

@@ -41,7 +41,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
     protected function rules()
     {
         $r = [
-            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
+            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
             'nome_sugerido' => 'required|string|max:255',
             'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
         ];
@@ -70,6 +70,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
+            'banrisul' => 'Banrisul (PDF) - Conta corrente',
         ];
     }
 
@@ -83,6 +84,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
+            'banrisul' => 'conversor_extrato_banrisul_pdf_csv.py',
         ];
         return $scripts[$this->layout_avancado] ?? 'conversor_registros_csv.py';
     }
@@ -101,7 +103,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
     {
         $this->erro = null;
         $this->validate([
-            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
+            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
             'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240',
         ]);
 
@@ -133,7 +135,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             $this->mensagem_status = 'Executando conversão do layout...';
 
             $script_name = $this->determinarScriptPython();
-            if (in_array($this->layout_avancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi'])) {
+            if (in_array($this->layout_avancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi', 'banrisul'])) {
                 $resultado = Process::run(
                     sprintf('python3 %s "%s" "%s" "%s"', $script_path, $caminho_completo, $caminho_saida, $contaBanco)
                 );
@@ -261,7 +263,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             session()->flash('message', 'Configuração atualizada com sucesso.');
         } else {
             $this->validate([
-                'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi',
+                'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
                 'nome_sugerido' => 'required|string|max:255',
                 'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
             ]);

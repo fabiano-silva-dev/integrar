@@ -140,7 +140,15 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Terceiro</label>
-                                <input type="text" wire:model="novoLancamento.nome_empresa" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Nome do terceiro">
+                                <x-busca-terceiro
+                                    :terceiro-id="$novoLancamento['terceiro_id'] ?? null"
+                                    :terceiro-nome="$novoLancamento['nome_empresa'] ?? ''"
+                                    busca-model="buscaTerceiroNovo"
+                                    :busca-valor="$buscaTerceiroNovo"
+                                    :resultados="$terceirosBuscaNovo"
+                                    selecionar-method="selecionarTerceiroNovo"
+                                    limpar-method="limparTerceiroNovo"
+                                />
                                 @error('novoLancamento.nome_empresa') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div class="md:col-span-2">
@@ -204,7 +212,15 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Terceiro</label>
-                                <input type="text" wire:model="dadosEdicao.nome_empresa" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Nome do terceiro">
+                                <x-busca-terceiro
+                                    :terceiro-id="$dadosEdicao['terceiro_id'] ?? null"
+                                    :terceiro-nome="$dadosEdicao['nome_empresa'] ?? ''"
+                                    busca-model="buscaTerceiroEdicao"
+                                    :busca-valor="$buscaTerceiroEdicao"
+                                    :resultados="$terceirosBuscaEdicao"
+                                    selecionar-method="selecionarTerceiroEdicao"
+                                    limpar-method="limparTerceiroEdicao"
+                                />
                                 @error('dadosEdicao.nome_empresa') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div>
