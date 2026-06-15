@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Traits;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Session;
 
 trait MenuTrait
 {
@@ -24,26 +23,29 @@ trait MenuTrait
     {
         $user = Auth::user();
         $role = $user->role ?? 'operador';
-        
+
         $menuItems = [
             [
                 'id' => 'cadastros',
-                'name' => '📋 Cadastros',
-                'icon' => 'fa-database',
+                'name' => 'Cadastros',
+                'icon' => 'folder',
                 'items' => [
                     [
-                        'name' => '🏢 Empresas',
+                        'name' => 'Empresas',
+                        'icon' => 'building',
                         'url' => route('empresas'),
                         'active' => request()->routeIs('empresas*'),
                     ],
                     [
-                        'name' => '👥 Usuários',
+                        'name' => 'Usuários',
+                        'icon' => 'users',
                         'url' => route('usuarios'),
                         'active' => request()->routeIs('usuarios*'),
                         'roles' => ['admin', 'gerente'],
                     ],
                     [
-                        'name' => '🤝 Terceiros',
+                        'name' => 'Terceiros',
+                        'icon' => 'user-group',
                         'url' => route('terceiros'),
                         'active' => request()->routeIs('terceiros*'),
                     ],
@@ -51,22 +53,25 @@ trait MenuTrait
             ],
             [
                 'id' => 'importacao',
-                'name' => '📥 Importação',
-                'icon' => 'fa-upload',
+                'name' => 'Importação',
+                'icon' => 'import',
                 'items' => [
                     [
-                        'name' => '📄 Importação de Extratos',
+                        'name' => 'Importação de Extratos',
+                        'icon' => 'document',
                         'url' => route('importador-avancado'),
                         'active' => request()->routeIs('importador-avancado*'),
                     ],
                     [
-                        'name' => '🎯 Importação Personalizada',
+                        'name' => 'Importação Personalizada',
+                        'icon' => 'sliders',
                         'url' => route('importador-personalizado'),
                         'active' => request()->routeIs('importador-personalizado*'),
                         'title' => 'Importação personalizada de CSV, XLS ou XLSX',
                     ],
                     [
-                        'name' => '🕑 Importações anteriores',
+                        'name' => 'Importações anteriores',
+                        'icon' => 'clock',
                         'url' => route('importacoes'),
                         'active' => request()->routeIs('importacoes*'),
                     ],
@@ -74,11 +79,12 @@ trait MenuTrait
             ],
             [
                 'id' => 'conversao',
-                'name' => '🔄 Conversão',
-                'icon' => 'fa-exchange-alt',
+                'name' => 'Conversão',
+                'icon' => 'convert',
                 'items' => [
                     [
-                        'name' => '📄 PDF para OFX',
+                        'name' => 'PDF para OFX',
+                        'icon' => 'document',
                         'url' => route('conversao-pdf-ofx'),
                         'active' => request()->routeIs('conversao-pdf-ofx'),
                         'title' => 'Converte extrato PDF para arquivo OFX',
@@ -87,16 +93,18 @@ trait MenuTrait
             ],
             [
                 'id' => 'lancamentos',
-                'name' => '📊 Lançamentos',
-                'icon' => 'fa-chart-bar',
+                'name' => 'Lançamentos',
+                'icon' => 'table',
                 'items' => [
                     [
-                        'name' => '📋 Tabela de lançamentos',
+                        'name' => 'Tabela de lançamentos',
+                        'icon' => 'table',
                         'url' => route('tabela'),
                         'active' => request()->routeIs('tabela*'),
                     ],
                     [
-                        'name' => '⚙️ Regras de Amarração',
+                        'name' => 'Regras de Amarração',
+                        'icon' => 'link',
                         'url' => route('regras-amarracao'),
                         'active' => request()->routeIs('regras-amarracao*'),
                     ],
@@ -104,11 +112,12 @@ trait MenuTrait
             ],
             [
                 'id' => 'exportacao',
-                'name' => '📤 Exportação',
-                'icon' => 'fa-download',
+                'name' => 'Exportação',
+                'icon' => 'export',
                 'items' => [
                     [
-                        'name' => '📤 Exportador',
+                        'name' => 'Exportador',
+                        'icon' => 'export',
                         'url' => route('exportador'),
                         'active' => request()->routeIs('exportador*'),
                     ],
@@ -116,57 +125,62 @@ trait MenuTrait
             ],
             [
                 'id' => 'administracao',
-                'name' => '⚙️ Administração',
-                'icon' => 'fa-cog',
+                'name' => 'Administração',
+                'icon' => 'cog',
                 'items' => [
                     [
-                        'name' => '🏛️ Escritórios',
+                        'name' => 'Escritórios',
+                        'icon' => 'building',
                         'url' => route('empresas-operadoras'),
                         'active' => request()->routeIs('empresas-operadoras*'),
                         'roles' => ['super_admin'],
                     ],
                     [
-                        'name' => '📋 Históricos padrão por layout',
+                        'name' => 'Históricos padrão por layout',
+                        'icon' => 'document',
                         'url' => route('historicos-padrao-layout'),
                         'active' => request()->routeIs('historicos-padrao-layout*'),
                         'roles' => ['admin'],
                     ],
                     [
-                        'name' => '🕑 Histórico de conversões',
+                        'name' => 'Histórico de conversões',
+                        'icon' => 'clock',
                         'url' => route('conversoes-extrato'),
                         'active' => request()->routeIs('conversoes-extrato*'),
                         'title' => 'Consulta conversões PDF para OFX realizadas',
                         'roles' => ['admin'],
                     ],
                     [
-                        'name' => '🛠️ Configurações',
+                        'name' => 'Configurações',
                         'url' => '#',
+                        'icon' => 'cog',
                         'active' => false,
                         'class' => 'text-gray-400 cursor-not-allowed',
                         'disabled' => true,
-                        'note' => '(em breve)',
+                        'note' => 'Em breve',
                     ],
                     [
-                        'name' => '📜 Logs',
+                        'name' => 'Logs',
                         'url' => '#',
+                        'icon' => 'document',
                         'active' => false,
                         'class' => 'text-gray-400 cursor-not-allowed',
                         'disabled' => true,
-                        'note' => '(em breve)',
+                        'note' => 'Em breve',
                     ],
                     [
-                        'name' => '🔑 Acessos',
+                        'name' => 'Acessos',
                         'url' => '#',
+                        'icon' => 'users',
                         'active' => false,
                         'class' => 'text-gray-400 cursor-not-allowed',
                         'disabled' => true,
-                        'note' => '(em breve)',
+                        'note' => 'Em breve',
                     ],
                 ],
             ],
         ];
 
-        // Filtra links sem acesso e remove menus vazios.
         $menuItems = array_values(array_filter(array_map(function ($menu) use ($role) {
             $items = $menu['items'] ?? [];
             $menu['items'] = array_values(array_filter($items, function ($item) use ($role) {
@@ -182,7 +196,7 @@ trait MenuTrait
     public function getUserData()
     {
         $user = Auth::user();
-        
+
         return [
             'name' => $user->name,
             'email' => $user->email,
@@ -190,4 +204,4 @@ trait MenuTrait
             'initial' => strtoupper(substr($user->name, 0, 1)),
         ];
     }
-} 
+}

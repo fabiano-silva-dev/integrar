@@ -42,14 +42,14 @@
                         </div>
 
                         <div>
-                            <label for="codigo_sistema" class="block text-sm font-medium text-gray-700">Código do Sistema</label>
+                            <label for="codigo_sistema" class="block text-sm font-medium text-gray-700">Código do Sistema Contábil</label>
                             <input type="text" id="codigo_sistema" wire:model="codigo_sistema" 
                                    class="mt-1 block w-full border border-gray-400 bg-white rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition duration-150 ease-in-out">
                             @error('codigo_sistema') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
 
                         <div>
-                            <label for="codigo_conta_banco" class="block text-sm font-medium text-gray-700">Código Conta Banco</label>
+                            <label for="codigo_conta_banco" class="block text-sm font-medium text-gray-700">Código contábil do banco <span class="text-gray-500 font-normal">(opcional)</span></label>
                             <input type="text" id="codigo_conta_banco" wire:model="codigo_conta_banco" 
                                    class="mt-1 block w-full border border-gray-400 bg-white rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition duration-150 ease-in-out">
                             @error('codigo_conta_banco') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
@@ -86,8 +86,8 @@
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CNPJ</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código Sistema</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conta Banco</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cód. sistema contábil</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cód. contábil banco</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>

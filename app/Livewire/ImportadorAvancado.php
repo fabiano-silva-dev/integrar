@@ -35,6 +35,7 @@ class ImportadorAvancado extends Component
     public $linhaAtual = 0;
     public $importacao_id = null;
     public $total_registros_importados = 0;
+    public $passo_atual = 1;
 
     protected function rules()
     {
@@ -61,6 +62,7 @@ class ImportadorAvancado extends Component
     public function mount()
     {
         $this->empresa_id = session('empresa_selecionada_id');
+        $this->preencherContaBancoDaEmpresa();
         $this->mensagem_status = 'Aguardando upload do arquivo...';
     }
 
@@ -68,7 +70,44 @@ class ImportadorAvancado extends Component
     {
         $this->resetValidation();
         $this->validateOnly('arquivo');
-        $this->mensagem_status = 'Arquivo selecionado. Escolha o layout e a empresa.';
+        $this->sugerirLayoutPorArquivo();
+        $this->mensagem_status = 'Arquivo selecionado. Confirme o banco de origem e importe.';
+
+        if ($this->arquivo && $this->status_importacao === 'pendente') {
+            $this->passo_atual = 2;
+        }
+    }
+
+    public function updatedLayoutSelecionado()
+    {
+        $this->sincronizarFamiliaLayout();
+    }
+
+    public function proximoPasso(): void
+    {
+        if ($this->status_importacao !== 'pendente') {
+            return;
+        }
+
+        if ($this->passo_atual === 1 && $this->arquivo) {
+            $this->passo_atual = 2;
+        } elseif ($this->passo_atual === 2 && $this->layout_selecionado) {
+            $this->passo_atual = 3;
+        }
+    }
+
+    public function passoAnterior(): void
+    {
+        if ($this->status_importacao !== 'pendente' || $this->passo_atual <= 1) {
+            return;
+        }
+
+        $this->passo_atual--;
+    }
+
+    public function podeImportar(): bool
+    {
+        return $this->formularioPronto() && $this->status_importacao === 'pendente';
     }
 
     public function updatedFamiliaLayout($familia)
@@ -82,6 +121,143 @@ class ImportadorAvancado extends Component
         }
 
         $this->layout_selecionado = '';
+    }
+
+    private function preencherContaBancoDaEmpresa(): void
+    {
+        if ($this->conta_banco !== '') {
+            return;
+        }
+
+        if (!$this->empresa_id) {
+            return;
+        }
+
+        $empresa = Empresa::find($this->empresa_id);
+        if ($empresa?->codigo_conta_banco) {
+            $this->conta_banco = $empresa->codigo_conta_banco;
+        }
+    }
+
+    private function sugerirLayoutPorArquivo(): void
+    {
+        if (!$this->arquivo || $this->layout_selecionado !== '') {
+            return;
+        }
+
+        $extensao = strtolower($this->arquivo->getClientOriginalExtension());
+        $sugestoes = [
+            'ofx' => 'ofx',
+            'txt' => 'dominio',
+            'csv' => 'registros',
+        ];
+
+        if (isset($sugestoes[$extensao])) {
+            $this->layout_selecionado = $sugestoes[$extensao];
+            $this->sincronizarFamiliaLayout();
+        }
+        // Não avança automaticamente para o passo 3 — usuário confirma no passo 2
+    }
+
+    private function sincronizarFamiliaLayout(): void
+    {
+        if ($this->layout_selecionado === '') {
+            $this->familia_layout = '';
+            return;
+        }
+
+        foreach ($this->obterLayoutsPorFamilia() as $familia => $layouts) {
+            if (array_key_exists($this->layout_selecionado, $layouts)) {
+                $this->familia_layout = $familia;
+                return;
+            }
+        }
+    }
+
+    public function obterTodosLayouts(): array
+    {
+        $layouts = [];
+        foreach ($this->obterLayoutsPorFamilia() as $layoutsFamilia) {
+            foreach ($layoutsFamilia as $valor => $nome) {
+                $layouts[$valor] = $nome;
+            }
+        }
+
+        return $layouts;
+    }
+
+    public function formatosAceitosLayout(): string
+    {
+        $formatos = [
+            'dominio' => '.txt',
+            'grafeno' => '.pdf',
+            'sicoob' => '.pdf',
+            'caixa_federal' => '.pdf',
+            'caixa' => '.pdf',
+            'sicredi' => '.pdf',
+            'ofx' => '.ofx',
+            'registros' => '.csv',
+        ];
+
+        if ($this->layout_selecionado && isset($formatos[$this->layout_selecionado])) {
+            return $formatos[$this->layout_selecionado];
+        }
+
+        return '.csv,.txt,.pdf,.ofx';
+    }
+
+    public function descricaoFormatoLayout(): string
+    {
+        $descricoes = [
+            'dominio' => 'Arquivo TXT exportado do Domínio',
+            'grafeno' => 'Extrato em PDF do Grafeno',
+            'sicoob' => 'Extrato em PDF do Sicoob',
+            'caixa_federal' => 'Extrato antigo da Caixa (PDF)',
+            'caixa' => 'Extrato do Caixa Internet Banking (PDF)',
+            'sicredi' => 'Extrato em PDF do Sicredi',
+            'ofx' => 'Arquivo OFX do internet banking',
+            'registros' => 'CSV exportado do Connectere (Contas Financeiras)',
+        ];
+
+        if ($this->layout_selecionado && isset($descricoes[$this->layout_selecionado])) {
+            return $descricoes[$this->layout_selecionado];
+        }
+
+        return 'PDF, OFX, CSV ou TXT — até 10 MB';
+    }
+
+    public function formularioPronto(): bool
+    {
+        return $this->arquivo
+            && $this->layout_selecionado
+            && $this->empresa_id
+            && trim($this->conta_banco) !== '';
+    }
+
+    /**
+     * Garante que o lado do banco no lançamento use a conta informada na importação.
+     *
+     * @return array{0: string, 1: string} [conta_debito, conta_credito]
+     */
+    private function aplicarContaBancoImportacao(string $contaDebito, string $contaCredito): array
+    {
+        $contaBanco = ltrim(trim($this->conta_banco ?? ''), '0');
+        if ($contaBanco === '') {
+            return [$contaDebito, $contaCredito];
+        }
+
+        $debPreenchido = $contaDebito !== '';
+        $credPreenchido = $contaCredito !== '';
+
+        if ($debPreenchido && !$credPreenchido) {
+            return [$contaBanco, $contaCredito];
+        }
+
+        if (!$debPreenchido && $credPreenchido) {
+            return [$contaDebito, $contaBanco];
+        }
+
+        return [$contaDebito, $contaCredito];
     }
 
     public function processarArquivo()
@@ -249,8 +425,9 @@ class ImportadorAvancado extends Component
             'conta_banco' => $this->conta_banco ?? 'não informada'
         ]);
         
-        // Se for o script do Grafeno, SICOOB, Caixa Federal ou Registros, passar a conta do banco como terceiro parâmetro
-        if (in_array($this->layout_selecionado, ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi']) && !empty($this->conta_banco)) {
+        // Passar conta do banco para conversores que aceitam o 3º parâmetro
+        $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'ofx'];
+        if (in_array($this->layout_selecionado, $scriptsComContaBanco, true) && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\"";
@@ -288,6 +465,10 @@ class ImportadorAvancado extends Component
         }
         
         $empresa = OperadoraContext::resolveEmpresa($this->empresa_id);
+        $empresaOperadoraId = $empresa->empresa_operadora_id ?? OperadoraContext::id();
+        if ($empresaOperadoraId === null) {
+            throw new \Exception('Não foi possível identificar o escritório (operadora) para a importação.');
+        }
         $contaBancoEmpresa = ltrim($empresa->codigo_conta_banco ?? '', '0');
         $codigoSistemaEmpresa = $empresa->codigo_sistema;
         
@@ -298,7 +479,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'caixa' => 'Caixa Internet Banking (PDF)',
-            'ofx' => 'Formato OFX',
+            'ofx' => 'OFX — qualquer banco',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
         ];
@@ -473,6 +654,7 @@ class ImportadorAvancado extends Component
                 $historicoOriginal = $historico; // Preservar para matching no reprocessamento
                 $contaDebito = ltrim(trim($contaDebito ?? ''), '0');
                 $contaCredito = ltrim(trim($contaCredito ?? ''), '0');
+                [$contaDebito, $contaCredito] = $this->aplicarContaBancoImportacao($contaDebito, $contaCredito);
                 $debPreenchido = $contaDebito !== '';
                 $credPreenchido = $contaCredito !== '';
 
@@ -548,6 +730,7 @@ class ImportadorAvancado extends Component
                     'numero_nota' => $numeroNota ?? null,
                     'importacao_id' => $importacao->id,
                     'empresa_id' => $empresa->id,
+                    'empresa_operadora_id' => $empresaOperadoraId,
                     'terceiro_id' => $terceiroId,
                     'amarracao_id' => null,
                     'linha_arquivo' => $linhaNumero,
@@ -569,7 +752,7 @@ class ImportadorAvancado extends Component
                 
                 // Inserir batch quando atingir o tamanho
                 if (count($lancamentos_batch) >= $batch_size) {
-                    Lancamento::insert($lancamentos_batch);
+                    Lancamento::insertMany($lancamentos_batch);
                     $lancamentos_batch = [];
                     
                     // Log do progresso do batch
@@ -591,7 +774,7 @@ class ImportadorAvancado extends Component
         
         // Inserir lançamentos restantes
         if (!empty($lancamentos_batch)) {
-            Lancamento::insert($lancamentos_batch);
+            Lancamento::insertMany($lancamentos_batch);
             Log::info("Último batch inserido:", ['registros' => count($lancamentos_batch)]);
         }
 
@@ -755,7 +938,10 @@ class ImportadorAvancado extends Component
 
     public function resetarImportacao()
     {
-        $this->reset(['arquivo', 'empresa_id', 'familia_layout', 'layout_selecionado', 'conta_banco', 'status_importacao', 'progresso', 'mensagem_status', 'arquivo_processado', 'caminho_csv_final', 'importacao_id', 'total_registros_importados']);
+        $this->reset(['arquivo', 'familia_layout', 'layout_selecionado', 'conta_banco', 'status_importacao', 'progresso', 'mensagem_status', 'arquivo_processado', 'caminho_csv_final', 'importacao_id', 'total_registros_importados', 'passo_atual']);
+        $this->passo_atual = 1;
+        $this->empresa_id = session('empresa_selecionada_id');
+        $this->preencherContaBancoDaEmpresa();
         $this->mensagem_status = 'Aguardando upload do arquivo...';
     }
 
@@ -779,7 +965,7 @@ class ImportadorAvancado extends Component
                 'sicredi' => 'SICREDI (PDF)',
             ],
             'ofx' => [
-                'ofx' => 'Formato OFX',
+                'ofx' => 'OFX — qualquer banco',
             ],
             'registros' => [
                 'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
@@ -831,6 +1017,7 @@ class ImportadorAvancado extends Component
             'empresas' => $empresas,
             'familiasLayout' => $familiasLayout,
             'layoutsDisponiveis' => $layoutsPorFamilia[$this->familia_layout] ?? [],
+            'todosLayouts' => $this->obterTodosLayouts(),
             'empresaAtual' => $empresaAtual,
         ]);
     }

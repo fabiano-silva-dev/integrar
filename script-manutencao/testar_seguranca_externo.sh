@@ -64,7 +64,9 @@ http_inacessivel() {
     local url="$1"
     local code
 
-    code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$TIMEOUT" --max-time "$((TIMEOUT * 2))" "$url" 2>/dev/null || echo "000")
+    # curl com timeout imprime "000" e sai com erro — evitar "|| echo 000" que duplica o código
+    code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$TIMEOUT" --max-time "$((TIMEOUT * 2))" "$url" 2>/dev/null) || true
+    code="${code:-000}"
 
     [[ "$code" == "000" ]]
 }
@@ -73,7 +75,8 @@ http_acessivel() {
     local url="$1"
     local code
 
-    code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$TIMEOUT" --max-time "$((TIMEOUT * 2))" -k "$url" 2>/dev/null || echo "000")
+    code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$TIMEOUT" --max-time "$((TIMEOUT * 2))" -k "$url" 2>/dev/null) || true
+    code="${code:-000}"
 
     [[ "$code" =~ ^[23] ]]
 }

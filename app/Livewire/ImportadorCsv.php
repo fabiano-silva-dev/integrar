@@ -45,7 +45,7 @@ class ImportadorCsv extends Component
                 'status' => 'processando',
                 'usuario' => auth()->user() ? auth()->user()->name : 'Sistema',
                 'user_id' => auth()->id(),
-                'empresa_id' => auth()->user() ? auth()->user()->empresa_id : null,
+                'empresa_id' => session('empresa_selecionada_id'),
             ]);
 
             $this->importacaoId = $importacao->id;
@@ -167,6 +167,7 @@ class ImportadorCsv extends Component
                         'nome_empresa' => $nomeEmpresa ?? null,
                         'numero_nota' => $numeroNota ?? null,
                         'importacao_id' => $importacao->id,
+                        'empresa_id' => $importacao->empresa_id,
                         'terceiro_id' => $terceiroId,
                         'amarracao_id' => null,
                     ]);

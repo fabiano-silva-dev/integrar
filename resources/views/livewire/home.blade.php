@@ -1,72 +1,83 @@
-<div class="max-w-5xl mx-auto py-10">
-    <h1 class="text-3xl font-bold mb-8 flex items-center gap-2">🏠 Home do Sistema</h1>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <!-- Cadastros -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">📋 Cadastros</h2>
-            <ul class="space-y-2">
-                <li><a href="{{ route('empresas') }}" class="flex items-center gap-2 hover:underline">🏢 Empresas</a></li>
-                <li><a href="{{ route('usuarios') }}" class="flex items-center gap-2 hover:underline">👥 Usuários</a></li>
-                <li><a href="{{ route('terceiros') }}" class="flex items-center gap-2 hover:underline">🤝 Terceiros</a></li>
-            </ul>
-        </div>
-        <!-- Importação -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">📥 Importação</h2>
-            <ul class="space-y-2">
-                <li><a href="{{ route('importador-avancado') }}" class="flex items-center gap-2 hover:underline">📄 Importação de Extratos</a></li>
-                <li><a href="{{ route('importador-personalizado') }}" title="Importação personalizada de CSV, XLS ou XLSX" class="flex items-center gap-2 hover:underline">🎯 Importação Personalizada</a></li>
-                <li><a href="{{ route('importacoes') }}" class="flex items-center gap-2 hover:underline">🕑 Importações anteriores</a></li>
-            </ul>
-        </div>
-        <!-- Conversão -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">🔄 Conversão</h2>
-            <ul class="space-y-2">
-                <li><a href="{{ route('conversao-pdf-ofx') }}" class="flex items-center gap-2 hover:underline">📄 PDF para OFX</a></li>
-            </ul>
-        </div>
-        <!-- Lançamentos -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">📊 Lançamentos</h2>
-            <ul class="space-y-2">
-                <li><a href="{{ route('tabela') }}" class="flex items-center gap-2 hover:underline">📋 Tabela de lançamentos</a></li>
-                <li><a href="{{ route('regras-amarracao') }}" class="flex items-center gap-2 hover:underline">⚙️ Regras de Amarração</a></li>
-            </ul>
-        </div>
-        <!-- Exportação -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">📤 Exportação</h2>
-            <ul class="space-y-2">
-                <li><a href="{{ route('exportador') }}" class="flex items-center gap-2 hover:underline">📤 Exportador</a></li>
-            </ul>
-        </div>
-        <!-- Administração -->
-        <div class="bg-white rounded-lg shadow p-6 col-span-1 md:col-span-2">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">⚙️ Administração</h2>
-            <ul class="flex flex-wrap gap-6">
-                @if(auth()->user()?->isSuperAdmin())
-                    <li><a href="{{ route('empresas-operadoras') }}" class="flex items-center gap-2 hover:underline">🏢 Escritórios (Operadoras)</a></li>
-                @endif
-                @if(auth()->user()?->role === 'admin')
-                    <li><a href="{{ route('conversoes-extrato') }}" class="flex items-center gap-2 hover:underline">🕑 Histórico de conversões</a></li>
-                    <li><a href="{{ route('historicos-padrao-layout') }}" class="flex items-center gap-2 hover:underline">📋 Históricos padrão por layout</a></li>
-                @endif
-                <li class="flex items-center gap-2 text-gray-400">🛠️ Configurações <span class="text-xs">(em breve)</span></li>
-                <li class="flex items-center gap-2 text-gray-400">📜 Logs <span class="text-xs">(em breve)</span></li>
-                <li class="flex items-center gap-2 text-gray-400">🔑 Acessos <span class="text-xs">(em breve)</span></li>
-            </ul>
-        </div>
+<div class="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Olá, {{ auth()->user()?->name ?? 'usuário' }}</h1>
+        <p class="mt-1 text-gray-600">Escolha uma operação para começar.</p>
     </div>
-    <div class="mt-10">
-        <h3 class="text-lg font-semibold mb-2">✔️ Fluxo do sistema</h3>
-        <div class="flex items-center gap-4">
-            <span class="px-3 py-1 rounded bg-blue-100 text-blue-800">Importado</span>
-            <span class="text-xl">→</span>
-            <span class="px-3 py-1 rounded bg-green-100 text-green-800">Amarrado</span>
-            <span class="text-xl">→</span>
-            <span class="px-3 py-1 rounded bg-purple-100 text-purple-800">Exportado</span>
-        </div>
-        <p class="text-gray-500 mt-2 text-sm">Siga o fluxo para garantir o processamento correto dos dados.</p>
+
+    {{-- Cards de status (placeholder) --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        @foreach([
+            ['label' => 'Importações recentes', 'icon' => 'import', 'color' => 'blue'],
+            ['label' => 'Lançamentos pendentes', 'icon' => 'table', 'color' => 'amber'],
+            ['label' => 'Regras ativas', 'icon' => 'link', 'color' => 'green'],
+            ['label' => 'Exportações do mês', 'icon' => 'export', 'color' => 'purple'],
+        ] as $card)
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div class="flex items-start justify-between">
+                    <div @class([
+                        'flex h-10 w-10 items-center justify-center rounded-xl',
+                        'bg-blue-50 text-blue-600' => $card['color'] === 'blue',
+                        'bg-amber-50 text-amber-600' => $card['color'] === 'amber',
+                        'bg-green-50 text-green-600' => $card['color'] === 'green',
+                        'bg-purple-50 text-purple-600' => $card['color'] === 'purple',
+                    ])>
+                        <x-menu-icon :name="$card['icon']" class="w-5 h-5" />
+                    </div>
+                    <span class="text-gray-300 text-lg font-light">—</span>
+                </div>
+                <p class="mt-4 font-semibold text-gray-900">{{ $card['label'] }}</p>
+                <p class="mt-1 text-sm text-gray-400">Disponível em breve</p>
+            </div>
+        @endforeach
+    </div>
+
+    {{-- Operações principais --}}
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Operações principais</h2>
+        <span class="text-xs text-gray-400">Importação e conversão</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <a href="{{ route('importador-avancado') }}"
+           class="group relative overflow-hidden rounded-2xl bg-indigo-600 p-6 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:scale-[1.01] transition-all duration-200 min-h-[220px] flex flex-col"
+           style="background-color: #4f46e5;">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                <x-menu-icon name="import" class="w-7 h-7 text-white" />
+            </div>
+            <h3 class="mt-5 text-xl font-bold">Importar extrato</h3>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Importe extratos bancários para lançamentos contábeis.</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
+                Iniciar
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
+
+        <a href="{{ route('importador-personalizado') }}"
+           class="group relative overflow-hidden rounded-2xl bg-indigo-600 p-6 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:scale-[1.01] transition-all duration-200 min-h-[220px] flex flex-col"
+           style="background-color: #4f46e5;">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                <x-menu-icon name="sliders" class="w-7 h-7 text-white" />
+            </div>
+            <h3 class="mt-5 text-xl font-bold">Importação personalizada</h3>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Crie e use layouts de importação customizados.</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
+                Iniciar
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
+
+        <a href="{{ route('conversao-pdf-ofx') }}"
+           class="group relative overflow-hidden rounded-2xl bg-indigo-600 p-6 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:scale-[1.01] transition-all duration-200 min-h-[220px] flex flex-col"
+           style="background-color: #4f46e5;">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                <x-menu-icon name="convert" class="w-7 h-7 text-white" />
+            </div>
+            <h3 class="mt-5 text-xl font-bold">Converter PDF para OFX</h3>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Transforme extratos em PDF em OFX ou planilha para importação.</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
+                Iniciar
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
     </div>
 </div>

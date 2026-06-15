@@ -73,34 +73,49 @@ Antes de alterar o servidor, simule todo o fluxo:
 ```bash
 sudo ./instalar-nativo-producao.sh \
   --dry-run \
-  --yes \
-  --domain integrar.exemplo.com \
-  --db-name integrar \
-  --db-user integrar
+  --yes
 ```
 
 Para executar a migração com confirmação em cada etapa:
 
 ```bash
-sudo ./instalar-nativo-producao.sh --domain integrar.exemplo.com
+cd /home/fabiano/Projetos/integrar_dalongaro
+sudo ./instalar-nativo-producao.sh
 ```
+
+Sem parâmetros, o script usa automaticamente:
+- **Origem (Docker):** `/home/fabiano/Projetos/integrar_dalongaro`
+- **Destino (nativo):** `/home/fabiano/Projetos/integrar`
+- **Domínio:** `integraexpert.com.br`
+- **Banco:** `integrar`
+
+O projeto Docker **permanece intacto**; os dados do banco `integrar_dalongaro` são
+copiados para o banco nativo `integrar`.
 
 Caso o container antigo não esteja disponível, indique um dump:
 
 ```bash
-sudo ./instalar-nativo-producao.sh \
-  --domain integrar.exemplo.com \
-  --backup-file /backup/integrar.sql
+sudo ./instalar-nativo-producao.sh --backup-file /backup/integrar.sql
 ```
 
 > **Atenção:** mantenha os volumes Docker até validar a aplicação nativa. O
-> script executa `docker compose down`, mas nunca remove volumes. Configure
-> HTTPS (por exemplo, com Certbot) antes de liberar o domínio ao público.
+> script executa `docker compose down`, mas nunca remove volumes. O `APP_URL`
+> usa `http://integraexpert.com.br` por padrão; após configurar TLS (Certbot),
+> ajuste com `--app-url-scheme https`. Credenciais e nomes dos containers MySQL
+> são detectados automaticamente a partir do `docker-compose.yml`.
 
 Os testes isolados do instalador não exigem root e não alteram o sistema:
 
 ```bash
 bash tests/scripts/test_instalar_nativo_producao.sh
+```
+
+Antes da migração em produção, gere um relatório de diagnóstico (somente
+leitura) e envie o arquivo Markdown gerado para análise:
+
+```bash
+sudo bash diagnostico_migracao_nativa.sh --quiet
+# relatório em storage/app/diagnostico_migracao_*.md
 ```
 
 ## 📋 Pré-requisitos
@@ -247,6 +262,20 @@ Data;Histórico;Conta Débito;Conta Crédito;Valor
 ### Formatos Suportados:
 - **Data**: DD/MM/AAAA, YYYY-MM-DD, DD-MM-YYYY, MM/DD/YYYY
 - **Valor**: Usar vírgula como separador decimal (ex: 1.500,00)
+
+## 🔄 Atualizar produção após `git pull`
+
+```bash
+git pull
+./atualizar-producao.sh
+```
+
+Padrão: Apache nativo como `www-data` (o `sudo` é solicitado automaticamente quando necessário).
+Em desenvolvimento com Docker: `./atualizar-producao.sh --docker`
+
+O script roda composer, build de assets,
+migrations, limpeza de cache e reload dos serviços. Ver opções em
+`script-manutencao/README.md`.
 
 ## 🔧 Comandos Úteis
 

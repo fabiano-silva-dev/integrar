@@ -1,273 +1,234 @@
 <div class="p-6">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-2xl mx-auto">
         <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
-            <div class="p-6 border-b border-gray-200">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">
+            <div class="p-6 sm:p-8">
+                <h2 class="text-2xl font-bold text-gray-900">
                     Importação de Extratos
                 </h2>
-                <p class="text-gray-600 mb-6">
-                    Selecione o layout do arquivo, a empresa de destino e faça upload do arquivo para importação.
-                </p>
 
-                <form wire:submit.prevent="processarArquivo" class="space-y-6">
-                    <!-- Família de Layout -->
-                    <div>
-                        <label for="familia_layout" class="block text-sm font-medium text-gray-700 mb-2">
-                            Instituição / Origem do Arquivo
-                        </label>
-                        <select id="familia_layout" wire:model.live="familia_layout"
-                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="">Selecione a origem...</option>
-                            @foreach($familiasLayout as $valor => $nome)
-                                <option value="{{ $valor }}">{{ $nome }}</option>
-                            @endforeach
-                        </select>
+                @if($empresaAtual)
+                    <p class="mt-2 text-sm text-gray-600">
+                        Empresa: <span class="font-medium text-gray-900">{{ $empresaAtual->nome }}</span>
+                        <span class="text-gray-400 mx-1">·</span>
+                        {{ $empresaAtual->codigo_sistema ?? '—' }}
+                    </p>
+                @else
+                    <p class="mt-2 text-sm text-red-600">Selecione uma empresa no cabeçalho antes de importar.</p>
+                @endif
+
+                @if($status_importacao === 'pendente')
+                    {{-- Progresso: 3 barras mais visíveis --}}
+                    <div class="mt-6 mb-8 flex gap-2">
+                        @for($i = 1; $i <= 3; $i++)
+                            <div @class([
+                                'h-2 flex-1 rounded-full transition-all duration-500',
+                                'bg-indigo-600' => $passo_atual >= $i,
+                                'bg-gray-200' => $passo_atual < $i,
+                            ])></div>
+                        @endfor
                     </div>
 
-                    @if(!empty($familia_layout))
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
-                            </label>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                @foreach($layoutsDisponiveis as $valor => $nome)
-                                    <label class="relative border rounded-lg p-3 cursor-pointer transition-all
-                                        {{ $layout_selecionado === $valor ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
-                                        <div class="flex items-start gap-3">
-                                            <input type="radio"
-                                                wire:model.live="layout_selecionado"
-                                                value="{{ $valor }}"
-                                                class="mt-1 text-indigo-600 border-gray-300 focus:ring-indigo-500">
-                                            <div>
-                                                <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
-                                                @if(str_contains($nome, 'novo'))
-                                                    <p class="text-xs text-green-600 mt-1">Recomendado para extratos recentes da Caixa.</p>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </label>
-                                @endforeach
-                            </div>
-                        </div>
-                    @endif
+                    <form wire:submit.prevent="processarArquivo">
+                        <div
+                            class="relative"
+                            x-data="{ passo: @entangle('passo_atual') }"
+                        >
+                            {{-- Passo 1 --}}
+                            <div wire:key="wizard-passo-1" class="w-full" x-show="passo === 1"
+                                 x-transition:enter="transition ease-out duration-300"
+                                 x-transition:enter-start="opacity-0 translate-x-8"
+                                 x-transition:enter-end="opacity-100 translate-x-0">
 
-                    <div>
-                        @error('layout_selecionado') 
-                            <span class="text-red-500 text-sm">{{ $message }}</span> 
-                        @enderror
-                    </div>
+                                <h3 class="text-xl font-semibold text-gray-900">1. Envie o extrato</h3>
+                                <p class="mt-1 mb-5 text-sm text-gray-500">PDF, OFX, CSV ou TXT — até 10 MB</p>
 
-                    <!-- Empresa (usa seletor global do cabeçalho) -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            Empresa de Destino
-                        </label>
-                        @if($empresaAtual)
-                            <div class="w-full border border-gray-200 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-800">
-                                <span class="font-semibold">{{ $empresaAtual->codigo_sistema ?? '—' }}</span>
-                                <span class="text-gray-500 mx-1">-</span>
-                                <span class="text-gray-700">{{ $empresaAtual->cnpj }}</span>
-                                <span class="text-gray-500 mx-1">-</span>
-                                <span class="text-gray-900">{{ $empresaAtual->nome }}</span>
-                            </div>
-                            <p class="mt-1 text-xs text-gray-500">
-                                Para trocar a empresa, use o seletor no cabeçalho (parte superior da tela).
-                            </p>
-                        @else
-                            <div class="w-full border border-red-300 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                                Nenhuma empresa está selecionada. Escolha uma empresa no seletor do cabeçalho.
-                            </div>
-                        @endif
-                        @error('empresa_id')
-                            <span class="text-red-500 text-sm">{{ $message }}</span>
-                        @enderror
-                    </div>
+                                <x-zona-upload
+                                    input-id="arquivo-extrato"
+                                    wire:model="arquivo"
+                                    :accept="$this->formatosAceitosLayout()"
+                                    :formato="$this->descricaoFormatoLayout()"
+                                    :nome-arquivo="$arquivo ? $arquivo->getClientOriginalName() : null"
+                                />
+                                <div wire:loading wire:target="arquivo" class="mt-2 text-sm text-indigo-600">Carregando arquivo...</div>
+                                @error('arquivo') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
 
-                    <!-- Conta do Banco (obrigatório na importação de extrato) -->
-                    <div>
-                        <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-2">
-                            Conta do Banco <span class="text-red-500">*</span> (Código contábil da conta do banco no sistema Domínio)
-                        </label>
-                        <input type="text" id="conta_banco" wire:model="conta_banco" 
-                               placeholder="Ex: 1.1.1.01 ou 8" 
-                               class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                        <p class="text-sm text-gray-500 mt-1">
-                            Obrigatório. Usada para lançamentos de débito (recebimentos) e crédito (pagamentos).
-                        </p>
-                        @error('conta_banco') 
-                            <span class="text-red-500 text-sm">{{ $message }}</span> 
-                        @enderror
-                    </div>
-
-                    <!-- Upload de Arquivo -->
-                    <div>
-                        <label for="arquivo" class="block text-sm font-medium text-gray-700 mb-2">
-                            Arquivo para Importação
-                        </label>
-                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                            <div class="space-y-1 text-center">
-                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                                <div class="flex text-sm text-gray-600">
-                                    <label for="arquivo" class="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                                        <span>Fazer upload de um arquivo</span>
-                                        <input id="arquivo" wire:model="arquivo" type="file" class="sr-only" accept=".csv,.txt,.pdf,.ofx">
-                                    </label>
-                                    <p class="pl-1">ou arraste e solte</p>
-                                </div>
-                                <p class="text-xs text-gray-500">
-                                    CSV, TXT, PDF ou OFX até 10MB
-                                </p>
-                            </div>
-                        </div>
-                        @if($arquivo)
-                            <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                                <div class="flex items-center">
-                                    <div class="flex-shrink-0">
-                                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm font-medium text-green-800">
-                                            ✅ Arquivo selecionado: <strong>{{ $arquivo->getClientOriginalName() }}</strong>
-                                        </p>
-                                        <p class="text-xs text-green-600 mt-1">
-                                            Pronto para processamento
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-                        @error('arquivo') 
-                            <span class="text-red-500 text-sm">{{ $message }}</span> 
-                        @enderror
-                    </div>
-
-                    <!-- Indicador de processamento (visível assim que o usuário clica) -->
-                    <div wire:loading.flex wire:target="processarArquivo" class="items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
-                        <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-blue-700">Iniciando importação...</span>
-                    </div>
-
-                    <!-- Botão de Processamento (bloqueado ao clicar e durante processamento) -->
-                    <div class="flex justify-end">
-                        <button type="submit" 
-                                wire:target="processarArquivo"
-                                wire:loading.attr="disabled"
-                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                {{ $status_importacao === 'processando' ? 'disabled' : '' }}>
-                            <span wire:loading.remove wire:target="processarArquivo">
-                                {{ $status_importacao === 'processando' ? 'Processando...' : 'Processar Arquivo' }}
-                            </span>
-                            <span wire:loading wire:target="processarArquivo" class="inline-flex items-center gap-2">
-                                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Processando...
-                            </span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Status e Progresso -->
-            @if($status_importacao !== 'pendente')
-                <div class="p-6 border-t border-gray-200">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Status da Importação</h3>
-                    
-                    <!-- Barra de Progresso -->
-                    <div class="mb-4">
-                        <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Progresso</span>
-                            <span>{{ $progresso }}%</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                 style="width: {{ $progresso }}%;"></div>
-                        </div>
-                        
-                        @if($status_importacao === 'processando' && $totalLinhas > 0)
-                            <div class="mt-2 text-sm text-gray-600">
-                                <p>Linha atual: {{ $linhaAtual }} de {{ $totalLinhas }}</p>
-                                <p>Processando registros...</p>
-                            </div>
-                        @endif
-                    </div>
-
-                    <!-- Mensagem de Status -->
-                    <div class="p-4 rounded-md 
-                        @if($status_importacao === 'processando') bg-blue-50 text-blue-700
-                        @elseif($status_importacao === 'concluida') bg-green-50 text-green-700
-                        @elseif($status_importacao === 'erro') bg-red-50 text-red-700
-                        @endif">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                @if($status_importacao === 'processando')
-                                    <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                @elseif($status_importacao === 'concluida')
-                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                @elseif($status_importacao === 'erro')
-                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                                    </svg>
-                                @endif
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm font-medium">
-                                    {{ $mensagem_status }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Informações da Importação Concluída -->
-                    @if($status_importacao === 'concluida')
-                        <div class="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="text-sm font-medium text-green-800">Importação Concluída</h4>
-                                    <p class="text-sm text-green-700 mt-1">
-                                        Total de registros importados: <strong>{{ number_format($total_registros_importados, 0, ',', '.') }}</strong>
-                                    </p>
-                                    @if($importacao_id)
-                                        <p class="text-sm text-green-700">
-                                            ID da Importação: <strong>{{ $importacao_id }}</strong>
-                                        </p>
+                                <div class="mt-8">
+                                    @if(!$arquivo)
+                                        <p class="text-sm text-gray-500 text-center mb-3">Selecione um arquivo para continuar</p>
                                     @endif
-                                </div>
-                                <div class="flex space-x-2">
-                                    <a href="{{ route('tabela', ['importacao' => $importacao_id]) }}" 
-                                       class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm">
-                                        Ver Lançamentos
-                                    </a>
-                                    <button wire:click="resetarImportacao" 
-                                            class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded text-sm">
-                                        Nova Importação
+                                    <button type="button" wire:click="proximoPasso" @disabled(!$arquivo)
+                                            class="w-full h-14 flex items-center justify-center gap-2 rounded-xl text-lg font-bold shadow-sm
+                                                bg-indigo-600 hover:bg-indigo-700 text-white
+                                                disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none transition-colors">
+                                        Continuar
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                     </button>
                                 </div>
                             </div>
+
+                            {{-- Passo 2 --}}
+                            <div wire:key="wizard-passo-2" class="w-full" x-show="passo === 2" x-cloak
+                                 x-transition:enter="transition ease-out duration-300"
+                                 x-transition:enter-start="opacity-0 translate-x-8"
+                                 x-transition:enter-end="opacity-100 translate-x-0">
+
+                                <h3 class="text-xl font-semibold text-gray-900">2. Identifique o formato</h3>
+                                <p class="mt-1 mb-5 text-sm text-gray-500">Como o arquivo foi exportado do banco ou sistema</p>
+
+                                @if($arquivo)
+                                    <p class="mb-4 text-sm text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                                        Arquivo: <span class="font-medium">{{ $arquivo->getClientOriginalName() }}</span>
+                                    </p>
+                                @endif
+
+                                <select id="layout_selecionado" wire:model.live="layout_selecionado"
+                                        class="w-full border-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-3.5 px-4 text-base">
+                                    <option value="">Selecione...</option>
+                                    @foreach($todosLayouts as $valor => $nome)
+                                        <option value="{{ $valor }}">{{ $nome }}</option>
+                                    @endforeach
+                                </select>
+
+                                @if($layout_selecionado === 'caixa_federal' || $layout_selecionado === 'caixa')
+                                    <p class="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                        @if($layout_selecionado === 'caixa')
+                                            Extrato do Caixa Internet Banking (modelo recente).
+                                        @else
+                                            Extrato no formato antigo da Caixa Econômica Federal.
+                                        @endif
+                                    </p>
+                                @endif
+                                @error('layout_selecionado') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+
+                                <div class="mt-8 flex flex-col sm:flex-row gap-4">
+                                    <button type="button" wire:click="passoAnterior"
+                                            class="w-full sm:flex-1 h-14 flex items-center justify-center rounded-xl border-2 border-gray-300 text-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                                        Voltar
+                                    </button>
+                                    <button type="button" wire:click="proximoPasso" @disabled(!$layout_selecionado)
+                                            class="w-full sm:flex-1 h-14 flex items-center justify-center gap-2 rounded-xl text-lg font-bold shadow-sm
+                                                bg-indigo-600 hover:bg-indigo-700 text-white
+                                                disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none transition-colors">
+                                        Continuar
+                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>
+                                </div>
+                                @if(!$layout_selecionado)
+                                    <p class="text-sm text-gray-500 text-center mt-3">Escolha o formato para continuar</p>
+                                @endif
+                            </div>
+
+                            {{-- Passo 3 --}}
+                            <div wire:key="wizard-passo-3" class="w-full" x-show="passo === 3" x-cloak
+                                 x-transition:enter="transition ease-out duration-300"
+                                 x-transition:enter-start="opacity-0 translate-x-8"
+                                 x-transition:enter-end="opacity-100 translate-x-0">
+
+                                <h3 class="text-xl font-semibold text-gray-900">3. Confirme e importe</h3>
+                                <p class="mt-1 mb-5 text-sm text-gray-500">Revise os dados antes de processar</p>
+
+                                @if($arquivo && $layout_selecionado)
+                                    <dl class="mb-5 rounded-xl bg-gray-50 border border-gray-200 divide-y divide-gray-200 text-sm">
+                                        <div class="flex justify-between gap-4 px-4 py-3">
+                                            <dt class="text-gray-500 shrink-0">Arquivo</dt>
+                                            <dd class="font-medium text-gray-900 text-right truncate">{{ $arquivo->getClientOriginalName() }}</dd>
+                                        </div>
+                                        <div class="flex justify-between gap-4 px-4 py-3">
+                                            <dt class="text-gray-500 shrink-0">Formato</dt>
+                                            <dd class="font-medium text-gray-900 text-right">{{ $todosLayouts[$layout_selecionado] ?? $layout_selecionado }}</dd>
+                                        </div>
+                                        <div class="flex justify-between gap-4 px-4 py-3">
+                                            <dt class="text-gray-500 shrink-0">Conta no Domínio</dt>
+                                            <dd class="font-medium text-indigo-700 text-right">{{ $conta_banco ?: '—' }}</dd>
+                                        </div>
+                                    </dl>
+                                @endif
+
+                                <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-1.5">Conta contábil do banco</label>
+                                <input type="text" id="conta_banco" wire:model.live.debounce.300ms="conta_banco"
+                                       placeholder="Ex: 1.1.1.01"
+                                       class="w-full border-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-3.5 px-4 text-base">
+                                @error('conta_banco') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+                                @error('empresa_id') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+
+                                <div class="mt-8 flex flex-col sm:flex-row gap-4">
+                                    <button type="button" wire:click="passoAnterior"
+                                            class="w-full sm:flex-1 h-14 flex items-center justify-center rounded-xl border-2 border-gray-300 text-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                                        Voltar
+                                    </button>
+                                    <button type="submit" wire:target="processarArquivo" wire:loading.attr="disabled"
+                                            @disabled(!$this->podeImportar())
+                                            class="w-full sm:flex-1 h-14 flex items-center justify-center gap-2 rounded-xl text-lg font-bold shadow-md
+                                                bg-indigo-600 hover:bg-indigo-700 text-white
+                                                disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none transition-colors">
+                                        <span wire:loading.remove wire:target="processarArquivo" class="inline-flex items-center gap-2">
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            Importar
+                                        </span>
+                                        <span wire:loading wire:target="processarArquivo" class="inline-flex items-center gap-2">
+                                            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                                            Importando...
+                                        </span>
+                                    </button>
+                                </div>
+                                @if(!$this->podeImportar())
+                                    <p class="text-sm text-gray-500 text-center mt-3">Informe a conta contábil para importar</p>
+                                @endif
+                            </div>
                         </div>
-                    @elseif($status_importacao === 'erro')
-                        <div class="mt-4">
-                            <button wire:click="resetarImportacao" 
-                                    class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
-                                Nova Importação
+                    </form>
+
+                @else
+                    <div wire:key="resultado-{{ $status_importacao }}" class="mt-8 text-center"
+                         x-transition:enter="transition ease-out duration-400"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100">
+
+                        @if($status_importacao === 'processando')
+                            <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100">
+                                <svg class="animate-spin h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-900">Importando...</h3>
+                            <p class="text-sm text-gray-600 mt-2 mb-6">{{ $mensagem_status }}</p>
+                            <div class="max-w-sm mx-auto">
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: {{ $progresso }}%;"></div>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500">{{ $progresso }}% @if($totalLinhas > 0)— linha {{ $linhaAtual }} de {{ $totalLinhas }}@endif</p>
+                            </div>
+
+                        @elseif($status_importacao === 'concluida')
+                            <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                                <svg class="h-8 w-8 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-900">Importação concluída</h3>
+                            <p class="text-gray-600 mt-2">{{ number_format($total_registros_importados, 0, ',', '.') }} lançamentos importados</p>
+
+                            <div class="mt-6 flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+                                <a href="{{ route('tabela', ['importacao' => $importacao_id]) }}"
+                                   class="w-full sm:flex-1 h-14 flex items-center justify-center rounded-xl text-lg font-bold shadow-md bg-green-600 hover:bg-green-700 text-white transition-colors">
+                                    Ver lançamentos
+                                </a>
+                                <button wire:click="resetarImportacao"
+                                        class="w-full sm:flex-1 h-14 flex items-center justify-center rounded-xl border-2 border-gray-300 text-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                                    Nova importação
+                                </button>
+                            </div>
+
+                        @elseif($status_importacao === 'erro')
+                            <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+                                <svg class="h-8 w-8 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-900">Erro na importação</h3>
+                            <p class="text-sm text-red-600 mt-2 mb-6 max-w-md mx-auto">{{ $mensagem_status }}</p>
+                            <button wire:click="resetarImportacao"
+                                    class="w-full max-w-sm mx-auto h-14 flex items-center justify-center rounded-xl text-lg font-bold shadow-md bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">
+                                Tentar novamente
                             </button>
-                        </div>
-                    @endif
-                </div>
-            @endif
+                        @endif
+                    </div>
+                @endif
+            </div>
         </div>
     </div>
 </div>

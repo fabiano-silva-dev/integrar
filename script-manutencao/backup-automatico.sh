@@ -13,9 +13,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Diretório do script
+# Diretório do script e raiz do projeto
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
 
 # Verificar se o arquivo .env existe
 if [ ! -f ".env" ]; then
@@ -46,9 +47,11 @@ if ! docker ps | grep -q "$CONTAINER_DB"; then
 fi
 
 # Configurações de backup
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"  # dias para manter (comparado pela data no nome do arquivo)
 DATA=$(date +%Y%m%d_%H%M%S)
 DIRETORIO_BACKUP="$SCRIPT_DIR/backups"
 ARQUIVO_BACKUP="$DIRETORIO_BACKUP/backup-${DB_NAME}-${DATA}.sql"
+CUTOFF_DATE=$(date -d "${RETENTION_DAYS} days ago" +%Y%m%d)
 
 # Criar diretório de backup se não existir
 mkdir -p "$DIRETORIO_BACKUP"
@@ -60,18 +63,36 @@ echo -e "${BLUE}Container:${NC} $CONTAINER_DB"
 echo -e "${BLUE}Arquivo:${NC} $ARQUIVO_BACKUP"
 
 # Fazer backup do banco
-if docker-compose exec -T "$CONTAINER_DB" mysqldump -u root -p"$MYSQL_ROOT_PASS" "$DB_NAME" > "$ARQUIVO_BACKUP" 2>/dev/null; then
+if docker compose exec -T db mysqldump -u root -p"$MYSQL_ROOT_PASS" "$DB_NAME" > "$ARQUIVO_BACKUP" 2>/dev/null; then
     # Verificar se o arquivo foi criado e não está vazio
     if [ -f "$ARQUIVO_BACKUP" ] && [ -s "$ARQUIVO_BACKUP" ]; then
         TAMANHO=$(du -h "$ARQUIVO_BACKUP" | cut -f1)
         echo -e "${GREEN}✅ Backup criado com sucesso: $ARQUIVO_BACKUP ($TAMANHO)${NC}"
         
-        # Manter apenas os últimos 7 backups
+        # Remove backups com data no nome anterior ao período de retenção
         cd "$DIRETORIO_BACKUP"
-        BACKUPS_REMOVIDOS=$(ls -t backup-${DB_NAME}-*.sql 2>/dev/null | tail -n +8 | wc -l)
+        BACKUPS_REMOVIDOS=0
+        for arquivo in backup-${DB_NAME}-*.sql backup-${DB_NAME}-*.sql.gz; do
+            [ -f "$arquivo" ] || continue
+
+            # Extrai YYYYMMDD do padrão backup-<db>-YYYYMMDD_HHMMSS.sql(.gz)
+            backup_date=$(echo "$arquivo" | sed -n "s/^backup-${DB_NAME}-\([0-9]\{8\}\)_.*/\1/p")
+            if [ -z "$backup_date" ]; then
+                echo -e "${YELLOW}⚠️  Ignorado (nome fora do padrão): $arquivo${NC}"
+                continue
+            fi
+
+            if [ "$backup_date" -lt "$CUTOFF_DATE" ]; then
+                rm -f "$arquivo"
+                BACKUPS_REMOVIDOS=$((BACKUPS_REMOVIDOS + 1))
+                echo -e "${YELLOW}🗑️  Removido: $arquivo (data $backup_date < limite $CUTOFF_DATE)${NC}"
+            fi
+        done
+
         if [ "$BACKUPS_REMOVIDOS" -gt 0 ]; then
-            ls -t backup-${DB_NAME}-*.sql 2>/dev/null | tail -n +8 | xargs -r rm
-            echo -e "${YELLOW}🗑️  $BACKUPS_REMOVIDOS backup(s) antigo(s) removido(s) (mantidos últimos 7)${NC}"
+            echo -e "${YELLOW}🗑️  $BACKUPS_REMOVIDOS backup(s) removido(s) (retenção: ${RETENTION_DAYS} dias, desde $CUTOFF_DATE)${NC}"
+        else
+            echo -e "${BLUE}ℹ️  Nenhum backup antigo para remover (retenção: ${RETENTION_DAYS} dias)${NC}"
         fi
         
         echo -e "${GREEN}Backup concluído em $(date +'%Y-%m-%d %H:%M:%S')${NC}"

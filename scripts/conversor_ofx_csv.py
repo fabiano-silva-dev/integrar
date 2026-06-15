@@ -73,7 +73,7 @@ def extract_description(name, memo):
     
     return " - ".join(desc_parts) if desc_parts else "Transação"
 
-def parse_ofx_file(file_path):
+def parse_ofx_file(file_path, conta_banco='1.1.1.01'):
     """
     Parse do arquivo OFX e extração das transações
     """
@@ -139,16 +139,18 @@ def parse_ofx_file(file_path):
         tipo_transacao = extract_transaction_type(trntype, name, memo)
         descricao = extract_description(name, memo)
         
-        # Determinar conta de débito e crédito baseado no tipo
-        if trntype.lower() == "credit":
-            conta_debito = ""  # Será preenchida pelo sistema
-            conta_credito = "1.1.01.001"  # Conta padrão para recebimentos
-        elif trntype.lower() == "debit":
-            conta_debito = "1.1.01.001"  # Conta padrão para pagamentos
-            conta_credito = ""  # Será preenchida pelo sistema
+        # Determinar conta de débito e crédito pelo sinal do valor (mesmo padrão dos demais conversores)
+        try:
+            amount = float(str(trnamt).replace(',', '.'))
+        except (TypeError, ValueError):
+            amount = 0.0
+
+        if amount >= 0:
+            conta_debito = conta_banco
+            conta_credito = ""
         else:
             conta_debito = ""
-            conta_credito = ""
+            conta_credito = conta_banco
         
         # Limpar todos os campos de quebras de linha e caracteres especiais
         def clean_field(field):
@@ -232,19 +234,21 @@ def main():
     Função principal
     """
     if len(sys.argv) < 3:
-        print("Uso: python conversor_ofx_csv.py <arquivo_ofx> <arquivo_csv_saida>")
-        print("Exemplo: python conversor_ofx_csv.py extrato.ofx extrato.csv")
+        print("Uso: python conversor_ofx_csv.py <arquivo_ofx> <arquivo_csv_saida> [conta_banco]")
+        print("Exemplo: python conversor_ofx_csv.py extrato.ofx extrato.csv 1.1.1.01")
         sys.exit(1)
     
     input_file = sys.argv[1]
     output_file = sys.argv[2]
+    conta_banco = sys.argv[3] if len(sys.argv) > 3 else '1.1.1.01'
     
     print(f"Processando arquivo OFX: {input_file}")
     print(f"Arquivo de saída CSV: {output_file}")
+    print(f"Conta do banco: {conta_banco}")
     
     try:
         # Parse do arquivo OFX
-        transactions, metadata = parse_ofx_file(input_file)
+        transactions, metadata = parse_ofx_file(input_file, conta_banco)
         
         print(f"\nInformações da conta:")
         print(f"Banco: {metadata['bank_id']}")
