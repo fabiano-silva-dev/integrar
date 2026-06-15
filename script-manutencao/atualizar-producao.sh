@@ -211,23 +211,28 @@ run_npm() {
     fi
 }
 
-fix_storage_permissions() {
+fix_deploy_permissions() {
     if [[ "$MODE" != native ]]; then
         return
     fi
 
-    log "Ajustando permissões de storage e bootstrap/cache..."
+    log "Ajustando permissões de storage, cache e build..."
     run_as_root mkdir -p \
         "$PROJECT_DIR/storage/logs" \
         "$PROJECT_DIR/storage/framework/cache" \
         "$PROJECT_DIR/storage/framework/sessions" \
         "$PROJECT_DIR/storage/framework/views" \
-        "$PROJECT_DIR/bootstrap/cache"
+        "$PROJECT_DIR/bootstrap/cache" \
+        "$PROJECT_DIR/public/build"
     # Dono = deploy (composer/npm); grupo = www-data (PHP-FPM/artisan)
     run_as_root chown -R "$DEPLOY_USER:$APP_GROUP" \
-        "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+        "$PROJECT_DIR/storage" \
+        "$PROJECT_DIR/bootstrap/cache" \
+        "$PROJECT_DIR/public/build"
     run_as_root chmod -R ug+rwX \
-        "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+        "$PROJECT_DIR/storage" \
+        "$PROJECT_DIR/bootstrap/cache" \
+        "$PROJECT_DIR/public/build"
     run_as_root find "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache" \
         -type d -exec chmod g+s {} +
     ok "Permissões ajustadas ($DEPLOY_USER:$APP_GROUP)"
@@ -304,7 +309,7 @@ main() {
     echo ""
 
     if [[ "$MODE" == native ]]; then
-        fix_storage_permissions
+        fix_deploy_permissions
     fi
 
     if ! $SKIP_COMPOSER; then
@@ -325,6 +330,9 @@ main() {
         fi
 
         log "Compilando assets (npm)..."
+        if [[ "$MODE" == native ]]; then
+            fix_deploy_permissions
+        fi
         NPM_SKIPPED=false
         run_npm
         if $NPM_SKIPPED; then
