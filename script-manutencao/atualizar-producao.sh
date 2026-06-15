@@ -330,9 +330,6 @@ main() {
         fi
 
         log "Compilando assets (npm)..."
-        if [[ "$MODE" == native ]]; then
-            fix_deploy_permissions
-        fi
         NPM_SKIPPED=false
         run_npm
         if $NPM_SKIPPED; then
@@ -360,7 +357,7 @@ main() {
         fi
     fi
 
-    fix_storage_permissions
+    fix_deploy_permissions
 
     reload_services
 
