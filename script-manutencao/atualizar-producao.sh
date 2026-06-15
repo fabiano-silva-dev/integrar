@@ -16,6 +16,7 @@ SKIP_CACHE=false
 APP_USER="www-data"
 APP_GROUP="www-data"
 DEPLOY_USER=""
+NPM_BIN=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -86,7 +87,47 @@ detect_deploy_user() {
     fi
 }
 
-# Composer/npm: dono do projeto (vendor/ e node_modules/ pertencem a quem fez git pull).
+# PATH mínimo para evitar .bashrc/.profile do deploy user (ex.: nvm quebrado).
+readonly SYSTEM_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+resolve_npm() {
+    NPM_BIN=""
+
+    if command -v npm >/dev/null 2>&1; then
+        NPM_BIN="$(command -v npm)"
+    fi
+
+    for candidate in /usr/bin/npm /usr/local/bin/npm; do
+        if [[ -z "$NPM_BIN" && -x "$candidate" ]]; then
+            NPM_BIN="$candidate"
+        fi
+    done
+
+    if [[ -z "$NPM_BIN" && -n "$DEPLOY_USER" ]]; then
+        local nvm_npm
+        shopt -s nullglob
+        local -a nvm_bins=(/home/"$DEPLOY_USER"/.nvm/versions/node/*/bin/npm)
+        shopt -u nullglob
+        if ((${#nvm_bins[@]} > 0)); then
+            nvm_npm="$(printf '%s\n' "${nvm_bins[@]}" | sort -V | tail -n1)"
+            [[ -x "$nvm_npm" ]] && NPM_BIN="$nvm_npm"
+        fi
+    fi
+
+    [[ -n "$NPM_BIN" ]]
+}
+
+has_built_assets() {
+    [[ -f "$PROJECT_DIR/public/build/manifest.json" ]]
+}
+
+warn_missing_npm() {
+    warn "npm não encontrado no PATH do sistema."
+    warn "Instale Node.js 20+ (como no instalador nativo):"
+    warn "  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
+    warn "  sudo apt-get install -y nodejs"
+    warn "Ou use --skip-npm se os assets em public/build/ já estiverem atualizados."
+}
 run_as_deploy_user() {
     if is_root; then
         sudo -u "$DEPLOY_USER" "$@"
@@ -150,7 +191,21 @@ run_npm() {
         docker compose exec -T app npm ci
         docker compose exec -T app npm run build
     else
-        run_as_deploy_user bash -lc "cd '$PROJECT_DIR' && npm ci && npm run build"
+        if ! resolve_npm; then
+            if has_built_assets; then
+                warn_missing_npm
+                warn "Mantendo assets existentes em public/build/"
+                return 0
+            fi
+            err "npm não encontrado e public/build/manifest.json não existe."
+            warn_missing_npm
+            exit 1
+        fi
+
+        local npm_dir
+        npm_dir="$(dirname "$NPM_BIN")"
+        run_as_deploy_user env PATH="$npm_dir:$SYSTEM_PATH" bash -c \
+            "cd '$PROJECT_DIR' && '$NPM_BIN' ci && '$NPM_BIN' run build"
     fi
 }
 
@@ -243,6 +298,12 @@ main() {
     fi
 
     if ! $SKIP_NPM && [[ -f package.json ]]; then
+        if [[ "$MODE" == native ]] && ! resolve_npm && ! has_built_assets; then
+            err "Node.js/npm não instalado e não há assets compilados."
+            warn_missing_npm
+            exit 1
+        fi
+
         log "Compilando assets (npm)..."
         run_npm
         ok "Assets compilados"

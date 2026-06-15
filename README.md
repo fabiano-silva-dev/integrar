@@ -274,7 +274,7 @@ Padrão: Apache nativo — `composer`/`npm` como dono do projeto, `artisan` como
 O `sudo` é solicitado automaticamente quando necessário.
 Em desenvolvimento com Docker: `./atualizar-producao.sh --docker`
 
-O script roda composer, build de assets,
+O script roda composer, build de assets (requer Node.js 20+ no servidor),
 migrations, limpeza de cache e reload dos serviços. Ver opções em
 `script-manutencao/README.md`.
 

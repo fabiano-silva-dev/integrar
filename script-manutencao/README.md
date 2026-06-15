@@ -16,7 +16,7 @@ Use `--docker` apenas em desenvolvimento com containers.
 Executa:
 
 - `composer install`
-- `npm ci && npm run build` (se `package.json` existir)
+- `npm ci && npm run build` (se `package.json` existir; requer Node.js 20+ no PATH do sistema)
 - `php artisan livewire:discover`
 - `php artisan migrate --force`
 - `php artisan optimize:clear` (+ `optimize` em produção nativa)
