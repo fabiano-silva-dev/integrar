@@ -15,9 +15,8 @@ Use `--docker` apenas em desenvolvimento com containers.
 
 Executa:
 
-- `composer install`
+- `composer install` (inclui `package:discover` do Livewire)
 - `npm ci && npm run build` (se `package.json` existir; requer Node.js 20+ no PATH do sistema)
-- `php artisan livewire:discover`
 - `php artisan migrate --force`
 - `php artisan optimize:clear` (+ `optimize` em produção nativa)
 - reload PHP-FPM / filas systemd (nativo)

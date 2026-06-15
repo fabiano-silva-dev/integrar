@@ -309,10 +309,6 @@ main() {
         ok "Assets compilados"
     fi
 
-    log "Livewire discover..."
-    run_artisan livewire:discover
-    ok "Componentes Livewire atualizados"
-
     if ! $SKIP_MIGRATE; then
         log "Migrations..."
         run_artisan migrate --force
