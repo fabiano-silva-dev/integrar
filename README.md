@@ -270,7 +270,8 @@ git pull
 ./atualizar-producao.sh
 ```
 
-Padrão: Apache nativo como `www-data` (o `sudo` é solicitado automaticamente quando necessário).
+Padrão: Apache nativo — `composer`/`npm` como dono do projeto, `artisan` como `www-data`.
+O `sudo` é solicitado automaticamente quando necessário.
 Em desenvolvimento com Docker: `./atualizar-producao.sh --docker`
 
 O script roda composer, build de assets,

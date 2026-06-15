@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Atualização pós git pull — padrão: Apache nativo (www-data).
+# Atualização pós git pull — padrão: Apache nativo.
+# composer/npm como dono do projeto; artisan como www-data (PHP-FPM).
 # Uso: ./atualizar-producao.sh
 #      ./atualizar-producao.sh --docker   (ambiente de desenvolvimento)
 set -Eeuo pipefail
@@ -13,6 +14,8 @@ SKIP_NPM=false
 SKIP_MIGRATE=false
 SKIP_CACHE=false
 APP_USER="www-data"
+APP_GROUP="www-data"
+DEPLOY_USER=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,7 +34,9 @@ Uso: $(basename "$0") [opções]
 
 Atualiza a aplicação após git pull (composer, assets, migrate, cache).
 
-Padrão: modo nativo (Apache/PHP-FPM) como usuário www-data.
+Padrão: modo nativo (Apache/PHP-FPM).
+Composer e npm rodam como dono do projeto (quem fez git pull).
+Artisan e permissões de runtime usam www-data quando necessário.
 O sudo é solicitado automaticamente quando necessário.
 
 Opções:
@@ -70,7 +75,29 @@ current_user() {
     id -un
 }
 
-# Executa como APP_USER; pede sudo se o usuário atual não for root nem APP_USER.
+detect_deploy_user() {
+    DEPLOY_USER="$(stat -c '%U' "$PROJECT_DIR" 2>/dev/null || echo "")"
+    if [[ -z "$DEPLOY_USER" || "$DEPLOY_USER" == "UNKNOWN" ]]; then
+        if [[ -n "${SUDO_USER:-}" ]]; then
+            DEPLOY_USER="$SUDO_USER"
+        else
+            DEPLOY_USER="$(current_user)"
+        fi
+    fi
+}
+
+# Composer/npm: dono do projeto (vendor/ e node_modules/ pertencem a quem fez git pull).
+run_as_deploy_user() {
+    if is_root; then
+        sudo -u "$DEPLOY_USER" "$@"
+    elif [[ "$(current_user)" == "$DEPLOY_USER" ]]; then
+        "$@"
+    else
+        sudo -u "$DEPLOY_USER" "$@"
+    fi
+}
+
+# Artisan em runtime: www-data (mesmo usuário do PHP-FPM).
 run_as_app_user() {
     if is_root; then
         sudo -u "$APP_USER" "$@"
@@ -113,7 +140,7 @@ run_composer() {
         docker compose exec -T app composer install \
             --no-interaction --prefer-dist --optimize-autoloader "$@"
     else
-        run_as_app_user composer install --working-dir="$PROJECT_DIR" \
+        run_as_deploy_user composer install --working-dir="$PROJECT_DIR" \
             --no-interaction --prefer-dist --optimize-autoloader "$@"
     fi
 }
@@ -123,8 +150,21 @@ run_npm() {
         docker compose exec -T app npm ci
         docker compose exec -T app npm run build
     else
-        run_as_app_user bash -lc "cd '$PROJECT_DIR' && npm ci && npm run build"
+        run_as_deploy_user bash -lc "cd '$PROJECT_DIR' && npm ci && npm run build"
     fi
+}
+
+fix_storage_permissions() {
+    if [[ "$MODE" != native ]]; then
+        return
+    fi
+
+    log "Ajustando permissões de storage e bootstrap/cache..."
+    run_as_root chown -R "$APP_USER:$APP_GROUP" \
+        "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+    run_as_root chmod -R ug+rwX \
+        "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+    ok "Permissões de runtime ajustadas ($APP_USER)"
 }
 
 reload_services() {
@@ -177,6 +217,9 @@ main() {
     parse_args "$@"
     validate_environment
     load_app_env
+    if [[ "$MODE" == native ]]; then
+        detect_deploy_user
+    fi
 
     echo ""
     echo "🚀 Atualizar produção — IntegraExpert"
@@ -184,7 +227,8 @@ main() {
     log "Diretório: $PROJECT_DIR"
     log "Modo: $MODE"
     if [[ "$MODE" == native ]]; then
-        log "Usuário da aplicação: $APP_USER"
+        log "Deploy (composer/npm): $DEPLOY_USER"
+        log "Runtime (artisan/web): $APP_USER"
     fi
     echo ""
 
@@ -225,6 +269,8 @@ main() {
             ok "Caches de produção recriados"
         fi
     fi
+
+    fix_storage_permissions
 
     reload_services
 

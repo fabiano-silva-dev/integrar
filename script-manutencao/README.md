@@ -4,7 +4,8 @@ Todos os scripts operacionais ficam nesta pasta. Na raiz do projeto há apenas a
 
 ## Atualização após `git pull` (use sempre)
 
-Padrão: modo **nativo** (`www-data`). O `sudo` é pedido automaticamente quando necessário.
+Padrão: modo **nativo**. `composer`/`npm` rodam como **dono do projeto** (fabiano após `git pull`);
+`artisan` roda como **www-data** (PHP-FPM). O `sudo` é pedido só quando necessário.
 Use `--docker` apenas em desenvolvimento com containers.
 
 ```bash
