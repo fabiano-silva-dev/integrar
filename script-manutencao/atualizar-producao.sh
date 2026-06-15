@@ -17,6 +17,7 @@ APP_USER="www-data"
 APP_GROUP="www-data"
 DEPLOY_USER=""
 NPM_BIN=""
+NPM_SKIPPED=false
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -195,6 +196,7 @@ run_npm() {
             if has_built_assets; then
                 warn_missing_npm
                 warn "Mantendo assets existentes em public/build/"
+                NPM_SKIPPED=true
                 return 0
             fi
             err "npm não encontrado e public/build/manifest.json não existe."
@@ -215,11 +217,25 @@ fix_storage_permissions() {
     fi
 
     log "Ajustando permissões de storage e bootstrap/cache..."
-    run_as_root chown -R "$APP_USER:$APP_GROUP" \
+    run_as_root mkdir -p \
+        "$PROJECT_DIR/storage/logs" \
+        "$PROJECT_DIR/storage/framework/cache" \
+        "$PROJECT_DIR/storage/framework/sessions" \
+        "$PROJECT_DIR/storage/framework/views" \
+        "$PROJECT_DIR/bootstrap/cache"
+    # Dono = deploy (composer/npm); grupo = www-data (PHP-FPM/artisan)
+    run_as_root chown -R "$DEPLOY_USER:$APP_GROUP" \
         "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
     run_as_root chmod -R ug+rwX \
         "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
-    ok "Permissões de runtime ajustadas ($APP_USER)"
+    run_as_root find "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache" \
+        -type d -exec chmod g+s {} +
+    ok "Permissões ajustadas ($DEPLOY_USER:$APP_GROUP)"
+
+    if ! id -nG "$DEPLOY_USER" 2>/dev/null | grep -qw "$APP_GROUP"; then
+        warn "$DEPLOY_USER não está no grupo $APP_GROUP."
+        warn "Recomendado: sudo usermod -aG $APP_GROUP $DEPLOY_USER (depois faça logout/login)"
+    fi
 }
 
 reload_services() {
@@ -287,6 +303,10 @@ main() {
     fi
     echo ""
 
+    if [[ "$MODE" == native ]]; then
+        fix_storage_permissions
+    fi
+
     if ! $SKIP_COMPOSER; then
         log "Composer install..."
         if [[ "$MODE" == native && "${APP_ENV:-production}" != "local" ]]; then
@@ -305,8 +325,13 @@ main() {
         fi
 
         log "Compilando assets (npm)..."
+        NPM_SKIPPED=false
         run_npm
-        ok "Assets compilados"
+        if $NPM_SKIPPED; then
+            warn "Assets não recompilados — usando public/build/ existente"
+        else
+            ok "Assets compilados"
+        fi
     fi
 
     if ! $SKIP_MIGRATE; then
