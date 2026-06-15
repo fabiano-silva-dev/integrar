@@ -48,15 +48,25 @@
                                     :accept="$this->formatosAceitosLayout()"
                                     :formato="$this->descricaoFormatoLayout()"
                                     :nome-arquivo="$arquivo ? $arquivo->getClientOriginalName() : null"
+                                    :bloqueado="!$empresa_id"
                                 />
                                 <div wire:loading wire:target="arquivo" class="mt-2 text-sm text-indigo-600">Carregando arquivo...</div>
                                 @error('arquivo') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+                                @error('empresa_id') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+
+                                @if($arquivo && !$empresa_id)
+                                    <p class="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                        Selecione uma empresa no cabeçalho para enviar o extrato.
+                                    </p>
+                                @endif
 
                                 <div class="mt-8">
-                                    @if(!$arquivo)
+                                    @if(!$empresa_id)
+                                        <p class="text-sm text-gray-500 text-center mb-3">Selecione a empresa no cabeçalho para enviar o arquivo</p>
+                                    @elseif(!$arquivo)
                                         <p class="text-sm text-gray-500 text-center mb-3">Selecione um arquivo para continuar</p>
                                     @endif
-                                    <button type="button" wire:click="proximoPasso" @disabled(!$arquivo)
+                                    <button type="button" wire:click="proximoPasso" @disabled(!$arquivo || !$empresa_id)
                                             class="w-full h-14 flex items-center justify-center gap-2 rounded-xl text-lg font-bold shadow-sm
                                                 bg-indigo-600 hover:bg-indigo-700 text-white
                                                 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none transition-colors">
@@ -99,6 +109,7 @@
                                     </p>
                                 @endif
                                 @error('layout_selecionado') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+                                @error('empresa_id') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
 
                                 <div class="mt-8 flex flex-col sm:flex-row gap-4">
                                     <button type="button" wire:click="passoAnterior"
@@ -172,7 +183,13 @@
                                     </button>
                                 </div>
                                 @if(!$this->podeImportar())
-                                    <p class="text-sm text-gray-500 text-center mt-3">Informe a conta contábil para importar</p>
+                                    <p class="text-sm text-gray-500 text-center mt-3">
+                                        @if(!$empresa_id)
+                                            Selecione a empresa no cabeçalho para importar
+                                        @elseif(trim($conta_banco) === '')
+                                            Informe a conta contábil para importar
+                                        @endif
+                                    </p>
                                 @endif
                             </div>
                         </div>

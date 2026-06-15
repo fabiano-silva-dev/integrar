@@ -6,6 +6,19 @@
     display: none !important;
 }
 
+@keyframes seletor-empresa-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 4px rgb(99 102 241 / 0.35), 0 4px 14px rgb(99 102 241 / 0.25);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgb(99 102 241 / 0.55), 0 4px 20px rgb(99 102 241 / 0.35);
+    }
+}
+
+.seletor-empresa-destaque {
+    animation: seletor-empresa-pulse 0.9s ease-in-out 4;
+}
+
 /* Classes customizadas para o importador personalizado */
 .multiples-valores-row {
     display: flex !important;

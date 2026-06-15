@@ -108,4 +108,23 @@ class TenantLancamentoBulkInsertTest extends TestCase
             OperadoraContext::enableScope();
         }
     }
+
+    public function test_create_falha_sem_operadora_resolvivel(): void
+    {
+        OperadoraContext::disableScope();
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('empresa_operadora_id');
+
+            Lancamento::create([
+                'data' => '2025-09-04',
+                'historico' => 'CREATE SEM OPERADORA',
+                'valor' => 10.00,
+                'processado' => true,
+            ]);
+        } finally {
+            OperadoraContext::enableScope();
+        }
+    }
 }

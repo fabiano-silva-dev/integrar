@@ -7,6 +7,7 @@
                 </h2>
                 <p class="text-gray-600 mb-6">
                     Selecione a instituição do extrato, envie o PDF e baixe o arquivo OFX gerado.
+                    <a href="{{ route('conversoes-extrato') }}" class="text-indigo-600 hover:text-indigo-800 font-medium">Ver histórico de conversões</a>
                 </p>
 
                 <form wire:submit.prevent="converter" class="space-y-6">

@@ -89,6 +89,13 @@ trait MenuTrait
                         'active' => request()->routeIs('conversao-pdf-ofx'),
                         'title' => 'Converte extrato PDF para arquivo OFX',
                     ],
+                    [
+                        'name' => 'Histórico de conversões',
+                        'icon' => 'clock',
+                        'url' => route('conversoes-extrato'),
+                        'active' => request()->routeIs('conversoes-extrato*'),
+                        'title' => 'Consulta conversões PDF para OFX realizadas',
+                    ],
                 ],
             ],
             [
@@ -140,14 +147,6 @@ trait MenuTrait
                         'icon' => 'document',
                         'url' => route('historicos-padrao-layout'),
                         'active' => request()->routeIs('historicos-padrao-layout*'),
-                        'roles' => ['admin'],
-                    ],
-                    [
-                        'name' => 'Histórico de conversões',
-                        'icon' => 'clock',
-                        'url' => route('conversoes-extrato'),
-                        'active' => request()->routeIs('conversoes-extrato*'),
-                        'title' => 'Consulta conversões PDF para OFX realizadas',
                         'roles' => ['admin'],
                     ],
                     [

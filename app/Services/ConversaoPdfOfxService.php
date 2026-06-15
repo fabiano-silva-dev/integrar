@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ConversaoExtrato;
+use App\Services\OperadoraContext;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -77,9 +78,12 @@ class ConversaoPdfOfxService
 
     public function criarRegistro(string $layout, string $nomeArquivoOrigem): ConversaoExtrato
     {
+        $empresa = OperadoraContext::resolveEmpresaDaSessao();
+
         return ConversaoExtrato::create([
             'user_id' => Auth::id(),
-            'empresa_id' => null,
+            'empresa_id' => $empresa?->id,
+            'empresa_operadora_id' => $empresa?->empresa_operadora_id ?? OperadoraContext::requireId(),
             'familia_layout' => $this->familiaDoLayout($layout) ?? '',
             'layout' => $layout,
             'nome_arquivo_origem' => $nomeArquivoOrigem,

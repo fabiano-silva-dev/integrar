@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Models\EmpresasOperadora;
 use App\Models\Terceiro;
 use App\Models\User;
+use App\Services\ConversaoPdfOfxService;
 use App\Services\OperadoraContext;
 use App\Services\OperadoraStorage;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -192,5 +193,41 @@ class TenantIsolationTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertDatabaseMissing('empresas', ['nome' => 'Nova Empresa Teste']);
+    }
+
+    public function test_conversao_extrato_recebe_empresa_operadora_id_do_contexto(): void
+    {
+        $this->actingAs($this->userA);
+
+        $conversao = app(ConversaoPdfOfxService::class)->criarRegistro('sicredi', 'extrato.pdf');
+
+        $this->assertSame($this->operadoraA->id, $conversao->empresa_operadora_id);
+        $this->assertDatabaseHas('conversoes_extrato', [
+            'id' => $conversao->id,
+            'empresa_operadora_id' => $this->operadoraA->id,
+        ]);
+    }
+
+    public function test_super_admin_sem_contexto_nao_cria_conversao_extrato(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($superAdmin);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+
+        app(ConversaoPdfOfxService::class)->criarRegistro('sicredi', 'extrato.pdf');
+    }
+
+    public function test_super_admin_com_contexto_cria_conversao_extrato(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($superAdmin);
+        OperadoraContext::set($this->operadoraA->id);
+
+        $conversao = app(ConversaoPdfOfxService::class)->criarRegistro('sicredi', 'extrato.pdf');
+
+        $this->assertSame($this->operadoraA->id, $conversao->empresa_operadora_id);
     }
 }

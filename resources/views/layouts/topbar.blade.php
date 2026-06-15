@@ -1,13 +1,22 @@
 {{-- Cabeçalho: marca + seletores + avatar --}}
 <header class="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-4 sm:px-6">
-    <a href="{{ route('home') }}"
-       @click="if (window.matchMedia('(max-width: 1023px)').matches) { $event.preventDefault(); sidebarMobileOpen = !sidebarMobileOpen; }"
-       class="flex shrink-0 items-center min-w-0"
-       aria-label="IntegraExpert">
+    <button type="button"
+       @click="toggleSidebar()"
+       class="flex shrink-0 items-center min-w-0 rounded-lg p-1 hover:bg-gray-100 lg:hidden"
+       aria-label="Abrir menu">
         <img src="{{ asset('images/brand/logo.png') }}"
              srcset="{{ asset('images/brand/logo@2x.png') }} 2x, {{ asset('images/brand/logo@3x.png') }} 3x"
              alt="IntegraExpert"
              class="h-8 w-auto max-w-[140px] sm:max-w-[180px]">
+    </button>
+
+    <a href="{{ route('home') }}"
+       class="hidden shrink-0 items-center min-w-0 lg:flex"
+       aria-label="IntegraExpert">
+        <img src="{{ asset('images/brand/logo.png') }}"
+             srcset="{{ asset('images/brand/logo@2x.png') }} 2x, {{ asset('images/brand/logo@3x.png') }} 3x"
+             alt="IntegraExpert"
+             class="h-8 w-auto max-w-[180px]">
     </a>
 
     <div class="flex-1 min-w-0">

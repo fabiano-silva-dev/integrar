@@ -5,7 +5,6 @@ namespace App\Livewire;
 use App\Models\ConversaoExtrato;
 use App\Services\OperadoraStorage;
 use App\Services\ConversaoPdfOfxService;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -26,14 +25,6 @@ class ListaConversoesExtrato extends Component
     ];
 
     protected $servico;
-
-    public function mount(): void
-    {
-        $user = Auth::user();
-        if (!$user || $user->role !== 'admin') {
-            abort(403, 'Acesso não autorizado.');
-        }
-    }
 
     public function boot(ConversaoPdfOfxService $servico): void
     {

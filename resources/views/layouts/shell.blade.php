@@ -17,10 +17,22 @@
                 {{ $menuIndex }}: {{ collect($menu['items'])->contains(fn ($i) => $i['active'] ?? false) ? 'true' : 'false' }},
             @endforeach
         },
+        abrirSidebar() {
+            this.sidebarExpanded = true;
+            this.sidebarMobileOpen = true;
+            localStorage.setItem('sidebarExpanded', '1');
+        },
         fecharMenu() {
             this.sidebarExpanded = false;
             this.sidebarMobileOpen = false;
             localStorage.setItem('sidebarExpanded', '0');
+        },
+        toggleSidebar() {
+            if (this.sidebarExpanded || this.sidebarMobileOpen) {
+                this.fecharMenu();
+            } else {
+                this.abrirSidebar();
+            }
         }
     }"
     class="min-h-screen bg-gray-100"
@@ -28,7 +40,8 @@
     @include('layouts.sidebar', compact('menuItems', 'userData', 'operadoraAtual'))
 
     <div class="flex min-h-screen flex-col transition-all duration-300 lg:pl-[4.5rem]"
-         :class="sidebarExpanded ? 'lg:pl-64' : 'lg:pl-[4.5rem]'">
+         :class="sidebarExpanded ? 'lg:pl-64' : 'lg:pl-[4.5rem]'"
+         @click="if (sidebarExpanded) fecharMenu()">
         @include('layouts.topbar', compact('userData', 'empresas', 'empresaAtual', 'operadoras'))
 
         @isset($header)

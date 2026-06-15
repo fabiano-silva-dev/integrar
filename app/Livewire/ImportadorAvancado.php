@@ -73,7 +73,7 @@ class ImportadorAvancado extends Component
         $this->sugerirLayoutPorArquivo();
         $this->mensagem_status = 'Arquivo selecionado. Confirme o banco de origem e importe.';
 
-        if ($this->arquivo && $this->status_importacao === 'pendente') {
+        if ($this->arquivo && $this->status_importacao === 'pendente' && $this->empresa_id) {
             $this->passo_atual = 2;
         }
     }
@@ -89,11 +89,22 @@ class ImportadorAvancado extends Component
             return;
         }
 
+        if (!$this->empresa_id) {
+            $this->solicitarSelecaoEmpresa();
+            return;
+        }
+
         if ($this->passo_atual === 1 && $this->arquivo) {
             $this->passo_atual = 2;
         } elseif ($this->passo_atual === 2 && $this->layout_selecionado) {
             $this->passo_atual = 3;
         }
+    }
+
+    public function solicitarSelecaoEmpresa(): void
+    {
+        $this->addError('empresa_id', 'Selecione uma empresa no cabeçalho antes de continuar.');
+        $this->dispatch('destacar-seletor-empresa');
     }
 
     public function passoAnterior(): void
@@ -262,6 +273,11 @@ class ImportadorAvancado extends Component
 
     public function processarArquivo()
     {
+        if (!$this->empresa_id) {
+            $this->solicitarSelecaoEmpresa();
+            return;
+        }
+
         // Aumentar limites de execução para arquivos grandes
         set_time_limit(300); // 5 minutos
         ini_set('memory_limit', '512M');

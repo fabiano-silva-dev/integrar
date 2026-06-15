@@ -8,11 +8,28 @@
         '-translate-x-full': !sidebarMobileOpen,
         'translate-x-0': sidebarMobileOpen
     }"
-    @keydown.escape.window="sidebarMobileOpen = false"
+    @click.stop
+    @keydown.escape.window="fecharMenu()"
 >
-    <div class="flex h-16 shrink-0 items-center border-b border-gray-700"
-         :class="sidebarExpanded ? 'justify-between px-4' : 'justify-center px-2'">
-        <a href="{{ route('home') }}" class="flex min-w-0 items-center gap-2 overflow-hidden" x-show="sidebarExpanded" @click="fecharMenu()">
+    {{-- Cabeçalho recolhido: logo abre o menu --}}
+    <div class="flex h-16 shrink-0 items-center justify-center border-b border-gray-700 px-2"
+         x-show="!sidebarExpanded">
+        <button type="button"
+                @click="abrirSidebar()"
+                class="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-gray-800"
+                title="Expandir menu">
+            @if(($operadoraAtual ?? null)?->logo)
+                <img src="{{ Storage::url($operadoraAtual->logo) }}" alt="" class="h-8 w-8 rounded object-cover">
+            @else
+                <img src="{{ asset('images/brand/icon.png') }}" srcset="{{ asset('images/brand/icon@2x.png') }} 2x, {{ asset('images/brand/icon@3x.png') }} 3x" alt="IntegraExpert" class="h-8 w-8">
+            @endif
+        </button>
+    </div>
+
+    {{-- Cabeçalho expandido: logo + nome + recolher --}}
+    <div class="flex h-16 shrink-0 items-center justify-between border-b border-gray-700 px-4"
+         x-show="sidebarExpanded">
+        <a href="{{ route('home') }}" class="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg py-1 pr-2 hover:bg-gray-800">
             @if(($operadoraAtual ?? null)?->logo)
                 <img src="{{ Storage::url($operadoraAtual->logo) }}" alt="" class="h-8 w-8 shrink-0 rounded object-cover">
             @else
@@ -20,19 +37,11 @@
             @endif
             <span class="truncate text-sm font-semibold">{{ ($operadoraAtual ?? null)?->nome_fantasia ?: 'IntegraExpert' }}</span>
         </a>
-        <a href="{{ route('home') }}" class="flex shrink-0 items-center justify-center" x-show="!sidebarExpanded" @click="fecharMenu()" title="IntegraExpert">
-            @if(($operadoraAtual ?? null)?->logo)
-                <img src="{{ Storage::url($operadoraAtual->logo) }}" alt="" class="h-8 w-8 rounded object-cover">
-            @else
-                <img src="{{ asset('images/brand/icon.png') }}" srcset="{{ asset('images/brand/icon@2x.png') }} 2x, {{ asset('images/brand/icon@3x.png') }} 3x" alt="IntegraExpert" class="h-8 w-8">
-            @endif
-        </a>
         <button type="button"
-                x-show="sidebarExpanded"
-                @click="sidebarExpanded = !sidebarExpanded; localStorage.setItem('sidebarExpanded', sidebarExpanded ? '1' : '0')"
-                class="hidden h-10 w-10 items-center justify-center rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white lg:flex"
-                :title="sidebarExpanded ? 'Recolher menu' : 'Expandir menu'">
-            <svg class="h-5 w-5 transition-transform" :class="sidebarExpanded ? '' : 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                @click="fecharMenu()"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white"
+                title="Recolher menu">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
             </svg>
         </button>
@@ -100,5 +109,5 @@
 </aside>
 
 <div x-show="sidebarMobileOpen" x-transition.opacity
-     @click="sidebarMobileOpen = false"
+     @click="fecharMenu()"
      class="fixed inset-0 z-30 bg-black/50 lg:hidden"></div>

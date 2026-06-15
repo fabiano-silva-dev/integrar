@@ -36,9 +36,13 @@ trait BelongsToOperadora
 
             $operadoraId = static::resolveOperadoraIdFromAttributes($model->getAttributes());
 
-            if ($operadoraId !== null) {
-                $model->empresa_operadora_id = $operadoraId;
+            if ($operadoraId === null) {
+                throw new RuntimeException(
+                    static::class . ': não foi possível determinar empresa_operadora_id.'
+                );
             }
+
+            $model->empresa_operadora_id = $operadoraId;
         });
     }
 

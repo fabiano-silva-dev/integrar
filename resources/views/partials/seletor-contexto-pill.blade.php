@@ -18,9 +18,19 @@
         </div>
     @endif
 
-    <div class="inline-flex items-center gap-2.5 rounded-full bg-gray-100 border border-gray-200 pl-3 pr-1 py-1.5 min-w-0 flex-1 sm:flex-initial max-w-full">
+    <div id="seletor-empresa-cabecalho"
+         x-data="{ destacado: false }"
+         @destacar-seletor-empresa.window="
+            destacado = true;
+            $el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            $refs.selectEmpresa?.focus({ preventScroll: true });
+            setTimeout(() => destacado = false, 4500);
+         "
+         :class="destacado ? 'ring-4 ring-indigo-500 ring-offset-2 border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-200/60 seletor-empresa-destaque' : ''"
+         class="inline-flex items-center gap-2.5 rounded-full bg-gray-100 border border-gray-200 pl-3 pr-1 py-1.5 min-w-0 flex-1 sm:flex-initial max-w-full transition-all duration-300">
         <x-menu-icon name="building" class="w-5 h-5 shrink-0 text-indigo-600" />
         <select
+            x-ref="selectEmpresa"
             onchange="if(this.value){window.location.href='{{ route('trocar-empresa', ['id' => '__ID__']) }}'.replace('__ID__', this.value)+'?redirect='+encodeURIComponent(window.location.href);}"
             class="border-0 bg-transparent text-base font-medium text-gray-800 focus:ring-0 py-1 pr-8 min-w-[10rem] max-w-[22rem] truncate cursor-pointer w-full sm:w-auto"
             title="{{ $empresaAtual ? ($empresaAtual->codigo_sistema ?? '—') . ' - ' . $empresaAtual->nome . ' - ' . $empresaAtual->cnpj : 'Selecione a empresa' }}"
