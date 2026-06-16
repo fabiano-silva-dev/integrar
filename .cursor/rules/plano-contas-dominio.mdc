@@ -1,0 +1,72 @@
+---
+description: Plano de contas Domínio — código vs classificação, importação PDF e validações
+globs: app/Services/Importacao/*PlanoContas*,app/Livewire/*PlanoContas*,app/Models/PlanoConta.php
+alwaysApply: false
+---
+
+# Plano de contas — Domínio
+
+## Colunas do relatório PDF (cabeçalho padrão)
+
+`Código` · `T` · `Classificação` · `Nome` · `Grau`
+
+| Coluna Domínio | Campo no Integrar | Papel |
+|----------------|-------------------|--------|
+| **Código** | `codigo` | Identificador único da conta; é o que vale em pesquisas e amarrações |
+| **T** (`S`) | `tipo` | Sintética quando `S` |
+| **Classificação** | `classificacao` | Hierarquia visual (ativo, passivo, etc.); **pode repetir** em várias contas analíticas |
+| **Nome** | `descricao` | Nome da conta |
+| **Grau** | `nivel` | Nível na árvore |
+
+## Regras de negócio
+
+1. **Unicidade:** validar duplicidade somente em `codigo`, nunca em `classificacao`.
+2. **Pesquisa:** se o usuário informar número, buscar em `codigo` (e `codigo_reduzido`); classificação é auxiliar para visualização.
+3. **Hierarquia:** `codigo_pai` resolve pelo mapa `classificacao → codigo` da conta-pai (segmento anterior da classificação), não pela classificação como chave primária.
+4. **Importação PDF:** usar `ExtratorPlanoContasPdfService` (`pdftotext -layout`); layout `dominio_nativo`.
+5. **Sinônimos de mapeamento:** `classificacao` **não** entra nos sinônimos de `codigo` em `ImportadorPlanoContasService::SINONIMOS`.
+
+## Listagem (`gerenciador-plano-contas`)
+
+Colunas na ordem do relatório Domínio, com **Status** e **Ações** ao final (específicos do Integrar):
+
+| Coluna | Campo | Observação |
+|--------|-------|------------|
+| Código | `codigo` | Identificador; busca numérica nesta coluna |
+| T | `tipo` | `S` quando sintética; vazio quando analítica |
+| Classificação | `classificacao` | Hierarquia; ordenação principal |
+| Nome | `descricao` | Indentação e negrito por grau/tipo (sintética em maiúsculas) |
+| Grau | `nivel` | Alinhado à direita |
+
+Ordenação: `classificacao` (fallback `codigo`), depois `descricao` (nome), depois `codigo`.
+
+### Filtro por classificação
+
+- Dropdown **Classificação** lista apenas contas **sintéticas** com `classificacao` preenchida.
+- Ao selecionar `X`, exibir a sintética e todas as filhas: `classificacao = X` ou `classificacao LIKE 'X.%'`.
+- Opções indentadas pelo grau; rótulo `classificacao — nome`.
+- Persistir em `queryString` (`filtroClassificacao`); incluir em **Limpar filtros**.
+
+## Importação (`importador-plano-contas`)
+
+Wizard alinhado a `importador-avancado.blade.php` (ver `frontend-vite-livewire.mdc` e `ux-fluxos-guiados.mdc`):
+
+| Passo | Conteúdo |
+|-------|----------|
+| 1 | Só upload (`<x-zona-upload>`) |
+| 2 | Estratégia + delimitador/cabeçalho (planilha) |
+| 3 | Mapeamento de colunas (planilha) |
+| 4 | Prévia e confirmação |
+
+- **PDF Domínio:** após o passo 2, gerar prévia automaticamente e **pular** o passo 3 (colunas já definidas pelo extrator).
+- Labels de mapeamento em `ImportadorPlanoContasService::CAMPOS`: **Código**, **Classificação**, **Nome**, **Grau** (não “Descrição” / “Nível” na UI).
+- Prévia: colunas Código, Classificação, Nome.
+
+## Modal de cadastro/edição
+
+Usar labels Domínio: **Código**, **Classificação**, **Nome**, **Grau**, **T (sintética)**. Campos técnicos extras (reduzido, natureza, código pai) podem permanecer no formulário.
+
+## Referências
+
+- Fixture de teste: `docs/plano-contas-dominio.pdf`
+- PDF escaneado (`docs/PLANO DE CONTAS - domínio.pdf`): sem texto extraível; OCR não implementado

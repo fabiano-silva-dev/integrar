@@ -1,0 +1,76 @@
+---
+description: Regras principais do IntegraExpert (Laravel 12 + Livewire 3 + multi-tenant)
+alwaysApply: true
+---
+
+# IntegraExpert — Regras Principais
+
+## Stack e compatibilidade
+- Laravel `^12`, PHP `^8.2`, Livewire `^3.6`.
+- Preferir padrão já usado no projeto antes de introduzir biblioteca ou abstração nova.
+- Evitar recursos de versões mais novas do framework se o projeto ainda não os utiliza.
+
+## Ambiente
+
+- **Desenvolvimento:** Docker Compose — ver `ambiente-dev-producao.mdc`.
+- **Produção:** instalação **nativa** (Apache + PHP-FPM + MySQL + systemd, sem Docker para a app) — ver `ambiente-dev-producao.mdc`.
+- **Deploy pós `git pull`:** `./atualizar-producao.sh` — ver `deploy-producao.mdc`.
+- Comandos Artisan **neste workspace de dev**: `docker compose exec app php artisan ...`
+- Livewire 3: **não** usar `livewire:discover` (removido); descoberta de pacotes via `composer install` → `package:discover`.
+
+## Estrutura oficial (onde criar cada coisa)
+- `app/Livewire/`: telas e fluxos interativos (importadores, gerenciadores, exportadores).
+- `app/Http/Controllers/`: controllers HTTP e API (ex.: exportação contábil).
+- `app/Http/Controllers/Traits/`: traits compartilhados (menu, etc.).
+- `app/Http/Middleware/`: middleware HTTP (`SetOperadoraContext`, etc.).
+- `app/Models/`: models Eloquent.
+- `app/Models/Concerns/`: traits de model (`BelongsToOperadora`).
+- `app/Services/`: regras de negócio reutilizáveis (`OperadoraContext`, `OperadoraStorage`, conversores).
+- `app/Rules/`: regras de validação customizadas (`EmpresaDoEscritorio`, `CnpjValido`, etc.).
+- `app/Console/Commands/`: comandos Artisan.
+- `routes/web.php`: rotas web e Livewire full-page.
+- `resources/views/livewire/`: views Blade dos componentes Livewire.
+- `resources/views/components/`: componentes Blade reutilizáveis.
+- `resources/js/` e `resources/css/`: fontes frontend (Vite).
+- `public/build/`: assets compilados pelo Vite (**não editar como fonte**).
+- `scripts/`: conversores Python (PDF/OFX/CSV por banco).
+- `database/migrations/`: migrações com timestamp real.
+- `tests/Feature/` e `tests/Unit/`: testes automatizados.
+
+## Convenções práticas
+- Nova tela administrativa: componente Livewire em `app/Livewire/` + view em `resources/views/livewire/`.
+- Nova rota de página: registrar em `routes/web.php` apontando para classe Livewire ou controller.
+- Nova validação de formulário: `app/Rules/` ou `$rules` no componente Livewire.
+- Nova tabela/campo: migration em `database/migrations/` com timestamp real (`YYYY_MM_DD_HHMMSS_descricao.php`).
+- Novo conversor de extrato: script em `scripts/` + registro no importador avançado / conversor PDF-OFX.
+- Empresa em formulários: usar regra `EmpresaDoEscritorio`, **não** `exists:empresas,id` isolado.
+- Arquivos por escritório: usar `OperadoraStorage` (uploads, exports, temp) — nunca gravar só em `storage/app/temp` na raiz.
+- **Plano de contas:** ver `plano-contas-dominio.mdc` — `GerenciadorPlanoContas`, `ImportadorPlanoContas`, services em `app/Services/Importacao/*PlanoContas*`.
+- **Regras de amarração:** ver `regras-amarracao.mdc` — export/import tabular, menu e validações.
+
+## Menu principal (`MenuTrait.php`)
+
+- **Cadastros:** inclui Plano de Contas (`/plano-contas`).
+- **Regras de Amarração:** grupo com **Descrições** (`/regras-amarracao`) e **Terceiros** (`/terceiros`) — Terceiros **não** ficam em Cadastros.
+
+## Backend
+- Controllers e Livewire enxutos; lógica reutilizável em `app/Services/`.
+- Preferir Eloquent; Query Builder para consultas complexas ou relatórios pesados.
+- Em fluxos com várias gravações relacionadas, usar `DB::transaction()`.
+- Importações em lote: ver regra `multi-tenant.mdc` (`insertMany`, nunca `Model::insert()` direto em models com `BelongsToOperadora`).
+
+## Migrações
+- Nome: `YYYY_MM_DD_HHMMSS_descricao_clara.php`
+- Após migration que adiciona coluna NOT NULL: revisar **todos** os caminhos de insert (Eloquent **e** bulk insert).
+
+## Qualidade das mudanças
+- Alterações mínimas e focadas no pedido — ver `qualidade-mudancas.mdc`.
+- Escopo restrito a este repositório — ver `escopo-repositorio.mdc`.
+- Multi-tenant: ver `multi-tenant.mdc`.
+- Frontend: ver `frontend-vite-livewire.mdc`.
+- Fluxos guiados (importação): ver `ux-fluxos-guiados.mdc`.
+- Plano de contas Domínio: ver `plano-contas-dominio.mdc`.
+- Regras de amarração: ver `regras-amarracao.mdc`.
+- Ambiente dev/produção: ver `ambiente-dev-producao.mdc`.
+- Deploy produção (pós-pull): ver `deploy-producao.mdc`.
+- Build de assets (Vite): ver `assets-build-vite.mdc`.

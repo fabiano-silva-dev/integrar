@@ -1,0 +1,67 @@
+---
+description: Multi-tenant por escritório (empresa_operadora_id) — obrigatório em gravações e consultas
+alwaysApply: true
+---
+
+# Multi-tenant (escritório / operadora)
+
+## Contexto
+
+O IntegraExpert isola dados por **escritório contábil** (`empresas_operadoras`). Entidades de negócio usam o trait `BelongsToOperadora` e a coluna `empresa_operadora_id` (NOT NULL após migration `2026_06_13_000001`).
+
+Documentação de referência: `docs/FASE1_MULTI_TENANT_IMPLEMENTADO.md`.
+
+## Models com BelongsToOperadora
+
+`Empresa`, `Importacao`, `Lancamento`, `Terceiro`, `Amarracao`, `RegraAmarracaoDescricao`, `LayoutImportacao`, `HistoricoPadraoLayout`, `ConversaoExtrato`, `PlanoConta`, `ImportacaoPlanoConta`.
+
+O model `User` **não** usa o trait (evita recursão com Auth); usa `scopeDoEscritorio()` e hook `creating` próprio.
+
+## Preenchimento automático (Eloquent create/save)
+
+O trait preenche `empresa_operadora_id` no evento `creating`, nesta ordem:
+
+1. Valor já informado no array/atributos
+2. `OperadoraContext::id()` (usuário logado ou sessão `operadora_context_id`)
+3. `empresa_id` → busca operadora da empresa
+4. `importacao_id` → busca operadora da importação
+
+## Insert em lote — regra crítica
+
+`Model::insert()` e `DB::table()->insert()` **ignoram** eventos Eloquent.
+
+- **Proibido:** `Lancamento::insert($rows)` (e equivalente em outros models com trait).
+- **Obrigatório:** `Lancamento::insertMany($rows)` (método do trait), que enriquece cada linha com `empresa_operadora_id` antes do insert.
+
+Ao montar arrays para batch insert, incluir sempre `empresa_id` e/ou `importacao_id` para resolução da operadora.
+
+## Papel `super_admin`
+
+- `role = 'super_admin'`; `empresa_operadora_id` **null** (acesso global a escritórios).
+- Seletor de escritório no header (`partials` / `topbar`); contexto em `session('operadora_context_id')`.
+- Telas administrativas (`GerenciadorUsuarios`, `/empresas-operadoras`, itens do menu com `roles: ['super_admin']`): **permitir** `super_admin` — não restringir só a `admin`/`gerente`.
+- Sem escritório selecionado: `OperadoraContext::superAdminPrecisaSelecionarEscritorio()` — bloquear **cadastros** que exigem tenant; listagens globais podem funcionar.
+- Usuários comuns (`admin`, `gerente`, `operador`): sempre vinculados a um escritório via `empresa_operadora_id`.
+
+## Consultas e validação
+
+- Queries Eloquent nos models com trait já filtram por `OperadoraContext` (global scope `operadora`).
+- Validar empresa em formulários: `new EmpresaDoEscritorio()` — **não** `exists:empresas,id` sozinho.
+- Validar CNPJ/CPF: regras em `app/Rules/` (`CnpjValido`, `CpfValido`, `CnpjOuCpfValido`).
+- Resolver empresa em fluxos críticos: `OperadoraContext::resolveEmpresa($empresaId)`.
+- Arquivos e downloads: `OperadoraStorage` (paths `{operadora_id}/exports`, `{operadora_id}/temp`).
+
+## Usuários iniciais via migration
+
+- Padrão do projeto: migration idempotente (ver `2025_07_22_000002_create_admin_user.php`).
+- Se e-mail já existe → `update` (role, senha com `Hash::make()`); senão → `insert`.
+- `super_admin` em migration: `empresa_operadora_id` null.
+- Senha em migration fica no histórico do repositório — orientar troca após deploy em produção.
+
+## Checklist ao implementar gravação
+
+- [ ] Model usa `BelongsToOperadora`?
+- [ ] Se usa `insert()` em lote → trocar por `insertMany()`?
+- [ ] Se usa `create()` → `empresa_id` ou contexto de operadora está disponível?
+- [ ] Super admin consegue operar só com escritório selecionado na sessão?
+- [ ] Teste de isolamento em `tests/Feature/TenantIsolationTest.php` ou teste específico do fluxo?

@@ -1,0 +1,74 @@
+---
+description: Desenvolvimento em Docker; produção nativa (Apache + PHP-FPM + MySQL, sem containers)
+alwaysApply: true
+---
+
+# Ambiente — desenvolvimento vs produção
+
+## Dois ambientes distintos
+
+| | **Desenvolvimento** | **Produção (nativo)** |
+|---|---------------------|------------------------|
+| Infra | **Docker Compose** (`docker-compose.yml`) | **Instalação nativa** no servidor (sem Docker para a app) |
+| Web | Container `app` | **Apache** + **PHP-FPM** |
+| Banco | MySQL no container | **MySQL nativo** no SO |
+| Fila / cron | Opcional no dev | **systemd** (queue worker + scheduler Laravel) |
+| Deploy | Código montado no container | Diretório no servidor (ex.: `/home/.../integrar`) |
+
+Em produção o termo correto é **instalação nativa** (ou **bare metal**): PHP, Apache e MySQL instalados diretamente no Ubuntu/Debian, não via `docker compose up` para servir a aplicação.
+
+## Comandos — desenvolvimento (Docker)
+
+Usar **sempre** o container `app` neste workspace local:
+
+```bash
+docker compose exec app php artisan ...
+docker compose exec app composer ...
+docker compose exec app php artisan test ...
+```
+
+- Scripts Python de conversão: rodam **dentro** do container, em `/var/www/html/scripts/`.
+- `npm run dev` / `npm run build`: pode ser no host ou no container, conforme o fluxo local; após mudar assets, garantir build antes de testar em produção.
+
+## Comandos — produção (nativo)
+
+**Não** prefixar com `docker compose` no servidor de produção.
+
+**Deploy pós `git pull` (padrão):**
+
+```bash
+cd /caminho/do/projeto
+git pull
+./atualizar-producao.sh
+```
+
+Ver regra **`deploy-producao.mdc`** (split `fabiano`/`www-data`, permissões, Node.js, erros comuns).
+
+Comandos manuais pontuais (quando necessário):
+
+```bash
+sudo -u www-data php artisan migrate:status
+python3 scripts/conversor_xxx.py ...
+```
+
+- Instalação inicial / migração Docker → nativo: `script-manutencao/instalar-nativo-producao.sh` (atalho na raiz).
+- Diagnóstico pré-migração: `script-manutencao/diagnostico_migracao_nativa.sh`.
+- O instalador nativo pode criar symlink `/var/www/html` → diretório de deploy (compatibilidade com paths hardcoded dos conversores Python).
+
+## Regras para o agente
+
+1. **Assumir Docker** ao sugerir comandos neste workspace de desenvolvimento (`docker compose exec app ...`).
+2. **Não** orientar `docker compose` como forma de operar **produção** — lá a app roda nativa.
+3. **Não** hardcodar dependências exclusivas de Docker em código de negócio; paths como `/var/www/html/scripts/` existem também em produção via symlink ou DocumentRoot Apache.
+4. Scripts de manutenção de **servidor** (`script-manutencao/*`, atalhos na raiz) rodam no **host** Linux; `sudo` só quando o script pedir — não dentro do container.
+5. Em produção, `composer`/`npm` rodam como **dono do projeto**; `artisan` como **`www-data`** — ver `deploy-producao.mdc`.
+6. Ao documentar deploy ou troubleshooting de produção, mencionar Apache, PHP-FPM, MySQL nativo e systemd — não containers.
+7. Testes automatizados PHP: executar via Docker no dev (`docker compose exec app php artisan test`).
+
+## Referências no repositório
+
+- `README.md` — seção "Instalação nativa em produção (sem Docker)"
+- `atualizar-producao.sh` — atualização pós `git pull` (composer, npm, migrate, cache)
+- `script-manutencao/instalar-nativo-producao.sh` — migração automatizada Docker → nativo
+- `script-manutencao/diagnostico_migracao_nativa.sh` — relatório read-only antes da migração
+- `tests/scripts/test_instalar_nativo_producao.sh` — testes do script de instalação

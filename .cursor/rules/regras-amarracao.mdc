@@ -1,0 +1,65 @@
+---
+description: Regras de amarração — menu, exportação/importação tabular e validações
+globs: app/Livewire/*RegrasAmarracao*,app/Livewire/*Terceiros*,app/Services/Importacao/*RegrasAmarracao*
+alwaysApply: false
+---
+
+# Regras de amarração
+
+## Menu (`MenuTrait.php`)
+
+Grupo **Regras de Amarração** (ícone `link`):
+
+| Item | Rota | Função |
+|------|------|--------|
+| Descrições | `/regras-amarracao` | Regras por palavra-chave / descrição do extrato |
+| Terceiros | `/terceiros` | Cadastro de terceiros (não fica em Cadastros) |
+
+## Componentes principais
+
+| Peça | Caminho |
+|------|---------|
+| Gerenciador | `GerenciadorRegrasAmarracao` |
+| Importador | `ImportadorRegrasAmarracao` |
+| Exportação/cópia | `ExportadorRegrasAmarracaoService` |
+| Importação | `ImportadorRegrasAmarracaoService` |
+| Validação de linha | `ValidadorRegraAmarracaoService` |
+
+Rotas: `regras-amarracao`, `regras-amarracao.importar` em `routes/web.php`.
+
+## Exportação e cópia
+
+- Formatos: CSV e XLSX; modelo para download.
+- Estratégias: adicionar/atualizar, somente adicionar, substituir por layout, validar apenas.
+- **Cópia entre empresas** do mesmo escritório via `ExportadorRegrasAmarracaoService`.
+- Botões no `GerenciadorRegrasAmarracao` (exportar, modelo, copiar).
+
+## Importação tabular
+
+Wizard com prévia obrigatória antes de gravar:
+
+1. Arquivo (CSV/XLS/XLSX) — **somente upload** no primeiro passo.
+2. Estratégia, layout padrão opcional, delimitador e cabeçalho (após arquivo selecionado).
+3. Mapeamento de colunas.
+4. Prévia e confirmação.
+
+- Ao refatorar UI: alinhar layout a `importador-avancado.blade.php` (ver `frontend-vite-livewire.mdc`).
+- Empresa: `session('empresa_selecionada_id')` + `OperadoraContext::resolveEmpresa()`.
+
+## Validação `conta_contrapartida`
+
+- Se a empresa tem plano de contas ativo, `ValidadorRegraAmarracaoService` verifica se `conta_contrapartida` existe em `PlanoConta.codigo`.
+- Resultado: **aviso** na prévia, não bloqueio da importação.
+- Pesquisa de conta no Domínio é pelo **código**, não pela classificação — ver `plano-contas-dominio.mdc`.
+
+## Multi-tenant
+
+- `RegraAmarracaoDescricao` e `Terceiro` usam `BelongsToOperadora`.
+- Regras e importações são por `empresa_id` dentro do escritório.
+- Validar empresa com `EmpresaDoEscritorio`.
+
+## Testes
+
+- `tests/Feature/TenantRegrasAmarracaoExportTest.php`
+- `tests/Feature/TenantRegrasAmarracaoImportTest.php`
+- Isolamento geral: `tests/Feature/TenantIsolationTest.php`

@@ -1,0 +1,160 @@
+---
+description: Regras de UX para fluxos guiados, importações, conferências e exportações no IntegraExpert.
+globs:
+  - "app/Livewire/**/*.php"
+  - "app/Http/Controllers/**/*.php"
+  - "resources/views/**/*.blade.php"
+  - "resources/js/**/*.js"
+alwaysApply: false
+---
+
+# UX — Fluxos guiados no IntegraExpert
+
+O IntegraExpert possui rotinas operacionais críticas, principalmente nos fluxos de importação, amarração, conferência e exportação.
+
+Sempre que implementar ou alterar telas com múltiplas etapas, seguir estas regras:
+
+## 1. Fluxos devem ser conduzidos por etapas
+
+Rotinas como importação de arquivos, mapeamento de colunas, validação, prévia, confirmação e exportação devem funcionar como um passo a passo.
+
+Exemplo de fluxo recomendado:
+
+1. Selecionar empresa
+2. Selecionar layout/banco/origem
+3. Enviar arquivo
+4. Processar/validar leitura
+5. Exibir prévia
+6. Aplicar regras de amarração
+7. Confirmar importação
+8. Enviar para conferência
+9. Exportar
+
+Não permitir que o usuário execute uma etapa futura sem que as etapas anteriores estejam válidas.
+
+## 2. Não exibir ações fora de contexto
+
+Evitar mostrar botões, inputs ou ações que ainda não fazem sentido para a etapa atual.
+
+Exemplos:
+
+- Não mostrar "Confirmar importação" antes de o arquivo ser lido e validado.
+- Não mostrar campos de mapeamento antes de haver arquivo carregado.
+- Não liberar "Exportar" antes de existir importação confirmada/conferida.
+- Não liberar "Reprocessar regras" antes de haver lançamentos importados.
+
+## 3. Quando necessário, mostrar ações futuras desabilitadas
+
+Se for importante mostrar ao usuário as próximas etapas, elas podem aparecer desabilitadas, desde que tenham uma explicação clara.
+
+Exemplo:
+
+- Botão desabilitado: "Confirmar importação"
+- Texto auxiliar: "Envie e valide o arquivo antes de confirmar."
+
+Nunca deixar botão ativo para depois exibir erro previsível.
+
+## 4. Cada etapa deve ter estado claro
+
+Todo fluxo com etapas deve indicar claramente:
+
+- etapa atual;
+- etapas concluídas;
+- próximas etapas;
+- pendências ou erros;
+- ação principal esperada do usuário.
+
+A tela deve conduzir o usuário, não apenas expor opções soltas.
+
+## 5. Ação principal única por etapa
+
+Cada etapa deve ter uma ação principal clara.
+
+Exemplo:
+
+- Etapa de upload: "Enviar arquivo"
+- Etapa de prévia: "Confirmar importação"
+- Etapa final: "Ir para conferência"
+
+Evitar múltiplos botões principais concorrendo visualmente.
+
+## 6. Validar no backend, não apenas na interface
+
+Mesmo que botões estejam ocultos ou desabilitados no frontend, a regra de etapa deve ser validada no backend.
+
+Exemplos:
+
+- Não confirmar importação sem arquivo processado.
+- Não trocar empresa para uma empresa fora da operadora do usuário.
+- Não exportar lançamentos que não pertencem à empresa/operadora atual.
+- Não permitir ações por URL, request manual ou manipulação do navegador.
+
+## 7. Evitar fluxos que permitam erro operacional
+
+Em rotinas contábeis, o sistema deve reduzir chances de erro.
+
+Evitar:
+
+- botões de exclusão muito próximos da ação principal;
+- ações destrutivas sem confirmação;
+- importação duplicada sem alerta;
+- mudança de empresa no meio do fluxo sem avisar;
+- inputs livres antes do sistema ter contexto suficiente.
+
+## 8. Preferir resumo antes da confirmação final
+
+Antes de gravar importações ou gerar exportações, exibir um resumo.
+
+Exemplo:
+
+- empresa selecionada;
+- layout/banco;
+- arquivo importado;
+- quantidade de lançamentos;
+- total de entradas;
+- total de saídas;
+- quantidade de lançamentos sem regra;
+- alertas encontrados.
+
+A confirmação final deve ser consciente.
+
+## 9. Linguagem da interface
+
+Usar textos simples, objetivos e orientados à ação.
+
+Preferir:
+
+- "Envie o arquivo para continuar"
+- "Valide os dados antes de confirmar"
+- "Confira os lançamentos antes de exportar"
+
+Evitar mensagens genéricas como:
+
+- "Erro"
+- "Inválido"
+- "Ação não permitida"
+
+## 10. Princípio geral
+
+Em fluxos operacionais do IntegraExpert, uma etapa deve liberar a próxima.
+
+A interface deve refletir o fluxo principal do produto:
+
+Importar → Amarrar → Conferir → Exportar
+
+## 11. Referência visual — importadores
+
+O padrão de layout está em `importador-avancado.blade.php` (`max-w-2xl`, barras indigo, `<x-zona-upload>`, botões `h-14 rounded-xl`). Replicar em novos wizards de importação.
+
+### Plano de contas (`importador-plano-contas`)
+
+1. Envie o arquivo (somente upload).
+2. Configure a importação (estratégia; delimitador só para planilha).
+3. Mapeie as colunas (somente planilha).
+4. Confirme a importação (prévia).
+
+**PDF Domínio:** omitir o passo 3 — colunas fixas pelo `ExtratorPlanoContasPdfService`; ir direto à prévia após processar no passo 2.
+
+### Regras de amarração (`importador-regras-amarracao`)
+
+Mesma lógica de **arquivo primeiro**; ao refatorar a UI, alinhar ao layout do importador de extratos (ver `regras-amarracao.mdc`).

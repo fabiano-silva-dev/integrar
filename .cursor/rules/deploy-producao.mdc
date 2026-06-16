@@ -1,0 +1,72 @@
+---
+description: Deploy pós git pull em produção nativa — atualizar-producao.sh, usuários e permissões
+alwaysApply: true
+---
+
+# Deploy em produção (pós git pull)
+
+## Comando padrão
+
+```bash
+git pull
+./atualizar-producao.sh
+```
+
+- Atalho na raiz → `script-manutencao/atualizar-producao.sh`
+- `--docker` **somente** em desenvolvimento com containers
+- Detalhes e opções: `script-manutencao/README.md`
+
+## Dois usuários no servidor nativo
+
+| Etapa | Usuário | Exemplos |
+|-------|---------|----------|
+| Deploy | dono do projeto (`fabiano`, quem fez `git pull`) | `composer install`, `npm ci`, `npm run build` |
+| Runtime | `www-data` (PHP-FPM) | `php artisan migrate`, `optimize`, filas |
+
+**Não** rodar `composer` nem `npm` como `www-data` — `vendor/` e `node_modules/` pertencem ao deploy user.
+
+## Permissões (antes de composer e npm)
+
+Ajustar **no início** do script e ao final:
+
+- `storage/`, `bootstrap/cache/`, `public/build/`
+- Dono: deploy user; grupo: `www-data`
+- Modo: `ug+rwX` (+ `g+s` em diretórios de `storage/` e `bootstrap/cache/`)
+
+Recomendado no servidor: `sudo usermod -aG www-data <deploy>` (logout/login após).
+
+**Erro típico:** `chown` só para `www-data` → próximo `composer` ou `vite build` falha com *Permission denied*.
+
+## Node.js em produção
+
+- **Node.js 20+** instalado no servidor quando houver mudanças em `resources/js`, `resources/css`, Tailwind ou Vue
+- Instalação (referência): NodeSource setup 20.x + `apt-get install nodejs`
+- Sem npm: usar `--skip-npm` **só** se `public/build/manifest.json` já estiver atualizado — avisar que assets **não** foram recompilados
+
+## O que o script executa (nativo)
+
+1. Permissões (`fix_deploy_permissions`)
+2. `composer install` (inclui `package:discover` — **não** existe `livewire:discover` no Livewire 3)
+3. `npm ci && npm run build` (se `package.json` existir)
+4. `php artisan migrate --force`
+5. `optimize:clear` + `optimize` (produção)
+6. Permissões finais + reload PHP-FPM / systemd (`integrar-queue`, `integrar-schedule`)
+
+Opções úteis: `--skip-npm`, `--skip-migrate`, `--skip-composer`, `--skip-cache`, `--app-user`
+
+## Erros comuns e diagnóstico
+
+| Sintoma | Causa provável | Ação |
+|---------|----------------|------|
+| Permission denied em `vendor/` ou `laravel.log` | `storage/`/`bootstrap/cache/` só de `www-data` | `chown -R deploy:www-data storage bootstrap/cache` |
+| EACCES em `public/build/assets` | build antigo de outro usuário | `chown -R deploy:www-data public/build` |
+| Layout quebrado (sidebar sobreposta, sem Tailwind) | assets não compilados ou `public/build/` desatualizado | instalar Node + `./atualizar-producao.sh` ou `npm run build` |
+| `livewire:discover` não encontrado | comando obsoleto (Livewire 3) | remover do script; usar `composer install` |
+| `npm: comando não encontrado` | Node não instalado | instalar Node 20+ ou `--skip-npm` temporário |
+
+## Regras para o agente
+
+1. Em produção nativa, orientar `./atualizar-producao.sh` — **não** `docker compose`.
+2. Ao alterar `script-manutencao/atualizar-producao.sh`, manter split deploy/runtime e permissões em `public/build/`.
+3. Não adicionar `livewire:discover` em scripts de deploy.
+4. Migrations no deploy aplicam schema + dados embutidos nas migrations; **não** substituem `importar-backup.sh`.

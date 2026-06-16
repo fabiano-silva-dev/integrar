@@ -1,0 +1,52 @@
+---
+description: Proíbe criar, editar ou excluir arquivos fora do workspace/repositório aberto no Cursor
+alwaysApply: true
+---
+
+# Escopo — somente este repositório
+
+## Objetivo
+
+Evitar que o agente **crie, altere ou apague** qualquer coisa em **outros repositórios** (pastas irmãs, projetos no mesmo servidor, libs compartilhadas fora do workspace, etc.).
+
+## Regra obrigatória
+
+- **Permitido** criar, editar ou excluir arquivos **somente** dentro da raiz do workspace aberto no Cursor (este projeto: `integrar`).
+- A raiz válida é o diretório onde o Cursor abriu a pasta do projeto — normalmente a raiz do Git em uso (`Workspace Path` / pasta com `.git` deste repo).
+- **Criar arquivo novo** (`Write`, `touch`, `mkdir`, redirecionamento `>`) só é permitido com destino **dentro** dessa raiz.
+
+## Proibido
+
+- **Criar** arquivos ou pastas em outro repositório (scripts, `.md`, testes, configs, patches, etc.).
+- Usar `Write`, `StrReplace`, `Delete`, `EditNotebook` ou comandos de shell que **criem ou modifiquem** arquivos fora do workspace.
+- Caminhos absolutos em outro repositório, por exemplo:
+  - `/ico/fabiano/ft/<outro-projeto>/...`
+  - `../eficere-pdv/...` ou `../sac/...` (quando resolve para fora do workspace)
+- Editar via symlink que aponte para fora do workspace.
+- Rodar `git commit`, `git push` ou scripts de deploy no diretório de outro projeto.
+
+## Leitura vs escrita
+
+- **Leitura** de arquivo externo só para entender integração ou copiar padrão — **sem criar nem gravar** lá.
+- Se o usuário pedir arquivo ou mudança em outro repo, **não criar nem salvar** no caminho externo: descrever conteúdo/patch na resposta e pedir que abra aquele repositório em outra janela/workspace do Cursor.
+
+## Verificação antes de cada alteração
+
+1. O caminho do arquivo (novo ou existente) está **dentro** da raiz do workspace atual?
+2. Operação é **criação**? Se o destino não for deste repo → **cancelar** e responder só com o conteúdo sugerido.
+3. Se o usuário colou caminho absoluto de outro projeto → **somente leitura** ou texto na resposta; nunca `Write`/`mkdir`/`cp` lá.
+4. Em dúvida, preferir caminho **relativo** à raiz do projeto (ex.: `app/Livewire/ImportadorAvancado.php`).
+
+## Exemplos
+
+```
+❌ Write em /ico/fabiano/ft/eficere-pdv/app/Services/NovoService.php
+❌ StrReplace em /ico/fabiano/ft/sac/.cursorrules
+✅ Write em app/Services/NovoService.php
+✅ StrReplace em app/Livewire/ImportadorAvancado.php
+✅ "No eficere-pdv, crie docs/novo-doc.md com este conteúdo: ..." (sem ferramentas de escrita no outro repo)
+```
+
+## Exceção
+
+Só **criar ou editar** fora do workspace se o usuário **pedir explicitamente** aquele caminho externo **e** confirmar que deseja alteração fora deste repositório. Mesmo assim, avisar o risco e registrar qual repo foi tocado.

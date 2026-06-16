@@ -1,0 +1,42 @@
+---
+description: Escopo mínimo, foco no pedido e qualidade das alterações
+alwaysApply: true
+---
+
+# Qualidade e foco das mudanças
+
+## Escopo mínimo
+
+- Implementar **somente** o que o usuário pediu; não expandir escopo por iniciativa própria.
+- **Não** criar funções, classes, arquivos ou abstrações sem uso imediato na tarefa.
+- Se a documentação menciona várias opções, implementar **apenas** o solicitado.
+- Quando pedirem alterar uma função/componente específico, alterar **só** esse ponto — não refatorar módulos adjacentes.
+- Em dúvida sobre escopo, perguntar antes de implementar funcionalidades extras.
+
+## Refatoração e estilo
+
+- Evitar refactors amplos sem necessidade direta da tarefa.
+- Seguir naming, imports e organização já adotados no arquivo e no módulo vizinho.
+- Reutilizar services, rules e traits existentes em vez de duplicar lógica.
+- Comentários só para regra de negócio não óbvia — o código deve ser autoexplicativo na maior parte.
+- **Não** criar arquivos de documentação (`*.md`) a menos que o usuário peça explicitamente.
+
+## Testes
+
+- Adicionar teste quando a mudança corrigir bug de regressão conhecido (ex.: multi-tenant, importação em lote).
+- Não adicionar testes triviais que só repetem o framework.
+- Testes que dependem de MySQL real: classe de teste com `Tenant` no nome (ver `tests/TestCase.php`).
+
+## Commits (quando o usuário pedir)
+
+- Mensagem em **português**, verbo no presente (`Adiciona`, `Corrige`, `Refatora`).
+- Foco no **porquê**, não listar cada arquivo alterado.
+- **Não** commitar sem pedido explícito do usuário.
+- **Não** incluir `Co-authored-by` de ferramenta/IA no corpo do commit.
+
+## Resposta ao usuário
+
+- Responder em **português**.
+- Após alterar script Python, informar o comando exato para executá-lo.
+- Comandos Artisan no **dev** (Docker): `docker compose exec app php artisan ...` — ver `ambiente-dev-producao.mdc`.
+- Após alterar **assets frontend** (`resources/js`, `resources/css`, Vue, Tailwind config ou classes Tailwind novas no Blade): **executar** `docker compose exec app npm run build` — ver `assets-build-vite.mdc` (não só avisar).

@@ -1,0 +1,59 @@
+---
+description: Frontend com Livewire, Blade, Tailwind e Vite — evitar JS/CSS inline desnecessário
+alwaysApply: true
+---
+
+# Frontend (Livewire + Vite + Tailwind)
+
+## Stack
+
+- **Livewire 3** para interatividade das telas principais.
+- **Blade** para markup; **Tailwind CSS** em `resources/css/app.css`.
+- **Vite** compila `resources/js/app.js` e `resources/css/app.css` → `public/build/`.
+- **Alpine.js** / **Vue** pontuais (ex.: exportador contábil) — seguir padrão já existente no módulo.
+
+## Build de assets — leia sempre
+
+**Quando recompilar (ou não) e comando exato:** ver regra **`assets-build-vite.mdc`**.
+
+Resumo: equivalente ao **gulp** do legado = **`docker compose exec app npm run build`**. Só após mudar `resources/js`, `resources/css`, Vue ou classes Tailwind novas. Mudança só em PHP/Livewire → F5, sem build.
+
+## Regras
+
+- Preferir lógica no componente Livewire (`app/Livewire/`) em vez de JavaScript customizado quando couber.
+- Evitar blocos grandes de `<script>` ou `<style>` em Blade; exceção: trecho mínimo exigido por biblioteca ou wire:init pontual.
+- Estilos novos: classes Tailwind na view; CSS customizado em `resources/css/app.css`.
+- JavaScript novo reutilizável: `resources/js/` (registrar em `app.js` se necessário).
+- Views Livewire: `resources/views/livewire/<nome-componente>.blade.php`.
+
+## Assets — fonte vs compilado
+
+| Proibido editar como fonte | Origem real |
+|---------------------------|-------------|
+| `public/build/**` | saída do Vite |
+| `public/build/manifest.json` | gerado pelo build |
+
+**Onde editar:** `resources/js/`, `resources/css/`, views Blade/Livewire.
+
+## Livewire — boas práticas neste projeto
+
+- Upload de arquivos: `WithFileUploads` + validação `extensions:` / `max:` como nos importadores existentes.
+- Progresso de importação: `$this->dispatch('progresso-atualizado', ...)` seguindo importadores existentes.
+- Empresa selecionada: preferir `session('empresa_selecionada_id')` + `OperadoraContext::resolveEmpresa()`.
+- Não duplicar layout de menu/navegação — usar `components/layouts/app` e partials em `resources/views/partials/`.
+
+## Textos para o usuário (UI)
+
+- Escrever para quem **usa** o sistema, não para quem implementa.
+- **Adaptar a tela** ao contexto (tipo de arquivo, passo do fluxo) em vez de explicar o que foi escondido ou automatizado.
+- Evitar avisos do tipo “não é necessário informar X”, “mapeamento automático”, “extração nativa”, OCR, delimitador, cabeçalho, etc., quando a própria interface já mostra só o que importa.
+- Mensagens curtas, orientadas à **ação** ou ao **resultado** (ex.: “Selecione a empresa”, “3 contas serão inativadas”).
+- Não usar caixas informativas redundantes; preferir labels, campos e botões que comuniquem o fluxo sozinhos.
+- Em importadores (wizard), o passo **Arquivo** começa só com a seleção do arquivo; estratégia, delimitador e demais opções aparecem **depois** que o arquivo foi escolhido.
+- **Layout de importação:** seguir o padrão de `importador-avancado.blade.php` — `max-w-2xl`, card `shadow-xl`, barras de progresso indigo, `<x-zona-upload>`, títulos numerados por etapa, botões `h-14 rounded-xl`. Ver também `ux-fluxos-guiados.mdc`.
+
+## Checklist antes de finalizar mudança de UI
+
+- [ ] Lógica pesada está no Livewire/Service, não inline na view?
+- [ ] Alterou JS/CSS/Vue/Tailwind config? → **`assets-build-vite.mdc`** (agente executa o build)
+- [ ] Nenhum arquivo em `public/build/` foi editado manualmente?

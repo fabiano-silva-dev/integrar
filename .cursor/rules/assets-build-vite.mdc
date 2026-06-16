@@ -1,0 +1,120 @@
+---
+description: Quando e como recompilar assets (Vite) após alterações — equivalente ao gulp do legado
+alwaysApply: true
+---
+
+# Build de assets (Vite) — obrigatório quando aplicável
+
+## Contexto
+
+Este projeto **não usa Gulp**. O equivalente é o **Vite**:
+
+| Legado (eficere) | Integrar |
+|------------------|----------|
+| `resources/assets/js/` + `gulp` | `resources/js/` + `npm run build` |
+| `public/js/all.js` (saída) | `public/build/` (saída) |
+
+O Laravel carrega assets via `@vite([...])` nos layouts. O navegador lê **`public/build/`** (manifest + arquivos hash). Editar só `resources/` **não atualiza o browser** até recompilar.
+
+## Quando **NÃO** precisa build
+
+Alterações **só em backend** — basta recarregar a página (F5):
+
+- `app/Livewire/*.php`, `app/Http/**`, `app/Models/**`, `app/Services/**`
+- `routes/**`, `database/migrations/**`
+- `resources/views/**/*.blade.php` se mudou **apenas** HTML/texto/Livewire e **não** adicionou classes Tailwind novas nem JS/CSS
+
+Nesses casos: **não** rodar `npm run build` (desperdício de tempo).
+
+## Quando **PRECISA** build (obrigatório)
+
+Recompilar **sempre** após editar qualquer um destes:
+
+| Arquivo / pasta | Motivo |
+|-----------------|--------|
+| `resources/js/**` | JavaScript compilado para `public/build/` |
+| `resources/css/app.css` | Tailwind e CSS customizado |
+| `resources/js/components/*.vue` | Componentes Vue |
+| `vite.config.js` | Configuração do bundler |
+| `tailwind.config.js`, `postcss.config.js` | Scan de classes Tailwind |
+| `package.json` (deps frontend) | Rodar `npm install` antes do build |
+| Blade/Livewire com **classes Tailwind novas** | Tailwind só inclui classes detectadas no build |
+
+**Proibido:** editar `public/build/**` manualmente para “ver a mudança”.
+
+## Comandos (desenvolvimento — Docker)
+
+Build único (padrão após alteração de asset):
+
+```bash
+docker compose exec app npm run build
+```
+
+Sessão longa editando JS/CSS (hot reload — opcional):
+
+```bash
+docker compose exec app npm run dev
+```
+
+Deixar `npm run dev` rodando em terminal separado enquanto mexe no frontend; ao encerrar a sessão, um `npm run build` final garante `public/build/` consistente.
+
+Após mudar dependências:
+
+```bash
+docker compose exec app npm install
+docker compose exec app npm run build
+```
+
+## Comandos (produção — nativo)
+
+Preferir o script de deploy (gerencia permissões e cache):
+
+```bash
+cd /caminho/do/projeto
+./atualizar-producao.sh
+```
+
+Build manual (após `chown deploy:www-data public/build` se necessário):
+
+```bash
+npm ci && npm run build
+sudo -u www-data php artisan optimize:clear && sudo -u www-data php artisan optimize
+```
+
+Requer **Node.js 20+** no servidor. Ver `deploy-producao.mdc` e `ambiente-dev-producao.mdc`.
+
+## Obrigação do agente (Cursor)
+
+1. **Antes de encerrar** uma tarefa, verificar se algum arquivo da tabela “PRECISA build” foi alterado.
+2. Se sim → **executar** `docker compose exec app npm run build` (não só avisar o usuário).
+3. Se o build falhar → corrigir e repetir até passar.
+4. Se a mudança foi **só PHP/Blade sem asset** → **não** rodar build; informar que basta recarregar a página.
+5. Nunca editar `public/build/` como atalho.
+
+## Checklist rápido
+
+```
+Alterou resources/js ou resources/css ou .vue ou tailwind/vite config?
+  → SIM: docker compose exec app npm run build
+  → NÃO: alterou só PHP/Livewire/Blade sem CSS/JS novo?
+         → SIM: só F5, sem build
+         → adicionou classe Tailwind nova no Blade?
+         → SIM: docker compose exec app npm run build
+```
+
+## Sintoma de “esqueci o build”
+
+- JS/CSS antigo no browser
+- Classe Tailwind no Blade sem efeito visual
+- Erro 404 em arquivo em `public/build/assets/...` (manifest desatualizado)
+- **Produção:** sidebar sobreposta ao conteúdo, layout “cru” sem grid/espaçamento Tailwind
+
+**Solução (dev):** `docker compose exec app npm run build` + hard refresh (Ctrl+Shift+R).
+
+**Solução (produção):** instalar Node 20+ se faltar → `./atualizar-producao.sh` (ou `npm run build` com `public/build/` gravável pelo deploy user).
+
+## Permissões de `public/build/` em produção
+
+- Vite (como deploy user) precisa **apagar e recriar** `public/build/assets/`
+- Diretório deve ser `deploy:www-data` com `ug+rwX` — ver `deploy-producao.mdc`
+- **EACCES** no `vite build` = `chown` incorreto (ex.: só `www-data`)
