@@ -23,7 +23,7 @@ echo
 [[ $REPLY =~ ^[Ss]$ ]] || exit 0
 
 echo "📦 Backup automático..."
-"$SCRIPT_DIR/backup-automatico.sh"
+"$SCRIPT_DIR/backup-automatico.sh" --docker
 
 echo "🛑 Parando containers (preservando volumes)..."
 docker compose down

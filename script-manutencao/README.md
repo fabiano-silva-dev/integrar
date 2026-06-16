@@ -34,7 +34,7 @@ sudo ./script-manutencao/instalar-nativo-producao.sh --dry-run --yes
 
 | Script | Descrição |
 |--------|-----------|
-| `backup-automatico.sh` | Dump MySQL (cron diário) |
+| `backup-automatico.sh` | Dump MySQL (cron diário; padrão nativo, `--docker` no dev) |
 | `importar-backup.sh` | Restaura SQL no container Docker |
 | `rollback-deploy.sh` | Restaura banco + limpa cache (emergência) |
 
