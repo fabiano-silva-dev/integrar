@@ -2,7 +2,30 @@
     <div class="w-full px-4 sm:px-6 lg:px-8">
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
             <div class="p-6 text-gray-900">
-                <h2 class="text-2xl font-bold mb-6">Regras de Amarração de Descrições</h2>
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
+                    <h2 class="text-2xl font-bold">Regras de Amarração de Descrições</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button wire:click="baixarModelo" type="button" class="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                            Baixar modelo
+                        </button>
+                        <button wire:click="exportarRegras('csv')" type="button" @disabled(!$empresa_id || !$layout_avancado) class="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                            Exportar CSV
+                        </button>
+                        <button wire:click="exportarRegras('xlsx')" type="button" @disabled(!$empresa_id || !$layout_avancado) class="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                            Exportar XLSX
+                        </button>
+                        <button wire:click="abrirModalCopiar" type="button" @disabled(!$empresa_id || !$layout_avancado) class="px-3 py-2 border border-indigo-300 rounded-md text-sm text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
+                            Copiar de outra empresa
+                        </button>
+                        <a href="{{ route('regras-amarracao.importar', $layout_avancado ? ['layout' => $layout_avancado] : []) }}" class="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                            Importar
+                        </a>
+                    </div>
+                </div>
+
+                @error('layout_avancado')
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">{{ $message }}</div>
+                @enderror
 
                 @if (session()->has('message'))
                     <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
@@ -191,4 +214,67 @@
             </div>
         </div>
     </div>
+
+    @if($modalCopiar)
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+                <h3 class="text-lg font-semibold mb-4">Copiar regras de outra empresa</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    As regras serão copiadas para <strong>{{ $empresaAtual?->nome }}</strong>
+                    (layout: <strong>{{ $layouts[$layout_avancado] ?? $layout_avancado }}</strong>).
+                </p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Empresa de origem *</label>
+                        <select wire:model="empresa_origem_id" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            <option value="">Selecione...</option>
+                            @foreach($empresasCopia as $empresa)
+                                <option value="{{ $empresa->id }}">{{ $empresa->codigo_sistema ?? '—' }} — {{ $empresa->nome }}</option>
+                            @endforeach
+                        </select>
+                        @error('empresa_origem_id') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Estratégia</label>
+                        <select wire:model="estrategia_copia" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            @foreach($estrategiasCopia as $valor => $nome)
+                                <option value="{{ $valor }}">{{ $nome }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    @if($estrategia_copia === 'substituir_layout')
+                        <div class="bg-amber-50 border border-amber-300 text-amber-800 px-3 py-2 rounded text-sm">
+                            Todas as regras do layout na empresa atual serão removidas antes da cópia.
+                        </div>
+                    @endif
+
+                    @if($previewCopia)
+                        <div class="bg-gray-50 border border-gray-200 rounded p-3 text-sm space-y-1">
+                            <div>{{ $previewCopia['total_origem'] }} regra(s) na origem</div>
+                            <div class="text-green-700">{{ $previewCopia['novas'] }} nova(s)</div>
+                            <div class="text-blue-700">{{ $previewCopia['atualizadas'] }} atualização(ões)</div>
+                            @if(($previewCopia['ignoradas'] ?? 0) > 0)
+                                <div class="text-gray-600">{{ $previewCopia['ignoradas'] }} ignorada(s)</div>
+                            @endif
+                            @if(($previewCopia['removidas'] ?? 0) > 0)
+                                <div class="text-red-700">{{ $previewCopia['removidas'] }} removida(s) na empresa atual</div>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" wire:click="fecharModalCopiar" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">Cancelar</button>
+                    @if($previewCopia)
+                        <button type="button" wire:click="confirmarCopia" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Confirmar cópia</button>
+                    @else
+                        <button type="button" wire:click="gerarPreviewCopia" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Gerar prévia</button>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

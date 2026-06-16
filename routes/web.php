@@ -23,9 +23,12 @@ Route::middleware(['auth'])->group(function () {
     Route::redirect('/conversao/pdf-ofx-sicoob', '/conversao/pdf-ofx');
     Route::get('/tabela', App\Livewire\TabelaLancamentos::class)->name('tabela');
     Route::get('/empresas', App\Livewire\GerenciadorEmpresas::class)->name('empresas');
+    Route::get('/plano-contas', App\Livewire\GerenciadorPlanoContas::class)->name('plano-contas');
+    Route::get('/plano-contas/importar', App\Livewire\ImportadorPlanoContas::class)->name('plano-contas.importar');
     Route::get('/terceiros', App\Livewire\GerenciadorTerceiros::class)->name('terceiros');
     Route::get('/amarracoes', fn () => redirect()->route('regras-amarracao'))->name('amarracoes');
     Route::get('/regras-amarracao', App\Livewire\GerenciadorRegrasAmarracao::class)->name('regras-amarracao');
+    Route::get('/regras-amarracao/importar', App\Livewire\ImportadorRegrasAmarracao::class)->name('regras-amarracao.importar');
     Route::get('/importacoes', App\Livewire\ListaImportacoes::class)->name('importacoes');
     Route::get('/exportador', App\Livewire\ExportadorContabil::class)->name('exportador');
     Route::get('/extrator-bancario', App\Livewire\ExtratorBancario::class)->name('extrator-bancario');

@@ -43,6 +43,12 @@ trait MenuTrait
                         'active' => request()->routeIs('usuarios*'),
                         'roles' => ['admin', 'gerente'],
                     ],
+                    [
+                        'name' => 'Plano de Contas',
+                        'icon' => 'document',
+                        'url' => route('plano-contas'),
+                        'active' => request()->routeIs('plano-contas*'),
+                    ],
                 ],
             ],
             [

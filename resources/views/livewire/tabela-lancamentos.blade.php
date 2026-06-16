@@ -82,7 +82,7 @@
                     Reprocessar amarrações
                 </button>
                 @endif
-                <a href="{{ route('regras-amarracao') }}" target="_blank" rel="noopener noreferrer" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
+                <a href="{{ $urlRegrasAmarracao }}" target="_blank" rel="noopener noreferrer" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-xs shadow transition-all flex items-center">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.172-1.171 4.828-4.828a4 4 0 00-5.656-5.656l-4 4a4 4 0 101.414 1.414l4-4z"></path>
                     </svg>

@@ -1020,10 +1020,18 @@ class TabelaLancamentos extends Component
         $importacaoSelecionada = $importacoes->firstWhere('id', (int) $this->filtroImportacao);
         $mostrarReprocessar = $importacaoSelecionada && !empty($importacaoSelecionada['layout_avancado']);
 
+        $urlRegrasAmarracao = route('regras-amarracao');
+        if ($importacaoSelecionada && !empty($importacaoSelecionada['layout_avancado'])) {
+            $urlRegrasAmarracao = route('regras-amarracao', [
+                'layout' => $importacaoSelecionada['layout_avancado'],
+            ]);
+        }
+
         return view('livewire.tabela-lancamentos', [
             'lancamentos' => $lancamentos,
             'importacoes' => $importacoes,
             'mostrarReprocessar' => $mostrarReprocessar,
+            'urlRegrasAmarracao' => $urlRegrasAmarracao,
             'terceirosBuscaEdicao' => $this->buscarTerceirosSugestoes($this->buscaTerceiroEdicao),
             'terceirosBuscaNovo' => $this->buscarTerceirosSugestoes($this->buscaTerceiroNovo),
         ]);

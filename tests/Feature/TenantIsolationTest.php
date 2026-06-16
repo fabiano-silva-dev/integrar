@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Empresa;
 use App\Models\EmpresasOperadora;
+use App\Models\PlanoConta;
 use App\Models\Terceiro;
 use App\Models\User;
 use App\Services\ConversaoPdfOfxService;
@@ -128,6 +129,30 @@ class TenantIsolationTest extends TestCase
         $this->assertEquals('Fornecedor XYZ', $terceirosEmpresaA->first()->nome);
         $this->assertEquals('Fornecedor XYZ', $terceirosEmpresaA2->first()->nome);
         $this->assertNotEquals($terceirosEmpresaA->first()->id, $terceirosEmpresaA2->first()->id);
+    }
+
+    public function test_plano_contas_isolado_por_escritorio(): void
+    {
+        PlanoConta::factory()->create([
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'empresa_id' => $this->empresaA->id,
+            'codigo' => '1',
+            'descricao' => 'Conta A',
+        ]);
+
+        PlanoConta::factory()->create([
+            'empresa_operadora_id' => $this->operadoraB->id,
+            'empresa_id' => $this->empresaB->id,
+            'codigo' => '1',
+            'descricao' => 'Conta B',
+        ]);
+
+        $this->actingAs($this->userA);
+
+        $contas = PlanoConta::all();
+
+        $this->assertCount(1, $contas);
+        $this->assertEquals('Conta A', $contas->first()->descricao);
     }
 
     public function test_super_admin_ve_todos_os_escritorios_sem_contexto(): void

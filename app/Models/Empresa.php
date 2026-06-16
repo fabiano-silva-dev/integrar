@@ -28,4 +28,9 @@ class Empresa extends Model
     {
         return $this->hasMany(Lancamento::class);
     }
+
+    public function planoContas(): HasMany
+    {
+        return $this->hasMany(PlanoConta::class);
+    }
 }

@@ -5,8 +5,12 @@ namespace App\Livewire;
 use App\Models\Empresa;
 use App\Models\HistoricoPadraoLayout;
 use App\Models\RegraAmarracaoDescricao;
+use App\Services\Importacao\ExportadorRegrasAmarracaoService;
+use App\Services\OperadoraContext;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GerenciadorRegrasAmarracao extends Component
 {
@@ -30,6 +34,12 @@ class GerenciadorRegrasAmarracao extends Component
     public $edit_descricao = '';
     public $edit_ativo = true;
 
+    /** Cópia de outra empresa */
+    public $modalCopiar = false;
+    public $empresa_origem_id = null;
+    public $estrategia_copia = 'adicionar_atualizar';
+    public $previewCopia = null;
+
     public static function getLayoutsAvancado(): array
     {
         return [
@@ -48,6 +58,11 @@ class GerenciadorRegrasAmarracao extends Component
     public function mount()
     {
         $this->empresa_id = session('empresa_selecionada_id');
+
+        $layout = request()->query('layout');
+        if (is_string($layout) && array_key_exists($layout, static::getLayoutsAvancado())) {
+            $this->layout_avancado = $layout;
+        }
     }
 
     /** Retorna o registro de histórico padrão para o layout (e opcionalmente empresa) selecionado */
@@ -228,6 +243,123 @@ class GerenciadorRegrasAmarracao extends Component
         $this->resetPage('regras_page');
     }
 
+    public function baixarModelo(): StreamedResponse
+    {
+        $service = new ExportadorRegrasAmarracaoService();
+        $conteudo = $service->conteudoModeloCsv();
+
+        return response()->streamDownload(function () use ($conteudo) {
+            echo $conteudo;
+        }, 'modelo_regras_amarracao.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function exportarRegras(string $formato = 'csv'): StreamedResponse|BinaryFileResponse|null
+    {
+        if (!$this->empresa_id || !$this->layout_avancado) {
+            $this->addError('layout_avancado', 'Selecione empresa e layout antes de exportar.');
+            return null;
+        }
+
+        OperadoraContext::resolveEmpresa($this->empresa_id);
+
+        $service = new ExportadorRegrasAmarracaoService();
+        $sufixoLayout = str_replace(['/', ' '], '_', $this->layout_avancado);
+        $timestamp = date('Y-m-d_His');
+
+        if ($formato === 'xlsx') {
+            $path = $service->exportarXlsx((int) $this->empresa_id, $this->layout_avancado);
+            $nome = "regras_amarracao_{$sufixoLayout}_{$timestamp}.xlsx";
+
+            return response()->download($path, $nome, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        }
+
+        $conteudo = $service->exportarCsv((int) $this->empresa_id, $this->layout_avancado);
+        $nome = "regras_amarracao_{$sufixoLayout}_{$timestamp}.csv";
+
+        return response()->streamDownload(function () use ($conteudo) {
+            echo $conteudo;
+        }, $nome, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function abrirModalCopiar(): void
+    {
+        if (!$this->empresa_id || !$this->layout_avancado) {
+            return;
+        }
+
+        $this->empresa_origem_id = null;
+        $this->estrategia_copia = 'adicionar_atualizar';
+        $this->previewCopia = null;
+        $this->modalCopiar = true;
+    }
+
+    public function fecharModalCopiar(): void
+    {
+        $this->modalCopiar = false;
+        $this->empresa_origem_id = null;
+        $this->previewCopia = null;
+    }
+
+    public function gerarPreviewCopia(): void
+    {
+        $this->validate([
+            'empresa_origem_id' => 'required|integer|different:empresa_id',
+            'estrategia_copia' => 'required|in:' . implode(',', array_keys(ExportadorRegrasAmarracaoService::ESTRATEGIAS_COPIA)),
+        ], [
+            'empresa_origem_id.different' => 'A empresa de origem deve ser diferente da empresa atual.',
+        ]);
+
+        if (!$this->empresa_id || !$this->layout_avancado) {
+            return;
+        }
+
+        OperadoraContext::resolveEmpresa((int) $this->empresa_origem_id);
+        OperadoraContext::resolveEmpresa((int) $this->empresa_id);
+
+        $service = new ExportadorRegrasAmarracaoService();
+        $this->previewCopia = $service->analisarCopia(
+            (int) $this->empresa_origem_id,
+            (int) $this->empresa_id,
+            $this->layout_avancado,
+            $this->estrategia_copia
+        );
+    }
+
+    public function confirmarCopia(): void
+    {
+        if (!$this->previewCopia || !$this->empresa_id || !$this->layout_avancado || !$this->empresa_origem_id) {
+            return;
+        }
+
+        OperadoraContext::resolveEmpresa((int) $this->empresa_origem_id);
+        OperadoraContext::resolveEmpresa((int) $this->empresa_id);
+
+        $service = new ExportadorRegrasAmarracaoService();
+        $resultado = $service->copiar(
+            (int) $this->empresa_origem_id,
+            (int) $this->empresa_id,
+            $this->layout_avancado,
+            $this->estrategia_copia
+        );
+
+        session()->flash('message', sprintf(
+            'Cópia concluída: %d novas, %d atualizadas, %d ignoradas%s.',
+            $resultado['copiadas'],
+            $resultado['atualizadas'],
+            $resultado['ignoradas'],
+            $resultado['removidas'] > 0 ? ", {$resultado['removidas']} removidas" : ''
+        ));
+
+        $this->fecharModalCopiar();
+        $this->resetPage('regras_page');
+    }
+
     public function render()
     {
         $empresas = Empresa::orderBy('nome')->get();
@@ -266,8 +398,10 @@ class GerenciadorRegrasAmarracao extends Component
         return view('livewire.gerenciador-regras-amarracao', [
             'regras' => $regrasLista,
             'empresas' => $empresas,
+            'empresasCopia' => $empresas->where('id', '!=', $this->empresa_id)->values(),
             'layouts' => $layouts,
             'empresaAtual' => $empresaAtual,
+            'estrategiasCopia' => ExportadorRegrasAmarracaoService::ESTRATEGIAS_COPIA,
             'regraEmEdicao' => $this->editando && $this->regraId ? RegraAmarracaoDescricao::find($this->regraId) : null,
         ]);
     }

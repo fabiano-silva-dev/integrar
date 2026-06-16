@@ -25,7 +25,9 @@ abstract class TestCase extends BaseTestCase
     protected function usesMysqlDatabase(): bool
     {
         return str_contains(static::class, 'TenantIsolation')
-            || str_contains(static::class, 'TenantLancamentoBulkInsert');
+            || str_contains(static::class, 'TenantLancamentoBulkInsert')
+            || str_contains(static::class, 'TenantPlanoContas')
+            || str_contains(static::class, 'TenantRegrasAmarracao');
     }
 
     protected function resolveMysqlDatabaseName(): string
