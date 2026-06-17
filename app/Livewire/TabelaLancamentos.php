@@ -7,6 +7,7 @@ use App\Models\AlteracaoLog;
 use App\Models\Importacao;
 use App\Models\RegraAmarracaoDescricao;
 use App\Models\Terceiro;
+use App\Services\PlanoContaResolver;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,10 @@ class TabelaLancamentos extends Component
     public $perPage = 50;
     public $buscaTerceiroEdicao = '';
     public $buscaTerceiroNovo = '';
+    public $sugestoesContaDebitoNovo = [];
+    public $sugestoesContaCreditoNovo = [];
+    public $sugestoesContaDebitoEdicao = [];
+    public $sugestoesContaCreditoEdicao = [];
     
     // Edição inline
     public $editandoId = null;
@@ -234,7 +239,7 @@ class TabelaLancamentos extends Component
         $contaBanco = $importacao->conta_banco ? ltrim((string) $importacao->conta_banco, '0') : null;
 
         if (!$contaBanco && in_array($layoutAvancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi', 'banrisul'])) {
-            session()->flash('error', 'Esta importação não possui conta banco registrada. Importe novamente informando a conta do banco.');
+            session()->flash('error', 'Esta importação não possui conta do banco registrada. Importe novamente informando a conta contábil do Banco no sistema da Contabilidade.');
             return;
         }
 
@@ -414,6 +419,8 @@ class TabelaLancamentos extends Component
         
         // Edição de conta débito/crédito ou outros campos
         if (in_array($campo, ['conta_debito', 'conta_credito'])) {
+            $resolver = new PlanoContaResolver();
+            $valorNovo = $resolver->resolverParaArmazenamento($lancamento->empresa_id, $valorNovo);
             $lancamento->{$campo} = $valorNovo;
             $lancamento->conferido = true;
             $lancamento->save();
@@ -692,6 +699,79 @@ class TabelaLancamentos extends Component
             ->all();
     }
 
+    private function empresaTemPlanoAtivo(?int $empresaId): bool
+    {
+        if (!$empresaId) {
+            return false;
+        }
+
+        return (new PlanoContaResolver())->empresaTemPlanoAtivo($empresaId);
+    }
+
+    private function buscarContasPlanoSugestoes(?int $empresaId, ?string $termo): array
+    {
+        if (!$empresaId || !$this->empresaTemPlanoAtivo($empresaId)) {
+            return [];
+        }
+
+        return (new PlanoContaResolver())->buscar($empresaId, (string) $termo);
+    }
+
+    private function empresaIdNovoLancamento(): ?int
+    {
+        if (empty($this->novoLancamento['importacao_id'])) {
+            return session('empresa_selecionada_id') ? (int) session('empresa_selecionada_id') : null;
+        }
+
+        return Importacao::where('id', $this->novoLancamento['importacao_id'])->value('empresa_id');
+    }
+
+    public function updatedNovoLancamentoContaDebito($valor): void
+    {
+        $this->sugestoesContaDebitoNovo = $this->buscarContasPlanoSugestoes($this->empresaIdNovoLancamento(), (string) $valor);
+    }
+
+    public function updatedNovoLancamentoContaCredito($valor): void
+    {
+        $this->sugestoesContaCreditoNovo = $this->buscarContasPlanoSugestoes($this->empresaIdNovoLancamento(), (string) $valor);
+    }
+
+    public function updatedDadosEdicaoContaDebito($valor): void
+    {
+        $empresaId = $this->lancamentoEditando?->empresa_id;
+        $this->sugestoesContaDebitoEdicao = $this->buscarContasPlanoSugestoes($empresaId, (string) $valor);
+    }
+
+    public function updatedDadosEdicaoContaCredito($valor): void
+    {
+        $empresaId = $this->lancamentoEditando?->empresa_id;
+        $this->sugestoesContaCreditoEdicao = $this->buscarContasPlanoSugestoes($empresaId, (string) $valor);
+    }
+
+    public function selecionarContaDebitoNovo(string $codigo): void
+    {
+        $this->novoLancamento['conta_debito'] = $codigo;
+        $this->sugestoesContaDebitoNovo = [];
+    }
+
+    public function selecionarContaCreditoNovo(string $codigo): void
+    {
+        $this->novoLancamento['conta_credito'] = $codigo;
+        $this->sugestoesContaCreditoNovo = [];
+    }
+
+    public function selecionarContaDebitoEdicao(string $codigo): void
+    {
+        $this->dadosEdicao['conta_debito'] = $codigo;
+        $this->sugestoesContaDebitoEdicao = [];
+    }
+
+    public function selecionarContaCreditoEdicao(string $codigo): void
+    {
+        $this->dadosEdicao['conta_credito'] = $codigo;
+        $this->sugestoesContaCreditoEdicao = [];
+    }
+
     public function carregarDadosImportacao()
     {
         if (!empty($this->novoLancamento['importacao_id'])) {
@@ -736,14 +816,18 @@ class TabelaLancamentos extends Component
             }
 
             // Criar o novo lançamento
+            $resolver = new PlanoContaResolver();
+            $contaDebito = $resolver->resolverParaArmazenamento($importacao->empresa_id, $this->novoLancamento['conta_debito']);
+            $contaCredito = $resolver->resolverParaArmazenamento($importacao->empresa_id, $this->novoLancamento['conta_credito']);
+
             $lancamento = Lancamento::create([
                 'importacao_id' => $this->novoLancamento['importacao_id'],
                 'empresa_id' => $importacao->empresa_id,
                 'data' => $this->novoLancamento['data'],
-                'conta_debito' => $this->novoLancamento['conta_debito'],
-                'conta_credito' => $this->novoLancamento['conta_credito'],
-                'conta_debito_original' => $this->novoLancamento['conta_debito'],
-                'conta_credito_original' => $this->novoLancamento['conta_credito'],
+                'conta_debito' => $contaDebito,
+                'conta_credito' => $contaCredito,
+                'conta_debito_original' => $contaDebito,
+                'conta_credito_original' => $contaCredito,
                 'valor' => $this->novoLancamento['valor'],
                 'nome_empresa' => $this->novoLancamento['nome_empresa'],
                 'terceiro_id' => $this->novoLancamento['terceiro_id'] ?: null,
@@ -863,11 +947,17 @@ class TabelaLancamentos extends Component
                 'arquivo_origem' => $lancamento->arquivo_origem,
             ];
 
+            $resolver = new PlanoContaResolver();
+            $contaDebito = $resolver->resolverParaArmazenamento($lancamento->empresa_id, $this->dadosEdicao['conta_debito']);
+            $contaCredito = $resolver->resolverParaArmazenamento($lancamento->empresa_id, $this->dadosEdicao['conta_credito']);
+            $this->dadosEdicao['conta_debito'] = $contaDebito;
+            $this->dadosEdicao['conta_credito'] = $contaCredito;
+
             // Atualizar o lançamento
             $lancamento->update([
                 'data' => $this->dadosEdicao['data'],
-                'conta_debito' => $this->dadosEdicao['conta_debito'],
-                'conta_credito' => $this->dadosEdicao['conta_credito'],
+                'conta_debito' => $contaDebito,
+                'conta_credito' => $contaCredito,
                 'valor' => $this->dadosEdicao['valor'],
                 'nome_empresa' => $this->dadosEdicao['nome_empresa'],
                 'terceiro_id' => $this->dadosEdicao['terceiro_id'] ?: null,
@@ -1034,6 +1124,8 @@ class TabelaLancamentos extends Component
             'urlRegrasAmarracao' => $urlRegrasAmarracao,
             'terceirosBuscaEdicao' => $this->buscarTerceirosSugestoes($this->buscaTerceiroEdicao),
             'terceirosBuscaNovo' => $this->buscarTerceirosSugestoes($this->buscaTerceiroNovo),
+            'empresaTemPlanoNovo' => $this->empresaTemPlanoAtivo($this->empresaIdNovoLancamento()),
+            'empresaTemPlanoEdicao' => $this->empresaTemPlanoAtivo($this->lancamentoEditando?->empresa_id),
         ]);
     }
 

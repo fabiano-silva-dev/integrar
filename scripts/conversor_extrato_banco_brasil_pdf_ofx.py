@@ -18,6 +18,7 @@ except ImportError:
     sys.exit(1)
 
 from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
+from extrato_util import eh_descricao_saldo  # noqa: E402
 
 LINHAS_IGNORAR = (
     'banco do brasil',
@@ -176,12 +177,11 @@ def parsear_linha_transacao(linha):
 
 
 def eh_saldo_final(descricao):
-    texto = re.sub(r'\s+', '', descricao.upper())
-    return texto == 'SALDO'
+    return eh_descricao_saldo(descricao)
 
 
 def eh_saldo_anterior(descricao):
-    return 'saldo anterior' in descricao.lower()
+    return eh_descricao_saldo(descricao)
 
 
 def montar_memo(item, complemento=''):

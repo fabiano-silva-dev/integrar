@@ -1,9 +1,13 @@
+import os
 import sys
 import csv
 import re
 from PyPDF2 import PdfReader
 import datetime
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 if len(sys.argv) < 3:
     print("Uso: python conversor_extrato_grafeno_pdf_csv.py <arquivo.pdf> <arquivo_saida.csv> [conta_banco]")
@@ -65,7 +69,7 @@ for page in reader.pages:
                         valor = ltest
                         break
                     j += 1
-            if 'SALDO FINAL' in lancamento or 'SALDO INICIAL' in lancamento:
+            if eh_descricao_saldo(lancamento):
                 continue
             if not re.fullmatch(r"\d{2}/\d{2}/\d{4}( \d{2}:\d{2})?", data):
                 continue

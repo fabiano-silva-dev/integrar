@@ -6,11 +6,15 @@ Converte arquivos OFX (Open Financial Exchange) para formato CSV
 com colunas padronizadas para importação no sistema.
 """
 
+import os
 import sys
 import re
 import csv
 from datetime import datetime
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 def parse_ofx_date(date_str):
     """
@@ -138,7 +142,10 @@ def parse_ofx_file(file_path, conta_banco='1.1.1.01'):
         valor = parse_ofx_amount(trnamt)
         tipo_transacao = extract_transaction_type(trntype, name, memo)
         descricao = extract_description(name, memo)
-        
+
+        if eh_descricao_saldo(descricao):
+            continue
+
         # Determinar conta de débito e crédito pelo sinal do valor (mesmo padrão dos demais conversores)
         try:
             amount = float(str(trnamt).replace(',', '.'))

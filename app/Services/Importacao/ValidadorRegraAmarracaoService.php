@@ -3,11 +3,19 @@
 namespace App\Services\Importacao;
 
 use App\Livewire\GerenciadorRegrasAmarracao;
-use App\Models\PlanoConta;
+use App\Services\PlanoContaResolver;
 
 class ValidadorRegraAmarracaoService
 {
     public const TIPOS_BUSCA = ['contains', 'starts_with', 'ends_with', 'exact'];
+
+    /** @var PlanoContaResolver */
+    private $planoContaResolver;
+
+    public function __construct(?PlanoContaResolver $planoContaResolver = null)
+    {
+        $this->planoContaResolver = $planoContaResolver ?: new PlanoContaResolver();
+    }
 
     /**
      * @return list<string>
@@ -80,19 +88,11 @@ class ValidadorRegraAmarracaoService
             return null;
         }
 
-        $temPlano = PlanoConta::where('empresa_id', $empresaId)->where('ativo', true)->exists();
-        if (!$temPlano) {
+        if (!$this->planoContaResolver->empresaTemPlanoAtivo($empresaId)) {
             return null;
         }
 
-        $existe = PlanoConta::where('empresa_id', $empresaId)
-            ->where('ativo', true)
-            ->where(function ($q) use ($conta) {
-                $q->where('codigo', $conta)->orWhere('codigo_reduzido', $conta);
-            })
-            ->exists();
-
-        if ($existe) {
+        if ($this->planoContaResolver->contaExisteNoPlano($empresaId, $conta)) {
             return null;
         }
 

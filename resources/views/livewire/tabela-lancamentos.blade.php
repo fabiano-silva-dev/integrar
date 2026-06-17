@@ -125,12 +125,26 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Conta Débito *</label>
-                                <input type="text" wire:model="novoLancamento.conta_debito" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Ex: 1.1.1.01.001">
+                                <x-busca-plano-conta
+                                    valor-model="novoLancamento.conta_debito"
+                                    :valor="$novoLancamento['conta_debito'] ?? ''"
+                                    :pesquisa-habilitada="$empresaTemPlanoNovo"
+                                    :resultados="$sugestoesContaDebitoNovo"
+                                    selecionar-method="selecionarContaDebitoNovo"
+                                    placeholder="Ex: 254"
+                                />
                                 @error('novoLancamento.conta_debito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Conta Crédito *</label>
-                                <input type="text" wire:model="novoLancamento.conta_credito" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Ex: 2.1.1.01.001">
+                                <x-busca-plano-conta
+                                    valor-model="novoLancamento.conta_credito"
+                                    :valor="$novoLancamento['conta_credito'] ?? ''"
+                                    :pesquisa-habilitada="$empresaTemPlanoNovo"
+                                    :resultados="$sugestoesContaCreditoNovo"
+                                    selecionar-method="selecionarContaCreditoNovo"
+                                    placeholder="Ex: 254"
+                                />
                                 @error('novoLancamento.conta_credito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div>
@@ -202,12 +216,26 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Conta Débito *</label>
-                                <input type="text" wire:model="dadosEdicao.conta_debito" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Ex: 1.1.1.01.001">
+                                <x-busca-plano-conta
+                                    valor-model="dadosEdicao.conta_debito"
+                                    :valor="$dadosEdicao['conta_debito'] ?? ''"
+                                    :pesquisa-habilitada="$empresaTemPlanoEdicao"
+                                    :resultados="$sugestoesContaDebitoEdicao"
+                                    selecionar-method="selecionarContaDebitoEdicao"
+                                    placeholder="Ex: 254"
+                                />
                                 @error('dadosEdicao.conta_debito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Conta Crédito *</label>
-                                <input type="text" wire:model="dadosEdicao.conta_credito" class="w-full rounded-md border-gray-300 shadow-sm" placeholder="Ex: 2.1.1.01.001">
+                                <x-busca-plano-conta
+                                    valor-model="dadosEdicao.conta_credito"
+                                    :valor="$dadosEdicao['conta_credito'] ?? ''"
+                                    :pesquisa-habilitada="$empresaTemPlanoEdicao"
+                                    :resultados="$sugestoesContaCreditoEdicao"
+                                    selecionar-method="selecionarContaCreditoEdicao"
+                                    placeholder="Ex: 254"
+                                />
                                 @error('dadosEdicao.conta_credito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
                             <div>

@@ -17,6 +17,7 @@ except ImportError:
     sys.exit(1)
 
 from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
+from extrato_util import eh_descricao_saldo  # noqa: E402
 
 
 def extrair_texto_pdf(caminho_pdf):
@@ -123,7 +124,8 @@ def parsear_lancamentos(linhas):
             doc = match.group(2)
             valor = parse_valor(match.group(3))
             memo = f'{descricao_pendente} DOC: {doc}'.strip() if descricao_pendente else f'DOC: {doc}'
-            lancamentos.append({'data': data_atual, 'valor': valor, 'memo': memo})
+            if not eh_descricao_saldo(memo):
+                lancamentos.append({'data': data_atual, 'valor': valor, 'memo': memo})
             descricao_pendente = ''
             continue
 
@@ -136,7 +138,8 @@ def parsear_lancamentos(linhas):
             if descricao_pendente:
                 memo = f'{descricao_pendente} {desc}'.strip()
             memo = f'{memo} DOC: {doc}'
-            lancamentos.append({'data': data_atual or '01/01/2026', 'valor': valor, 'memo': memo})
+            if not eh_descricao_saldo(memo):
+                lancamentos.append({'data': data_atual or '01/01/2026', 'valor': valor, 'memo': memo})
             descricao_pendente = ''
             continue
 
@@ -146,7 +149,8 @@ def parsear_lancamentos(linhas):
             valor = parse_valor(match.group(2))
             memo = descricao_pendente or 'Lançamento'
             memo = f'{memo} DOC: {doc}'.strip()
-            lancamentos.append({'data': data_atual, 'valor': valor, 'memo': memo})
+            if not eh_descricao_saldo(memo):
+                lancamentos.append({'data': data_atual, 'valor': valor, 'memo': memo})
             descricao_pendente = ''
             continue
 

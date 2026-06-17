@@ -7,6 +7,7 @@ use App\Models\HistoricoPadraoLayout;
 use App\Models\RegraAmarracaoDescricao;
 use App\Services\Importacao\ExportadorRegrasAmarracaoService;
 use App\Services\OperadoraContext;
+use App\Services\PlanoContaResolver;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -33,6 +34,7 @@ class GerenciadorRegrasAmarracao extends Component
     public $edit_conta_contrapartida = '';
     public $edit_descricao = '';
     public $edit_ativo = true;
+    public $sugestoesContaContrapartida = [];
 
     /** Cópia de outra empresa */
     public $modalCopiar = false;
@@ -52,6 +54,12 @@ class GerenciadorRegrasAmarracao extends Component
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
             'banrisul' => 'Banrisul (PDF) - Conta corrente',
+            'caixa' => 'Caixa Internet Banking (PDF)',
+            'santander' => 'Santander (PDF)',
+            'itau' => 'Itaú (PDF)',
+            'bradesco' => 'Bradesco (PDF)',
+            'cresol' => 'Cresol (PDF)',
+            'banco_brasil' => 'Banco do Brasil (PDF)',
         ];
     }
 
@@ -142,9 +150,15 @@ class GerenciadorRegrasAmarracao extends Component
             'edit_descricao' => 'nullable|string|max:500',
         ]);
 
+        $resolver = new PlanoContaResolver();
+        $contaContrapartida = trim($this->edit_conta_contrapartida ?? '');
+        if ($contaContrapartida !== '') {
+            $contaContrapartida = $resolver->resolverParaArmazenamento($regra->empresa_id, $contaContrapartida);
+        }
+
         $regra->update([
             'parte_digitavel' => trim($this->edit_parte_digitavel ?? '') ?: null,
-            'conta_contrapartida' => trim($this->edit_conta_contrapartida ?? '') ?: null,
+            'conta_contrapartida' => $contaContrapartida !== '' ? $contaContrapartida : null,
             'descricao' => trim($this->edit_descricao ?? '') ?: null,
             'conta_debito' => null,
             'conta_credito' => null,
@@ -164,6 +178,23 @@ class GerenciadorRegrasAmarracao extends Component
         $this->edit_conta_contrapartida = '';
         $this->edit_descricao = '';
         $this->edit_ativo = true;
+        $this->sugestoesContaContrapartida = [];
+    }
+
+    public function updatedEditContaContrapartida($valor): void
+    {
+        if (!$this->empresa_id || !(new PlanoContaResolver())->empresaTemPlanoAtivo((int) $this->empresa_id)) {
+            $this->sugestoesContaContrapartida = [];
+            return;
+        }
+
+        $this->sugestoesContaContrapartida = (new PlanoContaResolver())->buscar((int) $this->empresa_id, (string) $valor);
+    }
+
+    public function selecionarContaContrapartida(string $codigo): void
+    {
+        $this->edit_conta_contrapartida = $codigo;
+        $this->sugestoesContaContrapartida = [];
     }
 
     public function excluir($id)
@@ -403,6 +434,9 @@ class GerenciadorRegrasAmarracao extends Component
             'empresaAtual' => $empresaAtual,
             'estrategiasCopia' => ExportadorRegrasAmarracaoService::ESTRATEGIAS_COPIA,
             'regraEmEdicao' => $this->editando && $this->regraId ? RegraAmarracaoDescricao::find($this->regraId) : null,
+            'empresaTemPlano' => $this->empresa_id
+                ? (new PlanoContaResolver())->empresaTemPlanoAtivo((int) $this->empresa_id)
+                : false,
         ]);
     }
 }

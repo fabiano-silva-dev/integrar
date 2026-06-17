@@ -3,6 +3,7 @@
 namespace App\Services\Importacao;
 
 use App\Models\RegraAmarracaoDescricao;
+use App\Services\PlanoContaResolver;
 use Illuminate\Support\Facades\DB;
 
 class ImportadorRegrasAmarracaoService
@@ -38,9 +39,18 @@ class ImportadorRegrasAmarracaoService
         'ativo' => ['ativo', 'status'],
     ];
 
+    /** @var ValidadorRegraAmarracaoService */
+    private $validador;
+
+    /** @var PlanoContaResolver */
+    private $planoContaResolver;
+
     public function __construct(
-        private readonly ValidadorRegraAmarracaoService $validador = new ValidadorRegraAmarracaoService()
+        ?ValidadorRegraAmarracaoService $validador = null,
+        ?PlanoContaResolver $planoContaResolver = null
     ) {
+        $this->validador = $validador ?: new ValidadorRegraAmarracaoService();
+        $this->planoContaResolver = $planoContaResolver ?: new PlanoContaResolver();
     }
 
     /**
@@ -83,7 +93,7 @@ class ImportadorRegrasAmarracaoService
 
         foreach ($linhas as $indice => $linha) {
             $numeroLinha = $indice + 2;
-            $extraida = $this->extrairRegra($linha, $mapeamento, $layoutPadrao, $numeroLinha);
+            $extraida = $this->extrairRegra($linha, $mapeamento, $layoutPadrao, $numeroLinha, $empresaId);
 
             if (!empty($extraida['erros'])) {
                 foreach ($extraida['erros'] as $erro) {
@@ -244,7 +254,8 @@ class ImportadorRegrasAmarracaoService
         array $linha,
         array $mapeamento,
         ?string $layoutPadrao,
-        int $numeroLinha
+        int $numeroLinha,
+        int $empresaId,
     ): array {
         $erros = [];
 
@@ -275,6 +286,10 @@ class ImportadorRegrasAmarracaoService
         }
 
         $parteDigitavel = trim($this->valorMapeado($linha, $mapeamento, 'parte_digitavel'));
+        $contaContrapartida = trim($this->valorMapeado($linha, $mapeamento, 'conta_contrapartida'));
+        if ($contaContrapartida !== '') {
+            $contaContrapartida = $this->planoContaResolver->resolverParaArmazenamento($empresaId, $contaContrapartida);
+        }
 
         return [
             'dados' => [
@@ -282,7 +297,7 @@ class ImportadorRegrasAmarracaoService
                 'palavra_chave' => $palavraChave,
                 'parte_digitavel' => $parteDigitavel !== '' ? $parteDigitavel : null,
                 'tipo_busca' => $tipoBusca,
-                'conta_contrapartida' => trim($this->valorMapeado($linha, $mapeamento, 'conta_contrapartida')) ?: null,
+                'conta_contrapartida' => $contaContrapartida !== '' ? $contaContrapartida : null,
                 'centro_custo' => trim($this->valorMapeado($linha, $mapeamento, 'centro_custo')) ?: null,
                 'prioridade' => (int) ($this->valorMapeado($linha, $mapeamento, 'prioridade') ?: 0),
                 'descricao' => trim($this->valorMapeado($linha, $mapeamento, 'descricao')) ?: null,

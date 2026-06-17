@@ -1,8 +1,12 @@
 import sys
 import csv
 import re
+import os
 from PyPDF2 import PdfReader
 import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 if len(sys.argv) < 3:
     print("Uso: python conversor_extrato_caixa_federal_pdf_csv.py <arquivo.pdf> <arquivo_saida.csv> [conta_banco]")
@@ -106,7 +110,7 @@ for page in reader.pages:
                     nome_empresa = nome_empresa.strip()
                     
                     # Pular linhas que não são lançamentos válidos
-                    if 'SALDO ANTERIOR' in historico or 'SALDO FINAL' in historico or valor == 0:
+                    if eh_descricao_saldo(historico) or valor == 0:
                         continue
                         
                     if historico:

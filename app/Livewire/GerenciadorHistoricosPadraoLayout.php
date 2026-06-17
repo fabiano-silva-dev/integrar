@@ -41,7 +41,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
     protected function rules()
     {
         $r = [
-            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
+            'layout_avancado' => $this->validationLayoutsAvancado(),
             'nome_sugerido' => 'required|string|max:255',
             'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
         ];
@@ -67,11 +67,32 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'grafeno' => 'Grafeno (PDF)',
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
+            'caixa' => 'Caixa Internet Banking (PDF)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
             'banrisul' => 'Banrisul (PDF) - Conta corrente',
+            'santander' => 'Santander (PDF)',
+            'itau' => 'Itaú (PDF)',
+            'bradesco' => 'Bradesco (PDF)',
+            'cresol' => 'Cresol (PDF)',
+            'banco_brasil' => 'Banco do Brasil (PDF)',
         ];
+    }
+
+    private function layoutsPdfViaOfx(): array
+    {
+        return ['santander', 'itau', 'bradesco', 'cresol', 'banco_brasil'];
+    }
+
+    private function layoutsComContaBancoNoScript(): array
+    {
+        return ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'banrisul'];
+    }
+
+    private function validationLayoutsAvancado(): string
+    {
+        return 'required|in:' . implode(',', array_keys(self::getLayoutsAvancado()));
     }
 
     private function determinarScriptPython(): string
@@ -85,6 +106,12 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
             'banrisul' => 'conversor_extrato_banrisul_pdf_csv.py',
+            'caixa' => 'conversor_extrato_caixa_pdf_csv.py',
+            'santander' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'itau' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'bradesco' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'cresol' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'banco_brasil' => 'conversor_extrato_pdf_csv_via_ofx.py',
         ];
         return $scripts[$this->layout_avancado] ?? 'conversor_registros_csv.py';
     }
@@ -103,7 +130,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
     {
         $this->erro = null;
         $this->validate([
-            'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
+            'layout_avancado' => $this->validationLayoutsAvancado(),
             'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240',
         ]);
 
@@ -135,7 +162,18 @@ class GerenciadorHistoricosPadraoLayout extends Component
             $this->mensagem_status = 'Executando conversão do layout...';
 
             $script_name = $this->determinarScriptPython();
-            if (in_array($this->layout_avancado, ['grafeno', 'sicoob', 'caixa_federal', 'registros', 'sicredi', 'banrisul'])) {
+            if (in_array($this->layout_avancado, $this->layoutsPdfViaOfx(), true)) {
+                $resultado = Process::run(
+                    sprintf(
+                        'python3 %s "%s" "%s" "%s" "%s"',
+                        $script_path,
+                        $this->layout_avancado,
+                        $caminho_completo,
+                        $caminho_saida,
+                        $contaBanco
+                    )
+                );
+            } elseif (in_array($this->layout_avancado, $this->layoutsComContaBancoNoScript(), true)) {
                 $resultado = Process::run(
                     sprintf('python3 %s "%s" "%s" "%s"', $script_path, $caminho_completo, $caminho_saida, $contaBanco)
                 );
@@ -263,7 +301,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             session()->flash('message', 'Configuração atualizada com sucesso.');
         } else {
             $this->validate([
-                'layout_avancado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,ofx,registros,sicredi,banrisul',
+                'layout_avancado' => $this->validationLayoutsAvancado(),
                 'nome_sugerido' => 'required|string|max:255',
                 'empresa_id' => ['nullable', new EmpresaDoEscritorio()],
             ]);

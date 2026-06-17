@@ -12,10 +12,14 @@ Layout do PDF:
 """
 
 import csv
+import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 try:
     import pdfplumber
@@ -45,6 +49,13 @@ PADRAO_CABECALHO_DATA = re.compile(
 )
 PADRAO_NOME = re.compile(r'^NOME:\s*(.+)$', re.IGNORECASE)
 PADRAO_PAGINA = re.compile(r'^--\s+\d+\s+of\s+\d+\s+--$', re.IGNORECASE)
+PADRAO_AGENCIA = re.compile(r'AGENCIA:\s*(\d+)', re.IGNORECASE)
+PADRAO_CONTA = re.compile(r'CONTA\.{2,}:\s*([\d.\-]+)', re.IGNORECASE)
+PADRAO_NOME_TITULAR = re.compile(r'NOME\.{2,}:\s*(.+)$', re.IGNORECASE)
+PADRAO_SALDO_NA_DATA = re.compile(
+    r'SALDO\s+NA\s+DATA\s+([\d.]+,\d{2})(-)?\s*$',
+    re.IGNORECASE,
+)
 
 
 def extrair_texto_pdf(caminho_pdf):
@@ -55,6 +66,49 @@ def extrair_texto_pdf(caminho_pdf):
             if text:
                 linhas.extend(text.split('\n'))
     return linhas
+
+
+def extrair_dados_conta_banrisul(linhas):
+    agencia = ''
+    numero_conta = ''
+    titular = ''
+
+    for linha in linhas[:40]:
+        linha = linha.strip()
+        match_ag = PADRAO_AGENCIA.search(linha)
+        if match_ag:
+            agencia = match_ag.group(1)
+        match_conta = PADRAO_CONTA.search(linha)
+        if match_conta:
+            numero_conta = match_conta.group(1)
+        match_nome = PADRAO_NOME_TITULAR.search(linha)
+        if match_nome:
+            titular = match_nome.group(1).strip()
+
+    acct_id = re.sub(r'[^\d]', '', numero_conta) if numero_conta else '00000000'
+
+    return {
+        'cooperativa': agencia,
+        'numero_conta': numero_conta,
+        'titular': titular,
+        'acct_id': acct_id,
+        'branch_id': agencia,
+    }
+
+
+def extrair_saldo_final_banrisul(linhas):
+    saldo_final = None
+    for linha in linhas:
+        match = PADRAO_SALDO_NA_DATA.search(linha.strip())
+        if match:
+            valor_str, sinal = match.groups()
+            try:
+                saldo_final = float(valor_str.replace('.', '').replace(',', '.'))
+                if sinal:
+                    saldo_final = -abs(saldo_final)
+            except ValueError:
+                pass
+    return saldo_final
 
 
 def extrair_contexto_periodo(linhas):
@@ -159,6 +213,9 @@ def parsear_lancamentos(linhas):
         if valor_float == 0:
             continue
 
+        if eh_descricao_saldo(descricao.strip()):
+            continue
+
         lancamentos.append({
             'data': data,
             'descricao': descricao.strip(),
@@ -176,6 +233,16 @@ def formatar_valor_brl(valor):
         return f"{abs(float(valor)):,.2f}".replace('.', 'X').replace(',', '.').replace('X', ',')
     except Exception:
         return "0,00"
+
+
+def montar_memo_banrisul(lancamento):
+    historico = lancamento['descricao'].strip()
+    nome = (lancamento.get('nome') or '').strip()
+
+    if nome and nome.upper() not in historico.upper():
+        historico = f'{historico} - {nome}'
+
+    return historico
 
 
 def extrair_cnpj_cpf_nome(nome):

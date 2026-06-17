@@ -38,7 +38,7 @@ class ExtratorBancario extends Component
     }
 
     protected $messages = [
-        'contaBanco.required' => 'A conta do banco é obrigatória',
+        'contaBanco.required' => 'A conta contábil do Banco no sistema da Contabilidade é obrigatória',
         'saldoInicial.required' => 'O saldo inicial é obrigatório',
         'saldoInicial.numeric' => 'O saldo inicial deve ser um número',
         'saldoFinal.required' => 'O saldo final é obrigatório',

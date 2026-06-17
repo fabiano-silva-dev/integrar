@@ -5,11 +5,15 @@ Script para converter extrato PDF SICREDI para CSV no formato do importador avan
 Layout: Data | Descrição | Documento | Valor | Saldo
 """
 
+import os
 import sys
 import re
 import csv
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 try:
     import pdfplumber
@@ -125,12 +129,7 @@ def parsear_lancamentos(linhas):
             continue
         
         data, meio, valor_str, saldo_str = match.groups()
-        
-        # Ignorar SALDO ANTERIOR
-        if 'SALDO ANTERIOR' in meio.upper():
-            continue
-        
-        # Extrair documento do meio (última palavra antes do valor)
+
         doc_match = padrao_doc.search(meio)
         if doc_match:
             documento = doc_match.group(1)
@@ -138,7 +137,10 @@ def parsear_lancamentos(linhas):
         else:
             documento = ''
             descricao = meio
-        
+
+        if eh_descricao_saldo(meio) or eh_descricao_saldo(descricao):
+            continue
+
         try:
             valor_limpo = valor_str.replace('.', '').replace(',', '.')
             saldo_limpo = saldo_str.replace('.', '').replace(',', '.')

@@ -17,6 +17,7 @@ except ImportError:
     sys.exit(1)
 
 from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
+from extrato_util import eh_descricao_saldo  # noqa: E402
 
 LINHAS_IGNORAR = (
     'cresol central brasil',
@@ -175,8 +176,9 @@ def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
 
         descricao, identificacao = separar_descricao_identificacao(meio)
 
-        if re.search(r'SALDO\s+ANTERIOR', descricao, re.IGNORECASE):
-            saldo_corrente = valor_assinado(valor_str, tipo)
+        if eh_descricao_saldo(descricao):
+            if re.search(r'SALDO\s+ANTERIOR', descricao, re.IGNORECASE):
+                saldo_corrente = valor_assinado(valor_str, tipo)
             continue
 
         valor = valor_assinado(valor_str, tipo)

@@ -52,6 +52,10 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_banco_brasil_pdf_ofx.py',
     },
+    'banrisul': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_banrisul_pdf_ofx.py',
+    },
 }
 
 

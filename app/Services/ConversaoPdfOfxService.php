@@ -42,7 +42,31 @@ class ConversaoPdfOfxService
             'banco_brasil' => [
                 'banco_brasil' => 'Banco do Brasil (PDF)',
             ],
+            'banrisul' => [
+                'banrisul' => 'Banrisul (PDF) - Extrato',
+                'banrisul_enriquecido' => 'Banrisul (PDF) - Extrato + Pagamentos + PIX',
+            ],
         ];
+    }
+
+    public function layoutsRequeremArquivosAuxiliares(): array
+    {
+        return ['banrisul_enriquecido'];
+    }
+
+    public function layoutsComListagemLancamentos(): array
+    {
+        return ['banrisul', 'banrisul_enriquecido'];
+    }
+
+    public function layoutRequerArquivosAuxiliares(string $layout): bool
+    {
+        return in_array($layout, $this->layoutsRequeremArquivosAuxiliares(), true);
+    }
+
+    public function layoutExibeListagemLancamentos(string $layout): bool
+    {
+        return in_array($layout, $this->layoutsComListagemLancamentos(), true);
     }
 
     public function familiasLayout(): array
@@ -57,6 +81,7 @@ class ConversaoPdfOfxService
             'bradesco' => 'Bradesco',
             'cresol' => 'Cresol',
             'banco_brasil' => 'Banco do Brasil',
+            'banrisul' => 'Banrisul',
         ];
     }
 
@@ -91,8 +116,17 @@ class ConversaoPdfOfxService
         ]);
     }
 
-    public function executar(string $layout, string $caminhoPdf, string $caminhoOfx): array
+    public function executar(string $layout, string $caminhoPdf, string $caminhoOfx, ?string $caminhoPreview = null): array
     {
+        if ($layout === 'banrisul') {
+            return $this->executarScript(
+                'conversor_extrato_banrisul_pdf_ofx.py',
+                array_filter([$caminhoPdf, $caminhoOfx, $caminhoPreview]),
+                $layout,
+                $caminhoPreview
+            );
+        }
+
         $script = 'conversor_extrato_pdf_ofx.py';
         $caminhoScript = '/var/www/html/scripts/' . $script;
 
@@ -129,20 +163,109 @@ class ConversaoPdfOfxService
         return $this->parsearSaida($resultado->output());
     }
 
+    public function executarEnriquecido(
+        string $layout,
+        string $caminhoExtrato,
+        string $caminhoPix,
+        string $caminhoPagamentos,
+        string $caminhoOfx,
+        ?string $caminhoPreview = null
+    ): array {
+        if ($layout !== 'banrisul_enriquecido') {
+            throw new \InvalidArgumentException("Layout não suporta arquivos auxiliares: {$layout}");
+        }
+
+        return $this->executarScript(
+            'conversor_extrato_banrisul_enriquecido_pdf_ofx.py',
+            array_filter([
+                $caminhoExtrato,
+                $caminhoPix,
+                $caminhoPagamentos,
+                $caminhoOfx,
+                $caminhoPreview,
+            ]),
+            $layout,
+            $caminhoPreview
+        );
+    }
+
+    private function executarScript(string $script, array $argumentos, string $layout, ?string $caminhoPreview): array
+    {
+        $caminhoScript = '/var/www/html/scripts/' . $script;
+
+        if (!file_exists($caminhoScript)) {
+            throw new \RuntimeException("Script Python não encontrado: {$caminhoScript}");
+        }
+
+        $argsEscapados = array_map(
+            static fn (string $arg) => '"' . str_replace('"', '\\"', $arg) . '"',
+            $argumentos
+        );
+
+        $comando = sprintf(
+            'python3 %s %s',
+            $caminhoScript,
+            implode(' ', $argsEscapados)
+        );
+
+        Log::info('Executando conversão PDF->OFX', [
+            'layout' => $layout,
+            'comando' => $comando,
+        ]);
+
+        $resultado = Process::run($comando);
+
+        Log::info('Resultado conversão PDF->OFX', [
+            'layout' => $layout,
+            'sucesso' => $resultado->successful(),
+            'saida' => $resultado->output(),
+            'erro' => $resultado->errorOutput(),
+        ]);
+
+        if (!$resultado->successful()) {
+            throw new \RuntimeException(trim($resultado->errorOutput() ?: $resultado->output() ?: 'Falha na conversão.'));
+        }
+
+        $dados = $this->parsearSaida($resultado->output());
+
+        if ($caminhoPreview && file_exists($caminhoPreview)) {
+            $conteudo = file_get_contents($caminhoPreview);
+            $lancamentos = json_decode($conteudo ?: '[]', true);
+            if (is_array($lancamentos)) {
+                $dados['lancamentos'] = $lancamentos;
+            }
+        }
+
+        if (preg_match('/Lançamentos enriquecidos:\s*(\d+)/', $resultado->output(), $matches)) {
+            $dados['total_enriquecidos'] = (int) $matches[1];
+        }
+
+        if (preg_match('/Pagamentos separados \(juros\/multa\):\s*(\d+)/', $resultado->output(), $matches)) {
+            $dados['total_separados_encargos'] = (int) $matches[1];
+        }
+
+        return $dados;
+    }
+
     public function registrarSucesso(ConversaoExtrato $conversao, array $dados, string $nomeOfx): void
     {
+        $metadados = array_filter([
+            'cooperativa' => $dados['cooperativa'] ?? null,
+            'conta' => $dados['conta'] ?? null,
+            'titular' => $dados['titular'] ?? null,
+            'acct_id' => $dados['acct_id'] ?? null,
+            'total_enriquecidos' => $dados['total_enriquecidos'] ?? null,
+            'total_separados_encargos' => $dados['total_separados_encargos'] ?? null,
+            'lancamentos' => $dados['lancamentos'] ?? null,
+        ], static fn ($valor) => $valor !== null && $valor !== []);
+
         $conversao->update([
             'status' => 'concluida',
             'nome_arquivo_ofx' => $nomeOfx,
             'total_lancamentos' => $dados['total_lancamentos'] ?? 0,
             'data_inicial' => $this->parsearData($dados['data_inicial'] ?? null),
             'data_final' => $this->parsearData($dados['data_final'] ?? null),
-            'metadados' => array_filter([
-                'cooperativa' => $dados['cooperativa'] ?? null,
-                'conta' => $dados['conta'] ?? null,
-                'titular' => $dados['titular'] ?? null,
-                'acct_id' => $dados['acct_id'] ?? null,
-            ]),
+            'metadados' => $metadados ?: null,
         ]);
     }
 

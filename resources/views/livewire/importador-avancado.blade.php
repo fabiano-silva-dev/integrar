@@ -149,16 +149,22 @@
                                             <dd class="font-medium text-gray-900 text-right">{{ $todosLayouts[$layout_selecionado] ?? $layout_selecionado }}</dd>
                                         </div>
                                         <div class="flex justify-between gap-4 px-4 py-3">
-                                            <dt class="text-gray-500 shrink-0">Conta no Domínio</dt>
+                                            <dt class="text-gray-500 shrink-0">Conta no sistema da Contabilidade</dt>
                                             <dd class="font-medium text-indigo-700 text-right">{{ $conta_banco ?: '—' }}</dd>
                                         </div>
                                     </dl>
                                 @endif
 
-                                <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-1.5">Conta contábil do banco</label>
-                                <input type="text" id="conta_banco" wire:model.live.debounce.300ms="conta_banco"
-                                       placeholder="Ex: 1.1.1.01"
-                                       class="w-full border-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-3.5 px-4 text-base">
+                                <label for="conta_banco" class="block text-sm font-medium text-gray-700 mb-1.5">Conta contábil do Banco no sistema da Contabilidade</label>
+                                <x-busca-plano-conta
+                                    valor-model="conta_banco"
+                                    :valor="$conta_banco"
+                                    :pesquisa-habilitada="$empresaTemPlano"
+                                    :resultados="$sugestoesContaBanco"
+                                    selecionar-method="selecionarContaBanco"
+                                    placeholder="Ex: 254"
+                                    input-class="w-full border-gray-300 rounded-xl shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-3.5 px-4 text-base"
+                                />
                                 @error('conta_banco') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
                                 @error('empresa_id') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
 
@@ -187,7 +193,7 @@
                                         @if(!$empresa_id)
                                             Selecione a empresa no cabeçalho para importar
                                         @elseif(trim($conta_banco) === '')
-                                            Informe a conta contábil para importar
+                                            Informe a conta contábil do Banco para importar
                                         @endif
                                     </p>
                                 @endif

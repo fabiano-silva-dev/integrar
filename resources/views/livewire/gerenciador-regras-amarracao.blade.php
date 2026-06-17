@@ -159,7 +159,14 @@
                                                         </div>
                                                         <div>
                                                             <label class="block text-xs font-medium text-gray-700 mb-1">Conta contra-partida</label>
-                                                            <input wire:model="edit_conta_contrapartida" type="text" class="block w-full border-gray-300 rounded text-sm" placeholder="Ex.: 1083">
+                                                            <x-busca-plano-conta
+                                                                valor-model="edit_conta_contrapartida"
+                                                                :valor="$edit_conta_contrapartida"
+                                                                :pesquisa-habilitada="$empresaTemPlano"
+                                                                :resultados="$sugestoesContaContrapartida"
+                                                                selecionar-method="selecionarContaContrapartida"
+                                                                placeholder="Ex: 254"
+                                                            />
                                                         </div>
                                                         <div class="md:col-span-2">
                                                             <label class="block text-xs font-medium text-gray-700 mb-1">Histórico contábil</label>

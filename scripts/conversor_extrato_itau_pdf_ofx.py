@@ -17,6 +17,7 @@ except ImportError:
     sys.exit(1)
 
 from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
+from extrato_util import eh_descricao_saldo  # noqa: E402
 
 IGNORAR_PADROES = (
     'SALDO TOTAL DISPONÍVEL',
@@ -76,6 +77,8 @@ def extrair_periodo_itau(linhas):
 
 
 def deve_ignorar(descricao):
+    if eh_descricao_saldo(descricao):
+        return True
     upper = descricao.upper()
     return any(padrao in upper for padrao in IGNORAR_PADROES)
 
@@ -118,7 +121,7 @@ def parsear_lancamentos(linhas):
         if match_so:
             data = match_so.group(1)
             valor = float(match_so.group(2).replace('.', '').replace(',', '.'))
-            if valor != 0 and ultimo_memo:
+            if valor != 0 and ultimo_memo and not eh_descricao_saldo(ultimo_memo):
                 lancamentos.append({
                     'data': data,
                     'valor': valor,

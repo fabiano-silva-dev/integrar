@@ -4,16 +4,19 @@
 Script para extrair texto de PDF e exibir linha por linha na tela
 """
 
+import csv
+import re
 import sys
 import os
-import re
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
-import csv
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 try:
     import pdfplumber
@@ -473,7 +476,8 @@ def processar_lancamentos_com_data_valor(lancamentos_por_data, formato='3col', a
             if (data_processada and 
                 valor_processado is not None and 
                 tipo_operacao is not None and
-                valor_processado != 0):
+                valor_processado != 0 and
+                not eh_descricao_saldo(lancamento)):
                 item = {
                     'data': data_processada,
                     'valor': valor_processado,

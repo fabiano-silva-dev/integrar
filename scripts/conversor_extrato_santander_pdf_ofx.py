@@ -17,6 +17,7 @@ except ImportError:
     sys.exit(1)
 
 from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
+from extrato_util import eh_descricao_saldo  # noqa: E402
 
 MESES = {
     'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
@@ -110,6 +111,8 @@ def parsear_lancamentos(linhas):
         match = padrao_transacao.match(linha)
         if match and data_atual:
             descricao = match.group(1).strip()
+            if eh_descricao_saldo(descricao):
+                continue
             tipo = match.group(2).upper()
             valor = parsear_valor_brl(match.group(3))
             if valor is None or valor == 0:

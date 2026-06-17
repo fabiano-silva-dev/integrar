@@ -1,9 +1,13 @@
 import csv
+import os
 import re
 import sys
 from datetime import datetime
 
 from PyPDF2 import PdfReader
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from extrato_util import eh_descricao_saldo
 
 
 if len(sys.argv) < 3:
@@ -40,8 +44,7 @@ for page in reader.pages:
 
         data, numero_doc, historico, valor_str, natureza = match.groups()
 
-        historico_upper = historico.upper()
-        if "SALDO" in historico_upper:
+        if eh_descricao_saldo(historico):
             continue
 
         valor_float = float(valor_str.replace(".", "").replace(",", "."))

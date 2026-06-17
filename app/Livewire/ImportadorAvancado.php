@@ -11,6 +11,7 @@ use App\Models\Terceiro;
 use App\Rules\EmpresaDoEscritorio;
 use App\Services\OperadoraContext;
 use App\Services\OperadoraStorage;
+use App\Services\PlanoContaResolver;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,7 @@ class ImportadorAvancado extends Component
     public $familia_layout = '';
     public $layout_selecionado = '';
     public $conta_banco = '';
+    public $sugestoesContaBanco = [];
     public $status_importacao = 'pendente';
     public $progresso = 0;
     public $mensagem_status = '';
@@ -43,7 +45,7 @@ class ImportadorAvancado extends Component
         return [
             'arquivo' => 'required|file|extensions:csv,txt,pdf,ofx|max:10240',
             'empresa_id' => ['required', new EmpresaDoEscritorio()],
-            'layout_selecionado' => 'required|in:dominio,grafeno,sicoob,caixa_federal,caixa,ofx,registros,sicredi,banrisul',
+            'layout_selecionado' => 'required|in:' . implode(',', array_keys($this->obterTodosLayouts())),
             'conta_banco' => 'required|string',
         ];
     }
@@ -57,7 +59,7 @@ class ImportadorAvancado extends Component
         'empresa_id.exists' => 'A empresa selecionada não existe.',
         'layout_selecionado.required' => 'O layout é obrigatório.',
         'layout_selecionado.in' => 'O layout selecionado não é válido.',
-        'conta_banco.required' => 'A Conta do Banco é obrigatória na importação de extrato.',
+        'conta_banco.required' => 'A conta contábil do Banco no sistema da Contabilidade é obrigatória na importação de extrato.',
     ];
 
     public function mount()
@@ -151,6 +153,34 @@ class ImportadorAvancado extends Component
         }
     }
 
+    public function updatedContaBanco($valor): void
+    {
+        if (!$this->empresa_id || !(new PlanoContaResolver())->empresaTemPlanoAtivo((int) $this->empresa_id)) {
+            $this->sugestoesContaBanco = [];
+            return;
+        }
+
+        $this->sugestoesContaBanco = (new PlanoContaResolver())->buscar((int) $this->empresa_id, (string) $valor);
+    }
+
+    public function selecionarContaBanco(string $codigo): void
+    {
+        $this->conta_banco = $codigo;
+        $this->sugestoesContaBanco = [];
+    }
+
+    private function resolverContaBancoImportacao(): void
+    {
+        if (!$this->empresa_id || trim($this->conta_banco) === '') {
+            return;
+        }
+
+        $this->conta_banco = (new PlanoContaResolver())->resolverParaArmazenamento(
+            (int) $this->empresa_id,
+            $this->conta_banco
+        );
+    }
+
     private function sugerirLayoutPorArquivo(): void
     {
         if (!$this->arquivo || $this->layout_selecionado !== '') {
@@ -208,6 +238,11 @@ class ImportadorAvancado extends Component
             'caixa' => '.pdf',
             'sicredi' => '.pdf',
             'banrisul' => '.pdf',
+            'santander' => '.pdf',
+            'itau' => '.pdf',
+            'bradesco' => '.pdf',
+            'cresol' => '.pdf',
+            'banco_brasil' => '.pdf',
             'ofx' => '.ofx',
             'registros' => '.csv',
         ];
@@ -229,6 +264,11 @@ class ImportadorAvancado extends Component
             'caixa' => 'Extrato do Caixa Internet Banking (PDF)',
             'sicredi' => 'Extrato em PDF do Sicredi',
             'banrisul' => 'Extrato em PDF do Banrisul (conta corrente)',
+            'santander' => 'Extrato em PDF do Santander',
+            'itau' => 'Extrato em PDF do Itaú',
+            'bradesco' => 'Extrato em PDF do Bradesco',
+            'cresol' => 'Extrato em PDF da Cresol',
+            'banco_brasil' => 'Extrato em PDF do Banco do Brasil',
             'ofx' => 'Arquivo OFX do internet banking',
             'registros' => 'CSV exportado do Connectere (Contas Financeiras)',
         ];
@@ -287,6 +327,7 @@ class ImportadorAvancado extends Component
         
         $this->validate();
         OperadoraContext::resolveEmpresa($this->empresa_id);
+        $this->resolverContaBancoImportacao();
 
         try {
             $inicio_processamento = microtime(true);
@@ -426,9 +467,19 @@ class ImportadorAvancado extends Component
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
             'banrisul' => 'conversor_extrato_banrisul_pdf_csv.py',
+            'santander' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'itau' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'bradesco' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'cresol' => 'conversor_extrato_pdf_csv_via_ofx.py',
+            'banco_brasil' => 'conversor_extrato_pdf_csv_via_ofx.py',
         ];
 
         return $scripts[$this->layout_selecionado] ?? 'conversor_registros_csv.py';
+    }
+
+    private function layoutsPdfViaOfx(): array
+    {
+        return ['santander', 'itau', 'bradesco', 'cresol', 'banco_brasil'];
     }
 
     private function executarScriptPython($script, $entrada, $saida)
@@ -447,7 +498,12 @@ class ImportadorAvancado extends Component
         
         // Passar conta do banco para conversores que aceitam o 3º parâmetro
         $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'banrisul', 'ofx'];
-        if (in_array($this->layout_selecionado, $scriptsComContaBanco, true) && !empty($this->conta_banco)) {
+        $layoutsPdfViaOfx = $this->layoutsPdfViaOfx();
+
+        if (in_array($this->layout_selecionado, $layoutsPdfViaOfx, true)) {
+            $contaBanco = !empty($this->conta_banco) ? $this->conta_banco : '1.1.1.01';
+            $comando = "python3 /var/www/html/scripts/{$script} \"{$this->layout_selecionado}\" \"{$entrada}\" \"{$saida}\" \"{$contaBanco}\"";
+        } elseif (in_array($this->layout_selecionado, $scriptsComContaBanco, true) && !empty($this->conta_banco)) {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\" \"{$this->conta_banco}\"";
         } else {
             $comando = "python3 /var/www/html/scripts/{$script} \"{$entrada}\" \"{$saida}\"";
@@ -503,6 +559,11 @@ class ImportadorAvancado extends Component
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
             'banrisul' => 'Banrisul (PDF) - Conta corrente',
+            'santander' => 'Santander (PDF)',
+            'itau' => 'Itaú (PDF)',
+            'bradesco' => 'Bradesco (PDF)',
+            'cresol' => 'Cresol (PDF)',
+            'banco_brasil' => 'Banco do Brasil (PDF)',
         ];
         $nomeLayout = $layoutsNomes[$this->layout_selecionado] ?? $this->layout_selecionado;
 
@@ -678,6 +739,9 @@ class ImportadorAvancado extends Component
                 $historicoOriginal = $historico; // Preservar para matching no reprocessamento
                 $contaDebito = ltrim(trim($contaDebito ?? ''), '0');
                 $contaCredito = ltrim(trim($contaCredito ?? ''), '0');
+                $resolver = new PlanoContaResolver();
+                $contaDebito = $resolver->resolverParaArmazenamento($empresa->id, $contaDebito);
+                $contaCredito = $resolver->resolverParaArmazenamento($empresa->id, $contaCredito);
                 [$contaDebito, $contaCredito] = $this->aplicarContaBancoImportacao($contaDebito, $contaCredito);
                 $debPreenchido = $contaDebito !== '';
                 $credPreenchido = $contaCredito !== '';
@@ -991,6 +1055,21 @@ class ImportadorAvancado extends Component
             'banrisul' => [
                 'banrisul' => 'Banrisul (PDF) - Conta corrente',
             ],
+            'santander' => [
+                'santander' => 'Santander (PDF)',
+            ],
+            'itau' => [
+                'itau' => 'Itaú (PDF)',
+            ],
+            'bradesco' => [
+                'bradesco' => 'Bradesco (PDF)',
+            ],
+            'cresol' => [
+                'cresol' => 'Cresol (PDF)',
+            ],
+            'banco_brasil' => [
+                'banco_brasil' => 'Banco do Brasil (PDF)',
+            ],
             'ofx' => [
                 'ofx' => 'OFX — qualquer banco',
             ],
@@ -1020,6 +1099,11 @@ class ImportadorAvancado extends Component
             'caixa' => 'Caixa',
             'sicredi' => 'Sicredi',
             'banrisul' => 'Banrisul',
+            'santander' => 'Santander',
+            'itau' => 'Itaú',
+            'bradesco' => 'Bradesco',
+            'cresol' => 'Cresol',
+            'banco_brasil' => 'Banco do Brasil',
             'ofx' => 'OFX',
             'registros' => 'Connectere',
         ];
@@ -1041,12 +1125,15 @@ class ImportadorAvancado extends Component
             }
         }
 
+        $resolver = new PlanoContaResolver();
+
         return view('livewire.importador-avancado', [
             'empresas' => $empresas,
             'familiasLayout' => $familiasLayout,
             'layoutsDisponiveis' => $layoutsPorFamilia[$this->familia_layout] ?? [],
             'todosLayouts' => $this->obterTodosLayouts(),
             'empresaAtual' => $empresaAtual,
+            'empresaTemPlano' => $this->empresa_id ? $resolver->empresaTemPlanoAtivo((int) $this->empresa_id) : false,
         ]);
     }
 }
