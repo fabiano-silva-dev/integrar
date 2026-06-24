@@ -37,7 +37,8 @@ class ConversaoPdfOfxService
                 'bradesco' => 'Bradesco (PDF)',
             ],
             'cresol' => [
-                'cresol' => 'Cresol (PDF)',
+                'cresol' => 'Cresol (PDF) - Extrato consolidado',
+                'cresol_modelo2' => 'Cresol (PDF) - Extrato conta corrente',
             ],
             'banco_brasil' => [
                 'banco_brasil' => 'Banco do Brasil (PDF)',
@@ -56,7 +57,7 @@ class ConversaoPdfOfxService
 
     public function layoutsComListagemLancamentos(): array
     {
-        return ['banrisul', 'banrisul_enriquecido'];
+        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2'];
     }
 
     public function layoutRequerArquivosAuxiliares(string $layout): bool
@@ -101,6 +102,44 @@ class ConversaoPdfOfxService
         return null;
     }
 
+    /**
+     * Caminhos relativos a public/ das miniaturas de referência por layout.
+     *
+     * @return array<string, string>
+     */
+    public function miniaturasLayout(): array
+    {
+        return [
+            'cresol' => 'images/extratos/cresol/consolidado.png',
+            'cresol_modelo2' => 'images/extratos/cresol/conta-corrente.png',
+        ];
+    }
+
+    /**
+     * URLs das miniaturas disponíveis para os layouts de uma família.
+     *
+     * @return array<string, string>
+     */
+    public function miniaturasPorFamilia(string $familia): array
+    {
+        if ($familia === '') {
+            return [];
+        }
+
+        $layouts = array_keys($this->layoutsPdfPorFamilia()[$familia] ?? []);
+        $miniaturas = $this->miniaturasLayout();
+        $resultado = [];
+
+        foreach ($layouts as $layout) {
+            $caminho = $miniaturas[$layout] ?? null;
+            if ($caminho && is_file(public_path($caminho))) {
+                $resultado[$layout] = asset($caminho);
+            }
+        }
+
+        return $resultado;
+    }
+
     public function criarRegistro(string $layout, string $nomeArquivoOrigem): ConversaoExtrato
     {
         $empresa = OperadoraContext::resolveEmpresaDaSessao();
@@ -135,11 +174,12 @@ class ConversaoPdfOfxService
         }
 
         $comando = sprintf(
-            'python3 %s %s "%s" "%s"',
+            'python3 %s %s "%s" "%s"%s',
             $caminhoScript,
             $layout,
             $caminhoPdf,
-            $caminhoOfx
+            $caminhoOfx,
+            $caminhoPreview ? ' "' . str_replace('"', '\\"', $caminhoPreview) . '"' : ''
         );
 
         Log::info('Executando conversão PDF->OFX', [
@@ -160,7 +200,17 @@ class ConversaoPdfOfxService
             throw new \RuntimeException(trim($resultado->errorOutput() ?: $resultado->output() ?: 'Falha na conversão.'));
         }
 
-        return $this->parsearSaida($resultado->output());
+        $dados = $this->parsearSaida($resultado->output());
+
+        if ($caminhoPreview && file_exists($caminhoPreview)) {
+            $conteudo = file_get_contents($caminhoPreview);
+            $lancamentos = json_decode($conteudo ?: '[]', true);
+            if (is_array($lancamentos)) {
+                $dados['lancamentos'] = $lancamentos;
+            }
+        }
+
+        return $dados;
     }
 
     public function executarEnriquecido(

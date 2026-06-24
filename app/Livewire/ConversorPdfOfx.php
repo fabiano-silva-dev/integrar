@@ -319,6 +319,7 @@ class ConversorPdfOfx extends Component
         return view('livewire.conversor-pdf-ofx', [
             'familiasLayout' => $this->servico->familiasLayout(),
             'layoutsDisponiveis' => $this->servico->layoutsPdfPorFamilia()[$this->familia_layout] ?? [],
+            'miniaturasLayout' => $this->servico->miniaturasPorFamilia($this->familia_layout),
             'layoutRequerAuxiliares' => $this->servico->layoutRequerArquivosAuxiliares($this->layout_selecionado),
             'layoutExibeListagem' => $this->servico->layoutExibeListagemLancamentos($this->layout_selecionado),
         ]);

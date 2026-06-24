@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Converte extrato PDF Cresol para OFX."""
+"""Converte extrato PDF Cresol (extrato de conta corrente) para OFX."""
 
 import os
 import re
@@ -20,21 +20,24 @@ from gerador_ofx import gerar_arquivo_ofx  # noqa: E402
 from extrato_util import eh_descricao_saldo, gravar_preview_json  # noqa: E402
 
 LINHAS_IGNORAR = (
-    'cresol central brasil',
-    'extrato consolidado',
-    'segundo titular',
-    'conta integração',
-    'conta integracao',
-    'data movimento',
-    'data/hora:',
-    'julianabonald',
+    'extrato de conta corrente',
+    'consulta posição consolidada',
+    'consulta posicao consolidada',
+    'lançamentos',
+    'lancamentos',
+    'totalizadores',
+    'saldo bloqueado',
+    'saldo bloqueio',
+    'débitos pendentes',
+    'debitos pendentes',
+    'limite de crédito',
+    'limite de credito',
+    'cheque especial',
+    'custo efetivo total',
+    'juros de adiantamento',
+    'juros acumulados',
     'página',
     'pagina',
-    'https://',
-    'juros calculados',
-    'juros sobre limite',
-    'cet-custo',
-    'o valor das parcelas',
 )
 
 
@@ -52,9 +55,11 @@ def deve_ignorar_linha(linha):
     texto = linha.strip().lower()
     if not texto:
         return True
-    if texto.startswith('(=') or texto.startswith('(+') or texto.startswith('(-'):
+    if re.match(r'^r\$\s*[\d.]+,\d{2}\s+r\$\s*[\d.]+,\d{2}', texto):
         return True
-    if re.match(r'^[a-z]+\s*\|\s*\d{2}/\d{2}/\d{4}', texto):
+    if texto.startswith('saldo do dia'):
+        return True
+    if texto.startswith('saldo anterior'):
         return True
     return any(marca in texto for marca in LINHAS_IGNORAR)
 
@@ -63,51 +68,48 @@ def parsear_valor_brl(valor_str):
     return float(valor_str.replace('.', '').replace(',', '.'))
 
 
-def valor_assinado(valor_str, tipo):
+def valor_assinado(valor_str, sinal):
     valor = parsear_valor_brl(valor_str)
-    return -valor if tipo.upper() == 'D' else valor
+    return -valor if sinal == '-' else valor
 
 
-def extrair_dados_conta_cresol(linhas):
+def extrair_dados_conta(linhas):
     agencia = ''
     numero_conta = ''
     titular = ''
 
-    for linha in linhas[:40]:
+    for indice, linha in enumerate(linhas[:25]):
         texto = linha.strip()
 
-        match_ag = re.search(
-            r'Ag[eê]ncia:\s*(\d{4}\s*-\s*\d+)',
+        match = re.search(
+            r'Ag[eê]ncia:\s*(\d+)\s+Conta:\s*([\d.\-]+)',
             texto,
             re.IGNORECASE,
         )
-        if match_ag:
-            agencia = re.sub(r'\s+', '', match_ag.group(1))
+        if match:
+            agencia = match.group(1).strip()
+            numero_conta = match.group(2).strip()
+            if indice > 0:
+                candidato = linhas[indice - 1].strip()
+                if candidato and not re.search(r'ag[eê]ncia:', candidato, re.IGNORECASE):
+                    titular = candidato
+            break
 
-        match_conta = re.search(
-            r'Conta:\s*([\d.\-]+)\s*-\s*(.+)$',
-            texto,
-            re.IGNORECASE,
-        )
-        if match_conta:
-            numero_conta = match_conta.group(1).strip()
-            titular = match_conta.group(2).strip().rstrip('.')
-
-    acct_id = numero_conta.replace('.', '') if numero_conta else '00000000'
+    acct_id = re.sub(r'\D', '', numero_conta) if numero_conta else '00000000'
 
     return {
         'titular': titular,
         'cooperativa': agencia,
         'branch_id': agencia,
         'numero_conta': numero_conta,
-        'acct_id': acct_id,
+        'acct_id': acct_id or '00000000',
     }
 
 
-def extrair_periodo_cresol(linhas):
-    for linha in linhas[:40]:
+def extrair_periodo(linhas):
+    for linha in linhas[:30]:
         match = re.search(
-            r'(\d{2}/\d{2}/\d{4})\s+a\s+(\d{2}/\d{2}/\d{4})',
+            r'Per[ií]odo de\s+(\d{2}/\d{2}/\d{4})\s+a\s+(\d{2}/\d{2}/\d{4})',
             linha,
             re.IGNORECASE,
         )
@@ -116,33 +118,13 @@ def extrair_periodo_cresol(linhas):
     return None, None
 
 
-def separar_descricao_identificacao(meio):
-    meio = meio.strip()
-    if not meio:
-        return '', ''
-
-    match_id = re.search(r'([\d][\w.\-]{4,})$', meio)
-    if match_id:
-        identificacao = match_id.group(1)
-        descricao = meio[:match_id.start()].strip()
-        return descricao, identificacao
-
-    return meio, ''
-
-
-def montar_memo(descricao, identificacao=''):
-    if identificacao:
-        return f'{descricao} DOC: {identificacao}'.strip()
-    return descricao.strip()
-
-
 def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
     lancamentos = []
-    saldo_corrente = None
-    em_pendentes = False
+    data_corrente = None
 
-    padrao_linha = re.compile(
-        r'^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+([\d.]+,\d{2})\s+([CD])\s*$',
+    padrao_data = re.compile(r'^(\d{2}/\d{2}/\d{4})$')
+    padrao_lancamento = re.compile(
+        r'^(.+?)\s+([+-])\s*R\$\s*([\d.]+,\d{2})\s*$',
         re.IGNORECASE,
     )
 
@@ -151,22 +133,23 @@ def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
         if not texto:
             continue
 
-        if 'LANCAMENTOS FUTUROS/PENDENTES' in texto.upper():
-            em_pendentes = True
+        if deve_ignorar_linha(texto):
             continue
 
-        if em_pendentes or deve_ignorar_linha(texto):
+        match_data = padrao_data.match(texto)
+        if match_data:
+            data_corrente = match_data.group(1)
             continue
 
-        match = padrao_linha.match(texto)
-        if not match:
+        match = padrao_lancamento.match(texto)
+        if not match or not data_corrente:
             continue
 
-        data = match.group(1)
-        meio = match.group(2).strip()
-        valor_str = match.group(3)
-        tipo = match.group(4).upper()
+        descricao = match.group(1).strip()
+        if eh_descricao_saldo(descricao):
+            continue
 
+        data = data_corrente
         if periodo_inicio or periodo_fim:
             data_dt = datetime.strptime(data, '%d/%m/%Y')
             if periodo_inicio and data_dt < datetime.strptime(periodo_inicio, '%d/%m/%Y'):
@@ -174,47 +157,37 @@ def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
             if periodo_fim and data_dt > datetime.strptime(periodo_fim, '%d/%m/%Y'):
                 continue
 
-        descricao, identificacao = separar_descricao_identificacao(meio)
-
-        if eh_descricao_saldo(descricao):
-            if re.search(r'SALDO\s+ANTERIOR', descricao, re.IGNORECASE):
-                saldo_corrente = valor_assinado(valor_str, tipo)
-            continue
-
-        valor = valor_assinado(valor_str, tipo)
+        valor = valor_assinado(match.group(3), match.group(2))
         lancamentos.append({
             'data': data,
             'valor': valor,
-            'memo': montar_memo(descricao, identificacao),
+            'memo': descricao,
         })
 
-        if saldo_corrente is not None:
-            saldo_corrente += valor
-
-    return lancamentos, saldo_corrente
+    return lancamentos
 
 
-def extrair_saldo_resumo(linhas):
+def extrair_saldo_final(linhas):
     for linha in linhas:
         match = re.search(
-            r'\(=\)SALDO:\s*([\d.]+,\d{2})\s+([CD])',
+            r'Saldo da Conta Corrente\s+([+-])\s*R\$\s*([\d.]+,\d{2})',
             linha.strip(),
             re.IGNORECASE,
         )
         if match:
-            return valor_assinado(match.group(1), match.group(2))
+            return valor_assinado(match.group(2), match.group(1))
     return None
 
 
-def converter_pdf_cresol_para_ofx(caminho_pdf, caminho_ofx, caminho_preview=None):
+def converter_pdf_cresol_modelo2_para_ofx(caminho_pdf, caminho_ofx, caminho_preview=None):
     linhas = extrair_texto_pdf(caminho_pdf)
     if not linhas:
         raise ValueError('Não foi possível extrair texto do PDF')
 
-    dados_conta = extrair_dados_conta_cresol(linhas)
-    periodo_inicio, periodo_fim = extrair_periodo_cresol(linhas)
+    dados_conta = extrair_dados_conta(linhas)
+    periodo_inicio, periodo_fim = extrair_periodo(linhas)
+    lancamentos = parsear_lancamentos(linhas, periodo_inicio, periodo_fim)
 
-    lancamentos, saldo_calculado = parsear_lancamentos(linhas, periodo_inicio, periodo_fim)
     if not lancamentos:
         raise ValueError('Nenhum lançamento válido encontrado no PDF')
 
@@ -229,12 +202,9 @@ def converter_pdf_cresol_para_ofx(caminho_pdf, caminho_ofx, caminho_preview=None
         'memo': item['memo'],
     } for item in lancamentos_ordenados]
 
-    saldo_final = extrair_saldo_resumo(linhas)
+    saldo_final = extrair_saldo_final(linhas)
     if saldo_final is None:
-        if saldo_calculado is not None:
-            saldo_final = saldo_calculado
-        else:
-            saldo_final = sum(item['valor'] for item in transacoes)
+        saldo_final = sum(item['valor'] for item in transacoes)
 
     dtstart = None
     if periodo_inicio:
@@ -275,7 +245,7 @@ def converter_pdf_cresol_para_ofx(caminho_pdf, caminho_ofx, caminho_preview=None
 
 def main():
     if len(sys.argv) < 3:
-        print('Uso: python conversor_extrato_cresol_pdf_ofx.py <arquivo.pdf> <arquivo_saida.ofx> [preview.json]')
+        print('Uso: python conversor_extrato_cresol_modelo2_pdf_ofx.py <arquivo.pdf> <arquivo_saida.ofx> [preview.json]')
         sys.exit(1)
 
     caminho_pdf = sys.argv[1]
@@ -287,7 +257,7 @@ def main():
         sys.exit(1)
 
     try:
-        resultado = converter_pdf_cresol_para_ofx(caminho_pdf, caminho_ofx, caminho_preview)
+        resultado = converter_pdf_cresol_modelo2_para_ofx(caminho_pdf, caminho_ofx, caminho_preview)
         if resultado.get('cooperativa'):
             print(f"Agência extraída: {resultado['cooperativa']}")
         if resultado.get('numero_conta'):

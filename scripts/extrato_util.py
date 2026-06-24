@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Utilitários compartilhados para conversão de extratos bancários."""
 
+import json
 import re
 
 _PADROES_SALDO = (
@@ -33,3 +34,22 @@ def eh_descricao_saldo(descricao):
         return True
 
     return bool(re.match(r'^SALDO(\s|$)', upper))
+
+
+def montar_preview_lancamentos(transacoes):
+    preview = []
+    for item in transacoes:
+        preview.append({
+            'data': item['data'],
+            'historico': item.get('memo', item.get('historico', '')),
+            'valor': round(float(item['valor']), 2),
+        })
+    return preview
+
+
+def gravar_preview_json(transacoes, caminho_preview):
+    preview = montar_preview_lancamentos(transacoes)
+    if caminho_preview:
+        with open(caminho_preview, 'w', encoding='utf-8') as arquivo:
+            json.dump(preview, arquivo, ensure_ascii=False)
+    return preview

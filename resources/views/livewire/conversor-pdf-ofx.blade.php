@@ -26,28 +26,60 @@
 
                     @if(!empty($familia_layout))
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
-                            </label>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                @foreach($layoutsDisponiveis as $valor => $nome)
-                                    <label class="relative border rounded-lg p-3 cursor-pointer transition-all
-                                        {{ $layout_selecionado === $valor ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
-                                        <div class="flex items-start gap-3">
+                            @if(count($miniaturasLayout) > 0)
+                                <label class="block text-sm font-medium text-gray-700 mb-3">
+                                    Qual modelo é o seu extrato?
+                                </label>
+                                <div class="flex flex-wrap items-start gap-5">
+                                    @foreach($layoutsDisponiveis as $valor => $nome)
+                                        <label class="group cursor-pointer shrink-0">
                                             <input type="radio"
                                                 wire:model.live="layout_selecionado"
                                                 value="{{ $valor }}"
-                                                class="mt-1 text-indigo-600 border-gray-300 focus:ring-indigo-500">
-                                            <div>
-                                                <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
-                                                @if($valor === 'banrisul_enriquecido')
-                                                    <p class="text-xs text-gray-500 mt-1">Extrato + relatório de PIX + relatório de pagamentos de títulos</p>
+                                                class="sr-only">
+                                            <div class="inline-block rounded-xl border-2 overflow-hidden transition-all
+                                                {{ $layout_selecionado === $valor
+                                                    ? 'border-indigo-500 ring-2 ring-indigo-200 shadow-md'
+                                                    : 'border-gray-200 hover:border-gray-300 group-hover:shadow-sm' }}">
+                                                @if(isset($miniaturasLayout[$valor]))
+                                                    <img src="{{ $miniaturasLayout[$valor] }}"
+                                                         alt="Modelo {{ $nome }}"
+                                                         class="block">
                                                 @endif
+                                                <div class="p-2 bg-white text-center border-t border-gray-100">
+                                                    <p class="text-xs font-medium text-gray-900 leading-snug">{{ $nome }}</p>
+                                                    @if($valor === 'banrisul_enriquecido')
+                                                        <p class="text-xs text-gray-500 mt-1">Extrato + PIX + pagamentos</p>
+                                                    @endif
+                                                </div>
                                             </div>
-                                        </div>
-                                    </label>
-                                @endforeach
-                            </div>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @else
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
+                                </label>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    @foreach($layoutsDisponiveis as $valor => $nome)
+                                        <label class="relative border rounded-lg p-3 cursor-pointer transition-all
+                                            {{ $layout_selecionado === $valor ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white' }}">
+                                            <div class="flex items-start gap-3">
+                                                <input type="radio"
+                                                    wire:model.live="layout_selecionado"
+                                                    value="{{ $valor }}"
+                                                    class="mt-1 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
+                                                    @if($valor === 'banrisul_enriquecido')
+                                                        <p class="text-xs text-gray-500 mt-1">Extrato + relatório de PIX + relatório de pagamentos de títulos</p>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     @endif
 

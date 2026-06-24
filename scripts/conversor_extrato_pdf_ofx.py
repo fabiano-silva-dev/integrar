@@ -48,6 +48,10 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_cresol_pdf_ofx.py',
     },
+    'cresol_modelo2': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_cresol_modelo2_pdf_ofx.py',
+    },
     'banco_brasil': {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_banco_brasil_pdf_ofx.py',
@@ -69,13 +73,16 @@ def executar(script, args):
     return saida
 
 
-def converter(layout, caminho_pdf, caminho_ofx):
+def converter(layout, caminho_pdf, caminho_ofx, caminho_preview=None):
     config = LAYOUTS.get(layout)
     if not config:
         raise ValueError(f'Layout não suportado para conversão PDF→OFX: {layout}')
 
     if config['tipo'] == 'ofx_direto':
-        executar(config['script'], [caminho_pdf, caminho_ofx])
+        args = [caminho_pdf, caminho_ofx]
+        if caminho_preview:
+            args.append(caminho_preview)
+        executar(config['script'], args)
         return
 
     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_csv:
@@ -97,13 +104,14 @@ def main():
     layout = sys.argv[1]
     caminho_pdf = sys.argv[2]
     caminho_ofx = sys.argv[3]
+    caminho_preview = sys.argv[4] if len(sys.argv) > 4 else None
 
     if not os.path.exists(caminho_pdf):
         print(f"Erro: O arquivo '{caminho_pdf}' não existe.")
         sys.exit(1)
 
     try:
-        converter(layout, caminho_pdf, caminho_ofx)
+        converter(layout, caminho_pdf, caminho_ofx, caminho_preview)
     except Exception as erro:
         print(f'Erro na conversão: {erro}')
         sys.exit(1)
