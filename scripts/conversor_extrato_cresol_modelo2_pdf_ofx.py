@@ -36,8 +36,42 @@ LINHAS_IGNORAR = (
     'custo efetivo total',
     'juros de adiantamento',
     'juros acumulados',
+    'saldo em conta',
+    'saldo disponível',
+    'saldo disponivel',
     'página',
     'pagina',
+    'periodo de ',
+    'período de ',
+)
+
+MESES_POR_NOME = {
+    'janeiro': 1,
+    'fevereiro': 2,
+    'março': 3,
+    'marco': 3,
+    'abril': 4,
+    'maio': 5,
+    'junho': 6,
+    'julho': 7,
+    'agosto': 8,
+    'setembro': 9,
+    'outubro': 10,
+    'novembro': 11,
+    'dezembro': 12,
+}
+
+PADRAO_VALOR_FINAL = re.compile(r'\s([+-])\s*R\$\s*([\d.]+,\d{2})\s*$', re.IGNORECASE)
+PADRAO_DATA_INICIO = re.compile(r'^(\d{2}/\d{2}/\d{4})\s+')
+PADRAO_DATA_SOZINHA = re.compile(r'^(\d{2}/\d{2}/\d{4})$')
+PADRAO_SALDO_DIA_LINHA = re.compile(r'^\d{2}/\d{2}/\d{4}\s+Saldo do Dia', re.IGNORECASE)
+PADRAO_PERIODO_NUMERICO = re.compile(
+    r'Per[ií]odo de\s+(\d{2}/\d{2}/\d{4})\s+a\s+(\d{2}/\d{2}/\d{4})',
+    re.IGNORECASE,
+)
+PADRAO_PERIODO_EXTENSO = re.compile(
+    r'(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})\s+a\s+(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})',
+    re.IGNORECASE,
 )
 
 
@@ -61,6 +95,8 @@ def deve_ignorar_linha(linha):
         return True
     if texto.startswith('saldo anterior'):
         return True
+    if re.match(r'^p[aá]gina\s+\d+', texto):
+        return True
     return any(marca in texto for marca in LINHAS_IGNORAR)
 
 
@@ -82,7 +118,7 @@ def extrair_dados_conta(linhas):
         texto = linha.strip()
 
         match = re.search(
-            r'Ag[eê]ncia:\s*(\d+)\s+Conta:\s*([\d.\-]+)',
+            r'Ag[eê]ncia:?\s*(\d+)\s+Conta:?\s*([\d.\-]+)',
             texto,
             re.IGNORECASE,
         )
@@ -106,27 +142,71 @@ def extrair_dados_conta(linhas):
     }
 
 
+def data_por_nome_extenso(dia, mes_nome, ano):
+    mes = MESES_POR_NOME.get(mes_nome.lower())
+    if not mes:
+        return None
+    return datetime(int(ano), mes, int(dia)).strftime('%d/%m/%Y')
+
+
 def extrair_periodo(linhas):
-    for linha in linhas[:30]:
-        match = re.search(
-            r'Per[ií]odo de\s+(\d{2}/\d{2}/\d{4})\s+a\s+(\d{2}/\d{2}/\d{4})',
-            linha,
-            re.IGNORECASE,
-        )
+    for linha in linhas:
+        match = PADRAO_PERIODO_NUMERICO.search(linha)
         if match:
             return match.group(1), match.group(2)
+
+        match_extenso = PADRAO_PERIODO_EXTENSO.search(linha)
+        if match_extenso:
+            inicio = data_por_nome_extenso(
+                match_extenso.group(1),
+                match_extenso.group(2),
+                match_extenso.group(3),
+            )
+            fim = data_por_nome_extenso(
+                match_extenso.group(4),
+                match_extenso.group(5),
+                match_extenso.group(6),
+            )
+            if inicio and fim:
+                return inicio, fim
+
     return None, None
+
+
+def eh_inicio_descricao_lancamento(texto):
+    upper = texto.upper().strip()
+    if len(upper) <= 18 and not upper.startswith('PIX '):
+        return False
+
+    prefixos = (
+        'PIX DEBITO',
+        'PIX CREDITO',
+        'PAGAMENTO DE',
+        'TED ',
+        'SAQUE',
+        'DEPÓSITO',
+        'DEPOSITO',
+        'DÉBITO CONVENIO',
+        'DEBITO CONVENIO',
+        'PACOTE DE SERVI',
+    )
+    return any(upper.startswith(prefixo) for prefixo in prefixos)
+
+
+def lancamento_dentro_periodo(data, periodo_inicio, periodo_fim):
+    data_dt = datetime.strptime(data, '%d/%m/%Y')
+    if periodo_inicio and data_dt < datetime.strptime(periodo_inicio, '%d/%m/%Y'):
+        return False
+    if periodo_fim and data_dt > datetime.strptime(periodo_fim, '%d/%m/%Y'):
+        return False
+    return True
 
 
 def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
     lancamentos = []
     data_corrente = None
-
-    padrao_data = re.compile(r'^(\d{2}/\d{2}/\d{4})$')
-    padrao_lancamento = re.compile(
-        r'^(.+?)\s+([+-])\s*R\$\s*([\d.]+,\d{2})\s*$',
-        re.IGNORECASE,
-    )
+    descricao_pendente = []
+    aguardando_continuacao = False
 
     for linha in linhas:
         texto = linha.strip()
@@ -134,35 +214,75 @@ def parsear_lancamentos(linhas, periodo_inicio=None, periodo_fim=None):
             continue
 
         if deve_ignorar_linha(texto):
+            aguardando_continuacao = False
+            descricao_pendente = []
             continue
 
-        match_data = padrao_data.match(texto)
-        if match_data:
-            data_corrente = match_data.group(1)
+        if PADRAO_SALDO_DIA_LINHA.match(texto) or texto.lower().startswith('saldo do dia'):
+            aguardando_continuacao = False
+            descricao_pendente = []
+            match_data = PADRAO_DATA_INICIO.match(texto)
+            if match_data:
+                data_corrente = match_data.group(1)
             continue
 
-        match = padrao_lancamento.match(texto)
-        if not match or not data_corrente:
+        match_data_sozinha = PADRAO_DATA_SOZINHA.match(texto)
+        if match_data_sozinha:
+            data_corrente = match_data_sozinha.group(1)
+            aguardando_continuacao = False
+            descricao_pendente = []
             continue
 
-        descricao = match.group(1).strip()
-        if eh_descricao_saldo(descricao):
-            continue
+        match_valor = PADRAO_VALOR_FINAL.search(texto)
+        if match_valor:
+            aguardando_continuacao = False
+            parte_sem_valor = texto[:match_valor.start()].strip()
+            parte_sem_valor = re.sub(r'\s*-\s*$', '', parte_sem_valor).strip()
+            descricao_partes = list(descricao_pendente)
+            descricao_pendente = []
 
-        data = data_corrente
-        if periodo_inicio or periodo_fim:
-            data_dt = datetime.strptime(data, '%d/%m/%Y')
-            if periodo_inicio and data_dt < datetime.strptime(periodo_inicio, '%d/%m/%Y'):
+            data = data_corrente
+            match_data_sozinha_inline = PADRAO_DATA_SOZINHA.match(parte_sem_valor)
+            if match_data_sozinha_inline:
+                data = match_data_sozinha_inline.group(1)
+                data_corrente = data
+            else:
+                match_data_inicio = PADRAO_DATA_INICIO.match(parte_sem_valor)
+                if match_data_inicio:
+                    data = match_data_inicio.group(1)
+                    data_corrente = data
+                    resto = parte_sem_valor[match_data_inicio.end():].strip()
+                    if resto and resto != '-':
+                        descricao_partes.append(resto)
+                elif parte_sem_valor and parte_sem_valor != '-':
+                    descricao_partes.append(parte_sem_valor)
+
+            descricao = ' '.join(parte.strip() for parte in descricao_partes if parte.strip()).strip()
+            if not data or eh_descricao_saldo(descricao) or not descricao:
                 continue
-            if periodo_fim and data_dt > datetime.strptime(periodo_fim, '%d/%m/%Y'):
+            if not lancamento_dentro_periodo(data, periodo_inicio, periodo_fim):
                 continue
 
-        valor = valor_assinado(match.group(3), match.group(2))
-        lancamentos.append({
-            'data': data,
-            'valor': valor,
-            'memo': descricao,
-        })
+            valor = valor_assinado(match_valor.group(2), match_valor.group(1))
+            lancamentos.append({
+                'data': data,
+                'valor': valor,
+                'memo': descricao,
+            })
+            aguardando_continuacao = True
+            continue
+
+        if aguardando_continuacao and lancamentos:
+            if (
+                not PADRAO_DATA_INICIO.match(texto)
+                and not eh_inicio_descricao_lancamento(texto)
+            ):
+                lancamentos[-1]['memo'] = f"{lancamentos[-1]['memo']} {texto}".strip()
+                continue
+            aguardando_continuacao = False
+
+        aguardando_continuacao = False
+        descricao_pendente.append(texto)
 
     return lancamentos
 
@@ -176,6 +296,16 @@ def extrair_saldo_final(linhas):
         )
         if match:
             return valor_assinado(match.group(2), match.group(1))
+
+    for linha in linhas:
+        match = re.search(
+            r'(\d{2}/\d{2}/\d{4})\s+Saldo do Dia:\s*([+-])\s*R\$\s*([\d.]+,\d{2})',
+            linha.strip(),
+            re.IGNORECASE,
+        )
+        if match:
+            return valor_assinado(match.group(3), match.group(2))
+
     return None
 
 
