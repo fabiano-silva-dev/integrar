@@ -60,6 +60,14 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_banrisul_pdf_ofx.py',
     },
+    'nubank': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_nubank_pdf_ofx.py',
+    },
+    'infinitepay': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_infinitepay_pdf_ofx.py',
+    },
 }
 
 

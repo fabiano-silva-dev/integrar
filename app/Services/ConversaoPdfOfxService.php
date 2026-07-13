@@ -47,6 +47,12 @@ class ConversaoPdfOfxService
                 'banrisul' => 'Banrisul (PDF) - Extrato',
                 'banrisul_enriquecido' => 'Banrisul (PDF) - Extrato + Pagamentos + PIX',
             ],
+            'nubank' => [
+                'nubank' => 'Nubank (PDF)',
+            ],
+            'infinitepay' => [
+                'infinitepay' => 'InfinitePay (PDF)',
+            ],
         ];
     }
 
@@ -57,7 +63,7 @@ class ConversaoPdfOfxService
 
     public function layoutsComListagemLancamentos(): array
     {
-        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2'];
+        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2', 'nubank', 'infinitepay'];
     }
 
     public function layoutRequerArquivosAuxiliares(string $layout): bool
@@ -83,6 +89,8 @@ class ConversaoPdfOfxService
             'cresol' => 'Cresol',
             'banco_brasil' => 'Banco do Brasil',
             'banrisul' => 'Banrisul',
+            'nubank' => 'Nubank',
+            'infinitepay' => 'InfinitePay',
         ];
     }
 
