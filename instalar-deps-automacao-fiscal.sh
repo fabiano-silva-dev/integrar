@@ -1,0 +1,1 @@
+script-manutencao/instalar-deps-automacao-fiscal.sh
