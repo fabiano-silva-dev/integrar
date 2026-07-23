@@ -132,6 +132,35 @@ trait MenuTrait
                 ],
             ],
             [
+                'id' => 'automacao-fiscal',
+                'name' => 'Automação Fiscal',
+                'icon' => 'document',
+                'items' => [
+                    [
+                        'name' => 'Painel',
+                        'icon' => 'table',
+                        'url' => route('automacao-fiscal.painel'),
+                        'active' => request()->routeIs('automacao-fiscal.painel'),
+                    ],
+                    [
+                        'name' => 'Executar consulta',
+                        'icon' => 'document',
+                        'url' => route('automacao-fiscal.executar'),
+                        'active' => request()->routeIs('automacao-fiscal.executar') || request()->routeIs('automacao-fiscal.execucao'),
+                        'title' => 'Salvar parâmetros e acompanhar processamento da automação',
+                        'roles' => ['admin'],
+                    ],
+                    [
+                        'name' => 'Análises fiscais',
+                        'icon' => 'document',
+                        'url' => route('automacao-fiscal.analises'),
+                        'active' => request()->routeIs('automacao-fiscal.analises'),
+                        'title' => 'Resumos, valores e gráficos das coletas fiscais',
+                    ],
+
+                ],
+            ],
+            [
                 'id' => 'exportacao',
                 'name' => 'Exportação',
                 'icon' => 'export',
@@ -165,12 +194,10 @@ trait MenuTrait
                     ],
                     [
                         'name' => 'Configurações',
-                        'url' => '#',
+                        'url' => route('configuracoes.automacao-fiscal'),
                         'icon' => 'cog',
-                        'active' => false,
-                        'class' => 'text-gray-400 cursor-not-allowed',
-                        'disabled' => true,
-                        'note' => 'Em breve',
+                        'active' => request()->routeIs('configuracoes.*'),
+                        'roles' => ['admin', 'gerente'],
                     ],
                     [
                         'name' => 'Logs',

@@ -23,6 +23,23 @@ Route::middleware(['auth'])->group(function () {
     Route::redirect('/conversao/pdf-ofx-sicoob', '/conversao/pdf-ofx');
     Route::get('/tabela', App\Livewire\TabelaLancamentos::class)->name('tabela');
     Route::get('/empresas', App\Livewire\GerenciadorEmpresas::class)->name('empresas');
+    Route::get('/empresas/importar', App\Livewire\AutomacaoFiscal\ImportadorEmpresas::class)->name('empresas.importar');
+    Route::get('/configuracoes/automacao-fiscal/{aba?}', App\Livewire\AutomacaoFiscal\ConfiguracoesAutomacaoFiscal::class)
+        ->name('configuracoes.automacao-fiscal');
+    Route::get('/automacao-fiscal', App\Livewire\AutomacaoFiscal\PainelAutomacaoFiscal::class)
+        ->name('automacao-fiscal.painel');
+    Route::get('/automacao-fiscal/executar', App\Livewire\AutomacaoFiscal\ExecutarConsultaFiscal::class)
+        ->name('automacao-fiscal.executar');
+    Route::get('/automacao-fiscal/execucoes/{execucao}', App\Livewire\AutomacaoFiscal\ExecutarConsultaFiscal::class)
+        ->name('automacao-fiscal.execucao');
+    Route::get('/automacao-fiscal/artefatos/{artefato}', App\Http\Controllers\AutomacaoFiscal\AutomacaoArtefatoController::class)
+        ->name('automacao-fiscal.artefato');
+    Route::get('/automacao-fiscal/analises/{coleta?}', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
+        ->name('automacao-fiscal.analises');
+    Route::get('/automacao-fiscal/resumo-nfe/{coleta?}', function (?int $coleta = null) {
+        return redirect()->route('automacao-fiscal.analises', $coleta);
+    });
+
     Route::get('/plano-contas', App\Livewire\GerenciadorPlanoContas::class)->name('plano-contas');
     Route::get('/plano-contas/importar', App\Livewire\ImportadorPlanoContas::class)->name('plano-contas.importar');
     Route::get('/terceiros', App\Livewire\GerenciadorTerceiros::class)->name('terceiros');
