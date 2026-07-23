@@ -1,0 +1,36 @@
+{
+  "name": "@portal-automation/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server/index.js",
+    "cli": "tsx src/cli.ts",
+    "cli:dist": "node dist/cli.js",
+    "dev": "tsx watch src/server/index.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts",
+    "test:all": "tsx --test tests/**/*.test.ts",
+    "test:browser": "tsx --test tests/fake-mode.test.ts tests/timeout.test.ts tests/mtls.test.ts",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "playwright": "1.61.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "@types/node": "^24.0.15",
+    "eslint": "^9.31.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.37.0"
+  }
+}
