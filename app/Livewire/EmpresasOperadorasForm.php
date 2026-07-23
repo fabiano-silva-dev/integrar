@@ -2,8 +2,10 @@
 
 namespace App\Livewire;
 
+use App\Models\CertificadoDigital;
 use App\Models\EmpresasOperadora;
 use App\Rules\CnpjValido;
+use App\Services\AutomacaoFiscal\CertificadoDigitalService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -31,6 +33,11 @@ class EmpresasOperadorasForm extends Component
     public $limite_usuarios;
     public $subdominio;
     public $modoEdicao = false;
+
+    /** Upload A1 do escritório (contador) — só em edição. */
+    public $certificadoArquivo = null;
+    public string $certificadoNome = '';
+    public string $certificadoSenha = '';
 
     protected function rules()
     {
@@ -95,6 +102,10 @@ class EmpresasOperadorasForm extends Component
         $this->limite_usuarios = null;
         $this->subdominio = null;
         $this->modoEdicao = false;
+        $this->certificadoArquivo = null;
+        $this->certificadoNome = '';
+        $this->certificadoSenha = '';
+        $this->resetValidation(['certificadoArquivo', 'certificadoNome', 'certificadoSenha']);
     }
 
     public function salvarEmpresa()
@@ -109,11 +120,70 @@ class EmpresasOperadorasForm extends Component
         if ($this->empresa_id) {
             $empresa = EmpresasOperadora::find($this->empresa_id);
             $empresa->update($dados);
-        } else {
-            EmpresasOperadora::create($dados);
+            session()->flash('message', 'Escritório atualizado.');
+            $this->carregarEmpresas();
+            // Mantém edição aberta para permitir upload do certificado A1.
+            return;
         }
+
+        EmpresasOperadora::create($dados);
         $this->resetarCampos();
         $this->carregarEmpresas();
+        session()->flash('message', 'Escritório cadastrado. Edite-o para enviar o certificado A1 do contador.');
+    }
+
+    public function uploadCertificadoEscritorio(CertificadoDigitalService $service): void
+    {
+        if (!$this->modoEdicao || !$this->empresa_id) {
+            $this->addError('certificadoArquivo', 'Salve e edite o escritório antes de enviar o certificado.');
+
+            return;
+        }
+
+        $this->validate([
+            'certificadoArquivo' => 'required|file|extensions:pfx,p12|max:5120',
+            'certificadoNome' => 'required|string|min:3|max:255',
+            'certificadoSenha' => 'required|string|max:255',
+        ], [], [
+            'certificadoArquivo' => 'arquivo do certificado',
+            'certificadoNome' => 'nome do certificado',
+            'certificadoSenha' => 'senha',
+        ]);
+
+        try {
+            $service->armazenar(
+                $this->certificadoArquivo,
+                $this->certificadoSenha,
+                $this->certificadoNome,
+                (int) $this->empresa_id,
+                null // escritório / contador
+            );
+        } catch (\Throwable $e) {
+            $this->addError('certificadoArquivo', $e->getMessage());
+
+            return;
+        }
+
+        $this->certificadoArquivo = null;
+        $this->certificadoNome = '';
+        $this->certificadoSenha = '';
+        session()->flash('message', 'Certificado A1 do escritório armazenado. Nas integrações da empresa cliente, escolha-o para entrar como Empresa Contábil.');
+    }
+
+    public function desativarCertificadoEscritorio(int $id, CertificadoDigitalService $service): void
+    {
+        if (!$this->empresa_id) {
+            return;
+        }
+
+        $cert = CertificadoDigital::withoutGlobalScope('operadora')
+            ->where('empresa_operadora_id', $this->empresa_id)
+            ->whereNull('empresa_id')
+            ->where('id', $id)
+            ->firstOrFail();
+
+        $service->desativar($cert);
+        session()->flash('message', 'Certificado do escritório desativado.');
     }
 
     public function editarEmpresa($id)
@@ -161,6 +231,18 @@ class EmpresasOperadorasForm extends Component
 
     public function render()
     {
-        return view('livewire.empresas-operadoras-form');
+        $certificadosEscritorio = collect();
+        if ($this->modoEdicao && $this->empresa_id) {
+            $certificadosEscritorio = CertificadoDigital::withoutGlobalScope('operadora')
+                ->where('empresa_operadora_id', $this->empresa_id)
+                ->whereNull('empresa_id')
+                ->where('ativo', true)
+                ->orderBy('nome')
+                ->get();
+        }
+
+        return view('livewire.empresas-operadoras-form', [
+            'certificadosEscritorio' => $certificadosEscritorio,
+        ]);
     }
 }

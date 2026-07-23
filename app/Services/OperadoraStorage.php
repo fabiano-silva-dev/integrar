@@ -35,6 +35,43 @@ class OperadoraStorage
         return Storage::path(self::ensureDirectory('exports', $operadoraId));
     }
 
+    public static function certificadosDirectory(?int $operadoraId = null): string
+    {
+        return Storage::path(self::ensureDirectory('automacao-fiscal/certificados', $operadoraId));
+    }
+
+    public static function automacaoArtefatosDirectory(?int $operadoraId = null, ?string $execucaoUuid = null): string
+    {
+        $subdir = 'automacao-fiscal/artefatos';
+
+        if ($execucaoUuid !== null && $execucaoUuid !== '') {
+            $subdir .= '/' . basename($execucaoUuid);
+        }
+
+        return Storage::path(self::ensureDirectory($subdir, $operadoraId));
+    }
+
+    public static function automacaoTempDirectory(?int $operadoraId = null): string
+    {
+        return Storage::path(self::ensureDirectory('automacao-fiscal/temporarios', $operadoraId));
+    }
+
+    public static function automacaoExecucoesDirectory(?int $operadoraId = null, ?string $execucaoUuid = null): string
+    {
+        $subdir = 'automacao-fiscal/execucoes';
+
+        if ($execucaoUuid !== null && $execucaoUuid !== '') {
+            $subdir .= '/' . basename($execucaoUuid);
+        }
+
+        return Storage::path(self::ensureDirectory($subdir, $operadoraId));
+    }
+
+    public static function importacoesEmpresasDirectory(?int $operadoraId = null): string
+    {
+        return Storage::path(self::ensureDirectory('automacao-fiscal/importacoes-empresas', $operadoraId));
+    }
+
     public static function absolutePath(string $subdir, string $filename, ?int $operadoraId = null): string
     {
         return Storage::path(self::diskPath($subdir, $operadoraId) . '/' . basename($filename));

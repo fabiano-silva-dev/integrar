@@ -84,6 +84,62 @@
             </div>
         </form>
 
+        @if($modoEdicao && $empresa_id)
+            <div class="border-t border-gray-200 pt-8 mt-8 mb-8">
+                <h3 class="text-xl font-bold text-gray-900 mb-1">Certificado A1 do escritório</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Usado no e-CAC quando a integração da empresa cliente escolher este certificado:
+                    o portal seleciona <strong>CNPJ (Empresa Contábil)</strong>.
+                    O certificado A1 da própria empresa cliente usa <strong>CPF do Responsável</strong>.
+                </p>
+
+                <form wire:submit.prevent="uploadCertificadoEscritorio" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl border rounded-xl p-4 bg-gray-50 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nome</label>
+                        <input type="text" wire:model="certificadoNome" class="mt-1 w-full rounded-lg border-gray-300" placeholder="Ex.: e-CNPJ Contabilidade">
+                        @error('certificadoNome') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Arquivo PFX/P12</label>
+                        <input type="file" wire:model="certificadoArquivo" accept=".pfx,.p12" class="mt-1 w-full text-sm">
+                        @error('certificadoArquivo') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Senha</label>
+                        <input type="password" wire:model="certificadoSenha" autocomplete="new-password" class="mt-1 w-full rounded-lg border-gray-300">
+                        @error('certificadoSenha') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">
+                            Enviar certificado do escritório
+                        </button>
+                    </div>
+                </form>
+
+                <ul class="divide-y divide-gray-200 border rounded-lg max-w-3xl bg-white">
+                    @forelse($certificadosEscritorio as $cert)
+                        <li class="px-4 py-3 text-sm flex flex-wrap justify-between gap-2 items-center">
+                            <div>
+                                <span class="font-medium text-gray-900">{{ $cert->nome }}</span>
+                                <span class="text-gray-500"> — {{ $cert->titular ?: 'sem titular' }}</span>
+                                @if($cert->valido_ate)
+                                    <span class="text-gray-400"> (até {{ $cert->valido_ate->format('d/m/Y') }})</span>
+                                @endif
+                            </div>
+                            <button type="button"
+                                    wire:click="desativarCertificadoEscritorio({{ $cert->id }})"
+                                    wire:confirm="Desativar este certificado do escritório?"
+                                    class="text-red-600 hover:underline text-xs font-semibold">
+                                Desativar
+                            </button>
+                        </li>
+                    @empty
+                        <li class="px-4 py-6 text-center text-gray-400 text-sm">Nenhum certificado A1 do escritório cadastrado.</li>
+                    @endforelse
+                </ul>
+            </div>
+        @endif
+
         <div class="border-t border-gray-200 pt-8 mt-8">
             <div class="overflow-x-auto">
                 <table class="min-w-full bg-white rounded shadow text-sm">

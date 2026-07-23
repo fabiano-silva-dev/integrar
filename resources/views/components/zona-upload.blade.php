@@ -4,6 +4,7 @@
     'formato' => '',
     'nomeArquivo' => null,
     'bloqueado' => false,
+    'multiple' => false,
 ])
 
 <div
@@ -27,7 +28,13 @@
             const files = e.dataTransfer?.files;
             if (!files?.length) return;
             const input = this.$refs.fileInput;
-            input.files = files;
+            if (@js($multiple)) {
+                const dt = new DataTransfer();
+                Array.from(files).forEach(f => dt.items.add(f));
+                input.files = dt.files;
+            } else {
+                input.files = files;
+            }
             input.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }"
@@ -70,6 +77,7 @@
                 type="file"
                 class="sr-only"
                 accept="{{ $accept }}"
+                @if($multiple) multiple @endif
                 {{ $attributes->whereStartsWith('wire:') }}
             >
 
