@@ -13,10 +13,22 @@ class Empresa extends Model
 
     protected $fillable = [
         'nome',
+        'razao_social',
+        'nome_fantasia',
         'cnpj',
+        'inscricao_estadual',
+        'inscricao_municipal',
+        'uf',
+        'codigo_municipio_ibge',
+        'municipio',
         'codigo_sistema',
         'codigo_conta_banco',
+        'ativo',
         'empresa_operadora_id',
+    ];
+
+    protected $casts = [
+        'ativo' => 'boolean',
     ];
 
     public function importacoes(): HasMany
@@ -32,5 +44,15 @@ class Empresa extends Model
     public function planoContas(): HasMany
     {
         return $this->hasMany(PlanoConta::class);
+    }
+
+    public function integracoes(): HasMany
+    {
+        return $this->hasMany(EmpresaIntegracao::class);
+    }
+
+    public function certificadosDigitais(): HasMany
+    {
+        return $this->hasMany(CertificadoDigital::class);
     }
 }

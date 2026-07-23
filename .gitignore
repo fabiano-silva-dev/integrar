@@ -16,6 +16,8 @@
 /.zed
 /auth.json
 /node_modules
+scripts/**/node_modules/
+scripts/**/dist/
 /public/build
 /public/hot
 /public/storage
