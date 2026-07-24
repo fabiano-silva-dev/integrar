@@ -45,6 +45,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/automacao-fiscal/xml-download/{token}', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlArquivoController::class)
         ->where('token', '[0-9a-fA-F-]{36}')
         ->name('automacao-fiscal.documento.xml.arquivo');
+    Route::get('/automacao-fiscal/xml-download/{token}/danfe', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlDanfeController::class)
+        ->where('token', '[0-9a-fA-F-]{36}')
+        ->name('automacao-fiscal.documento.xml.danfe');
     Route::get('/automacao-fiscal/analises', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
         ->name('automacao-fiscal.analises');
     Route::get('/automacao-fiscal/analises/{empresa}/{portal}/{competencia}', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
