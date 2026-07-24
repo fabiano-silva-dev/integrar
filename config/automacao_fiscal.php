@@ -36,24 +36,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Download de XML NF-e (modelo 55) via portal nacional (Playwright)
+    | WS Contabilista SEFAZ-RS (download XML por chave com A1 do escritório)
+    |--------------------------------------------------------------------------
+    */
+    'nfe_contabilista_url' => env(
+        'NFE_CONTABILISTA_URL',
+        'https://nfe-rs-integracao.sefazvirtual.rs.gov.br/ws/NfeIntegracao/NfeIntegracao.asmx'
+    ),
+    'nfe_contabilista_tp_amb' => env('NFE_CONTABILISTA_TP_AMB', '1'),
+    'nfe_contabilista_ver_aplic' => env('NFE_CONTABILISTA_VER_APLIC', 'IntegrarExpert1.0'),
+    /** Timeout curto: o host Contabilista RS costuma ficar inacessível; não bloquear a fila. */
+    'nfe_contabilista_timeout_s' => (int) env('NFE_CONTABILISTA_TIMEOUT_S', 12),
+    'nfe_contabilista_connect_timeout_s' => (int) env('NFE_CONTABILISTA_CONNECT_TIMEOUT_S', 5),
+
+    /*
+    |--------------------------------------------------------------------------
+    | DistDFe + Manifestação (Ambiente Nacional) — A1 do destinatário/cliente
     |--------------------------------------------------------------------------
     |
-    | Automação do consultaRecaptcha.aspx + "Download do documento" com A1.
-    | hCaptcha resolvido via CapSolver (CAPSOLVER_API_KEY).
+    | Ciência da Operação (210210) e download por chave (consChNFe).
     |
     */
-    'nfe_fazenda_entry_url' => env(
-        'NFE_FAZENDA_ENTRY_URL',
-        'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=resumo&tipoConteudo=7PhJ+gAVw2g='
+    'nfe_distdfe_url' => env(
+        'NFE_DISTDFE_URL',
+        'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
     ),
-
-    'nfe_fazenda_cert_origins' => env(
-        'NFE_FAZENDA_CERT_ORIGINS',
-        'https://www.nfe.fazenda.gov.br'
+    'nfe_recepcao_evento_url' => env(
+        'NFE_RECEPCAO_EVENTO_URL',
+        'https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx'
     ),
-
-    'capsolver_api_key' => env('CAPSOLVER_API_KEY', ''),
-
-    'nfe_xml_timeout_ms' => (int) env('NFE_XML_TIMEOUT_MS', 300000),
+    'nfe_distdfe_tp_amb' => env('NFE_DISTDFE_TP_AMB', '1'),
+    'nfe_distdfe_cuf_autor' => env('NFE_DISTDFE_CUF_AUTOR', '43'),
+    'nfe_distdfe_timeout_s' => (int) env('NFE_DISTDFE_TIMEOUT_S', 60),
+    'nfe_distdfe_retry_count' => (int) env('NFE_DISTDFE_RETRY_COUNT', 3),
+    'nfe_distdfe_retry_delay_s' => (int) env('NFE_DISTDFE_RETRY_DELAY_S', 20),
 ];

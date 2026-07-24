@@ -141,6 +141,22 @@ class CertificadoDigitalService
     }
 
     /**
+     * Certificado A1 ativo do escritório (contador) — empresa_id nulo.
+     */
+    public function resolverCertificadoEscritorio(): ?CertificadoDigital
+    {
+        return CertificadoDigital::query()
+            ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->whereNull('empresa_id')
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Certificado A1 ativo cujo titular (CNPJ/CPF) corresponde ao documento informado.
      */
     public function resolverAtivoPorDocumento(string $documento): ?CertificadoDigital
@@ -198,12 +214,11 @@ class CertificadoDigitalService
     }
 
     /**
-     * Extrai certificado e chave privada PEM para mTLS (arquivos temporários).
-     * O chamador deve invocar o cleanup ao terminar.
+     * Extrai certificado e chave privada PEM (conteúdo em memória) a partir do A1.
      *
-     * @return array{cert: string, key: string, cleanup: \Closure}
+     * @return array{cert: string, key: string}
      */
-    public function materializarCredenciaisMtls(CertificadoDigital $certificado): array
+    public function extrairPem(CertificadoDigital $certificado): array
     {
         $caminho = $this->caminhoAbsoluto($certificado);
         if ($caminho === null || ! is_file($caminho)) {
@@ -215,8 +230,18 @@ class CertificadoDigitalService
             throw new RuntimeException('Não foi possível ler o certificado A1.');
         }
 
-        $senha = (string) $certificado->senha_criptografada;
-        $creds = $this->extrairCertEChavePem($binario, $senha);
+        return $this->extrairCertEChavePem($binario, (string) $certificado->senha_criptografada);
+    }
+
+    /**
+     * Extrai certificado e chave privada PEM para mTLS (arquivos temporários).
+     * O chamador deve invocar o cleanup ao terminar.
+     *
+     * @return array{cert: string, key: string, cleanup: \Closure}
+     */
+    public function materializarCredenciaisMtls(CertificadoDigital $certificado): array
+    {
+        $creds = $this->extrairPem($certificado);
 
         $workDir = sys_get_temp_dir() . '/nfe-mtls-' . Str::uuid();
         File::ensureDirectoryExists($workDir, 0700);
