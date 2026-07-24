@@ -24,7 +24,6 @@ import type {
   PortalAdapter,
 } from './types.js';
 import { EcacRsAdapter } from '../portals/ecac-rs/EcacRsAdapter.js';
-import { NfeFazendaAdapter } from '../portals/nfe-fazenda/NfeFazendaAdapter.js';
 import { NfseEmissorAdapter } from '../portals/nfse-emissor/NfseEmissorAdapter.js';
 
 export class AutomationRunner {
@@ -180,18 +179,23 @@ export class AutomationRunner {
       }
     };
 
-    const saveScreenshot = async (filename: string, page?: Page) => {
+    const saveScreenshot = async (
+      filename: string,
+      page?: Page,
+      options?: { fullPage?: boolean; metadata?: Record<string, unknown> },
+    ) => {
       const target = page ?? browserManager.page;
       if (!target || target.isClosed()) {
         return null;
       }
-      const buffer = await target.screenshot({ fullPage: true, type: 'png' });
+      const fullPage = options?.fullPage ?? true;
+      const buffer = await target.screenshot({ fullPage, type: 'png' });
       const artifact = await store.writeBinary('screenshot', filename, buffer, 'image/png');
       await emitEvent({
         level: 'info',
         eventType: 'SCREENSHOT_SAVED',
         message: `Screenshot salvo: ${filename}`,
-        metadata: { filename, sha256: artifact.sha256 },
+        metadata: { filename, sha256: artifact.sha256, ...(options?.metadata ?? {}) },
       });
       try {
         await this.platform.postArtifact(runId, artifact);
@@ -279,6 +283,7 @@ export class AutomationRunner {
         browser: session.browser,
         context: session.context,
         page: session.page,
+        ...(clientCertificates ? { clientCertificates } : {}),
         emitEvent,
         saveScreenshot,
         saveDownload,
@@ -364,9 +369,6 @@ export class AutomationRunner {
 function createPortalAdapter(portal: PortalCode): PortalAdapter {
   if (portal === 'nfse-emissor') {
     return new NfseEmissorAdapter();
-  }
-  if (portal === 'nfe-fazenda') {
-    return new NfeFazendaAdapter();
   }
   return new EcacRsAdapter();
 }

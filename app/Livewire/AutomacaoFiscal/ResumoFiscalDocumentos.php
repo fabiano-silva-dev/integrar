@@ -7,11 +7,13 @@ use App\Models\DocumentoFiscal;
 use App\Models\Empresa;
 use App\Models\PortalIntegracao;
 use App\Services\AutomacaoFiscal\AnaliseFiscalService;
+use App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter;
 use App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser;
 use App\Services\AutomacaoFiscal\ExtratoNfseParser;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadProgresso;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadService;
 use App\Services\OperadoraContext;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -44,8 +46,13 @@ class ResumoFiscalDocumentos extends Component
     public array $xmlLogs = [];
     public ?string $xmlErro = null;
     public ?string $xmlNomeArquivo = null;
+    public ?string $xmlFonte = null;
     public ?string $xmlChave = null;
     public ?int $xmlDocumentoId = null;
+    public ?int $xmlDuracaoMs = null;
+    public ?string $xmlFinishedAt = null;
+    /** @var array<string, mixed> */
+    public array $xmlParametros = [];
 
     public function mount(?int $empresa = null, ?int $portal = null, ?string $competencia = null): void
     {
@@ -120,7 +127,17 @@ class ResumoFiscalDocumentos extends Component
         $token = (string) Str::uuid();
         $operadoraId = OperadoraContext::id() ?? (int) $documento->empresa_operadora_id;
 
-        NfeXmlDownloadProgresso::iniciar($token, $documento->id, $operadoraId, $chave);
+        NfeXmlDownloadProgresso::iniciar(
+            $token,
+            $documento->id,
+            $operadoraId,
+            $chave,
+            'xml_nfe_documento',
+            [
+                'documento_id' => $documento->id,
+                'chave_acesso' => $chave,
+            ]
+        );
         NfeXmlDownloadProgresso::adicionarLog(
             $token,
             'info',
@@ -130,12 +147,10 @@ class ResumoFiscalDocumentos extends Component
 
         $this->xmlModalAberto = true;
         $this->xmlToken = $token;
-        $this->xmlStatus = 'running';
-        $this->xmlLogs = NfeXmlDownloadProgresso::obter($token)['logs'] ?? [];
-        $this->xmlErro = null;
-        $this->xmlNomeArquivo = null;
         $this->xmlChave = $chave;
         $this->xmlDocumentoId = $documento->id;
+        $this->aplicarProgressoXml(NfeXmlDownloadProgresso::obter($token) ?? []);
+        $this->xmlStatus = 'running';
 
         BaixarDocumentoFiscalXmlJob::dispatch($token, $documento->id, $operadoraId);
     }
@@ -151,11 +166,7 @@ class ResumoFiscalDocumentos extends Component
             return;
         }
 
-        $this->xmlStatus = (string) ($data['status'] ?? 'running');
-        $this->xmlLogs = is_array($data['logs'] ?? null) ? $data['logs'] : [];
-        $this->xmlErro = isset($data['error']) ? (string) $data['error'] : null;
-        $this->xmlNomeArquivo = isset($data['nome_arquivo']) ? (string) $data['nome_arquivo'] : null;
-        $this->xmlChave = isset($data['chave']) ? (string) $data['chave'] : $this->xmlChave;
+        $this->aplicarProgressoXml($data);
     }
 
     public function fecharModalXml(): void
@@ -167,8 +178,35 @@ class ResumoFiscalDocumentos extends Component
             $this->xmlLogs = [];
             $this->xmlErro = null;
             $this->xmlNomeArquivo = null;
+            $this->xmlFonte = null;
             $this->xmlChave = null;
             $this->xmlDocumentoId = null;
+            $this->xmlDuracaoMs = null;
+            $this->xmlFinishedAt = null;
+            $this->xmlParametros = [];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function aplicarProgressoXml(array $data): void
+    {
+        $this->xmlStatus = (string) ($data['status'] ?? 'running');
+        $this->xmlLogs = is_array($data['logs'] ?? null) ? $data['logs'] : [];
+        $this->xmlErro = isset($data['error']) ? (string) $data['error'] : null;
+        $this->xmlNomeArquivo = isset($data['nome_arquivo']) ? (string) $data['nome_arquivo'] : null;
+        $this->xmlFonte = isset($data['fonte']) ? (string) $data['fonte'] : null;
+        $this->xmlChave = isset($data['chave']) ? (string) $data['chave'] : $this->xmlChave;
+        $this->xmlDuracaoMs = isset($data['duracao_ms']) ? (int) $data['duracao_ms'] : null;
+        $this->xmlParametros = is_array($data['parametros'] ?? null) ? $data['parametros'] : [];
+        $this->xmlFinishedAt = null;
+        if (! empty($data['finished_at'])) {
+            try {
+                $this->xmlFinishedAt = Carbon::parse((string) $data['finished_at'])->format('d/m/Y H:i:s');
+            } catch (\Throwable) {
+                $this->xmlFinishedAt = (string) $data['finished_at'];
+            }
         }
     }
 
@@ -203,6 +241,15 @@ class ResumoFiscalDocumentos extends Component
                 ->paginate(25);
         }
 
+        $progresso = app(ExecucaoProgressoPresenter::class);
+        $xmlPipeline = $this->xmlToken
+            ? $progresso->montarPipelineDeEventos($this->xmlStatus, $this->xmlLogs)
+            : [];
+        $xmlEtapaAtual = null;
+        if ($this->xmlLogs !== []) {
+            $xmlEtapaAtual = (string) ($this->xmlLogs[array_key_last($this->xmlLogs)]['eventType'] ?? '');
+        }
+
         return view('livewire.automacao-fiscal.resumo-fiscal-documentos', [
             'empresas' => $empresas,
             'portais' => $portais,
@@ -213,6 +260,9 @@ class ResumoFiscalDocumentos extends Component
             'labelsColunasArquivo' => $this->analiseEhNfse
                 ? ExtratoNfseParser::COLUNAS
                 : ExtratoNfeEcacRsParser::COLUNAS,
+            'xmlProgresso' => $progresso,
+            'xmlPipeline' => $xmlPipeline,
+            'xmlEtapaAtual' => $xmlEtapaAtual ?: ($this->xmlStatus === 'running' ? 'executando' : null),
         ]);
     }
 }

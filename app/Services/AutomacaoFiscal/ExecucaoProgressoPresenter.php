@@ -17,7 +17,7 @@ class ExecucaoProgressoPresenter
             [
                 'key' => 'queue',
                 'label' => 'Na fila',
-                'match' => ['na_fila', 'JOB_STARTED'],
+                'match' => ['na_fila', 'JOB_STARTED', 'JOB_QUEUED'],
             ],
             [
                 'key' => 'start',
@@ -55,6 +55,7 @@ class ExecucaoProgressoPresenter
                     'AUTHENTICATION_CONFIRMED',
                     'ROLE_SELECTION_DETECTED',
                     'MANUAL_CONFIRMATION_DETECTED',
+                    'SEFAZ_RESPONSE',
                     'SCREENSHOT_SAVED',
                     'extract',
                     'EXTRACT_STARTED',
@@ -99,6 +100,7 @@ class ExecucaoProgressoPresenter
 
         $labels = [
             'JOB_STARTED' => 'Job enfileirado',
+            'JOB_QUEUED' => 'Na fila',
             'RUN_STARTED' => 'Execução iniciada',
             'CERTIFICATE_CONFIGURED' => 'Certificado A1 configurado',
             'CERTIFICATE_REQUEST_SUSPECTED' => 'Possível pedido de certificado',
@@ -113,6 +115,7 @@ class ExecucaoProgressoPresenter
             'AUTHENTICATION_CONFIRMED' => 'Autenticação confirmada',
             'ROLE_SELECTION_DETECTED' => 'Seleção de perfil detectada',
             'MANUAL_CONFIRMATION_DETECTED' => 'CAPTCHA / confirmação manual',
+            'SEFAZ_RESPONSE' => 'Resposta da SEFAZ',
             'SCREENSHOT_SAVED' => 'Screenshot salvo',
             'TRACE_SAVED' => 'Trace salvo',
             'FAKE_STEP' => 'Etapa simulada',
@@ -139,10 +142,11 @@ class ExecucaoProgressoPresenter
     }
 
     /**
-     * @param  Collection<int, AutomacaoExecucaoLog>|iterable<AutomacaoExecucaoLog>  $logs
+     * @param  object{status: string, etapa_atual?: ?string}|AutomacaoExecucao  $execucao
+     * @param  Collection<int, object>|iterable<object>  $logs
      * @return list<array{key: string, label: string, detail: ?string, state: string}>
      */
-    public function montarPipeline(AutomacaoExecucao $execucao, iterable $logs): array
+    public function montarPipeline(object $execucao, iterable $logs): array
     {
         $logs = collect($logs);
         $status = (string) $execucao->status;
@@ -151,7 +155,7 @@ class ExecucaoProgressoPresenter
         if ($status === 'na_fila' || $status === 'executando') {
             $seen[] = 'na_fila';
         }
-        if ($execucao->etapa_atual) {
+        if (! empty($execucao->etapa_atual)) {
             $seen[] = (string) $execucao->etapa_atual;
         }
         if (in_array($status, ['sucesso', 'sucesso_parcial'], true)) {
@@ -165,15 +169,15 @@ class ExecucaoProgressoPresenter
 
         $seenSet = array_fill_keys($seen, true);
         $hasError = $status === 'falha'
-            || $logs->contains(fn (AutomacaoExecucaoLog $log) => $log->nivel === 'error'
-                || in_array((string) $log->etapa, ['RUN_FAILED', 'JOB_FAILED', 'erro'], true));
-        $hasWarn = $logs->contains(fn (AutomacaoExecucaoLog $log) => $log->nivel === 'warning'
-            || in_array((string) $log->etapa, [
+            || $logs->contains(fn ($log) => (($log->nivel ?? null) === 'error')
+                || in_array((string) ($log->etapa ?? ''), ['RUN_FAILED', 'JOB_FAILED', 'erro'], true));
+        $hasWarn = $logs->contains(fn ($log) => (($log->nivel ?? null) === 'warning')
+            || in_array((string) ($log->etapa ?? ''), [
                 'MANUAL_CONFIRMATION_DETECTED',
                 'ROLE_SELECTION_DETECTED',
                 'CERTIFICATE_REQUEST_SUSPECTED',
             ], true));
-        $terminal = !$this->emAndamento($status);
+        $terminal = ! $this->emAndamento($status);
         $activeAssigned = false;
 
         $pipeline = [];
@@ -181,8 +185,8 @@ class ExecucaoProgressoPresenter
             $matched = collect($step['match'])->contains(fn ($m) => isset($seenSet[$m]));
             $lastMessage = $logs
                 ->reverse()
-                ->first(fn (AutomacaoExecucaoLog $log) => in_array((string) $log->etapa, $step['match'], true))
-                ?->mensagem;
+                ->first(fn ($log) => in_array((string) ($log->etapa ?? ''), $step['match'], true))
+                ?->mensagem ?? null;
 
             if ($matched) {
                 if ($step['key'] === 'finish' && $hasError) {
@@ -197,7 +201,7 @@ class ExecucaoProgressoPresenter
                 continue;
             }
 
-            if (!$terminal && !$activeAssigned) {
+            if (! $terminal && ! $activeAssigned) {
                 $activeAssigned = true;
                 $pipeline[] = ['key' => $step['key'], 'label' => $step['label'], 'detail' => $lastMessage, 'state' => 'active'];
                 continue;
@@ -222,5 +226,77 @@ class ExecucaoProgressoPresenter
         }
 
         return $pipeline;
+    }
+
+    /**
+     * Pipeline a partir de logs em array (consultas avulsas / cache).
+     *
+     * @param  list<array{eventType?: string, level?: string, message?: string, at?: string}>  $logs
+     * @return list<array{key: string, label: string, detail: ?string, state: string}>
+     */
+    public function montarPipelineDeEventos(string $status, array $logs): array
+    {
+        $statusNorm = match ($status) {
+            'running', 'na_fila', 'executando' => $status === 'running' ? 'executando' : $status,
+            'succeeded', 'sucesso', 'sucesso_parcial' => 'sucesso',
+            'failed', 'falha' => 'falha',
+            default => $status,
+        };
+
+        $fake = new class($statusNorm)
+        {
+            public string $status;
+
+            public ?string $etapa_atual = null;
+
+            public function __construct(string $status)
+            {
+                $this->status = $status;
+            }
+        };
+
+        $logModels = collect($logs)->map(function (array $log) {
+            return new class($log)
+            {
+                public string $etapa;
+
+                public string $mensagem;
+
+                public string $nivel;
+
+                public function __construct(array $log)
+                {
+                    $this->etapa = (string) ($log['eventType'] ?? '');
+                    $this->mensagem = (string) ($log['message'] ?? '');
+                    $level = (string) ($log['level'] ?? 'info');
+                    $this->nivel = $level === 'warn' ? 'warning' : $level;
+                }
+            };
+        });
+
+        return $this->montarPipeline($fake, $logModels);
+    }
+
+    public function labelStatusAvulso(string $status): string
+    {
+        return match ($status) {
+            'idle' => 'Aguardando',
+            'running', 'executando' => 'Em execução',
+            'succeeded', 'sucesso' => 'Sucesso',
+            'failed', 'falha' => 'Falhou',
+            default => $this->labelStatus($status),
+        };
+    }
+
+    /**
+     * Origem do XML baixado: webservice do contador (escritório) ou do destinatário.
+     */
+    public static function labelFonteDownload(?string $fonte): ?string
+    {
+        return match ($fonte) {
+            'ws-distdfe-an' => 'DistDFe Ambiente Nacional — certificado A1 do destinatário (cliente)',
+            'ws-contabilista-rs' => 'WS Contabilista SEFAZ-RS — certificado A1 do escritório (contador)',
+            default => $fonte !== null && $fonte !== '' ? $fonte : null,
+        };
     }
 }

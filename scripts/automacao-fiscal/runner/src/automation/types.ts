@@ -1,6 +1,7 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { EnvConfig } from '../config/env.js';
 import type { LocalArtifact } from '../artifacts/ArtifactStore.js';
+import type { ClientCertificateMaterial } from '../certificates/CertificateProvider.js';
 import type { ErrorCode } from '../errors/errorCodes.js';
 
 export type AutomationMode = 'fake' | 'discovery' | 'certificate';
@@ -62,8 +63,14 @@ export type AutomationContext = {
   browser: Browser | null;
   context: BrowserContext | null;
   page: Page | null;
+  /** Material A1 carregado para o contexto atual. */
+  clientCertificates?: ClientCertificateMaterial[];
   emitEvent: (event: AutomationEvent) => Promise<void>;
-  saveScreenshot: (filename: string, page?: Page) => Promise<LocalArtifact | null>;
+  saveScreenshot: (
+    filename: string,
+    page?: Page,
+    options?: { fullPage?: boolean; metadata?: Record<string, unknown> },
+  ) => Promise<LocalArtifact | null>;
   saveDownload?: (
     filename: string,
     content: Buffer,

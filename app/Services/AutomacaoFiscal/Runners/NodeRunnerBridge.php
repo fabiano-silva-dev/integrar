@@ -41,39 +41,6 @@ class NodeRunnerBridge
     }
 
     /**
-     * Execução avulsa (sem AutomacaoExecucao), ex.: download de XML NF-e pela listagem.
-     *
-     * @param  array<string, mixed>  $params
-     * @return array{status: string, result: array<string, mixed>, events: list<array<string, mixed>>, artifacts: list<array<string, mixed>>, exit_code: int, work_dir: string}
-     */
-    public function executarAvulso(
-        string $runId,
-        string $portal,
-        string $operation,
-        array $params = [],
-        string $mode = 'certificate',
-        ?CertificadoDigital $certificado = null,
-        ?callable $onEvent = null,
-        ?callable $onArtifact = null,
-        ?int $timeoutMs = null
-    ): array {
-        $resultado = $this->executarInterno(
-            $runId,
-            $portal,
-            $operation,
-            $params,
-            $mode,
-            $certificado,
-            $onEvent,
-            $onArtifact,
-            $timeoutMs
-        );
-        $resultado['work_dir'] = storage_path('app/automacao-fiscal-runner/'.$runId);
-
-        return $resultado;
-    }
-
-    /**
      * @param  array<string, mixed>  $params
      * @param  (callable(array<string, mixed>): void)|null  $onEvent
      * @param  (callable(array<string, mixed>): void)|null  $onArtifact
@@ -138,17 +105,6 @@ class NodeRunnerBridge
             ),
             'NFSE_EMISSOR_CERT_ORIGINS' => config('automacao_fiscal.nfse_cert_origins', 'https://certificado.nfse.gov.br'),
             'NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES' => 'nfse.gov.br',
-            'NFE_FAZENDA_MODE' => $mode,
-            'NFE_FAZENDA_ENTRY_URL' => (string) config(
-                'automacao_fiscal.nfe_fazenda_entry_url',
-                'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=resumo&tipoConteudo=7PhJ+gAVw2g='
-            ),
-            'NFE_FAZENDA_CERT_ORIGINS' => (string) config(
-                'automacao_fiscal.nfe_fazenda_cert_origins',
-                'https://www.nfe.fazenda.gov.br'
-            ),
-            'NFE_FAZENDA_ALLOWED_HOST_SUFFIXES' => 'nfe.fazenda.gov.br,fazenda.gov.br',
-            'CAPSOLVER_API_KEY' => (string) (config('automacao_fiscal.capsolver_api_key') ?: env('CAPSOLVER_API_KEY', '')),
         ];
 
         if ($certificado && $mode === 'certificate') {
@@ -162,7 +118,6 @@ class NodeRunnerBridge
             $env['ECAC_A1_PASSWORD_FILE'] = $passwordFile;
             $env['ECAC_RS_MODE'] = 'certificate';
             $env['NFSE_EMISSOR_MODE'] = 'certificate';
-            $env['NFE_FAZENDA_MODE'] = 'certificate';
         } else {
             $env['ECAC_A1_PFX_FILE'] = $workDir . '/missing.pfx';
             $env['ECAC_A1_PASSWORD_FILE'] = $workDir . '/missing-password.txt';

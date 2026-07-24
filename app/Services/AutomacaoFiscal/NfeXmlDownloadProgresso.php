@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Progresso do download avulso de XML NF-e (modal na listagem).
+ * Progresso de download/consulta avulsa (cache + storage temporário).
  */
 class NfeXmlDownloadProgresso
 {
@@ -16,30 +16,34 @@ class NfeXmlDownloadProgresso
     }
 
     /**
-     * @return array{
-     *     status: string,
-     *     documento_id: int,
-     *     empresa_operadora_id: int|null,
-     *     chave: string|null,
-     *     logs: list<array{at: string, level: string, eventType: string, message: string}>,
-     *     error: string|null,
-     *     storage_path: string|null,
-     *     nome_arquivo: string|null
-     * }
+     * @param  array<string, mixed>  $parametros
+     * @return array<string, mixed>
      */
-    public static function iniciar(string $token, int $documentoId, ?int $operadoraId, ?string $chave = null): array
-    {
+    public static function iniciar(
+        string $token,
+        int $documentoId,
+        ?int $operadoraId,
+        ?string $chave = null,
+        ?string $tipo = null,
+        array $parametros = []
+    ): array {
         $payload = [
             'status' => 'running',
             'documento_id' => $documentoId,
             'empresa_operadora_id' => $operadoraId,
             'chave' => $chave,
+            'tipo' => $tipo,
+            'parametros' => $parametros,
             'logs' => [
-                self::linha('info', 'JOB_STARTED', 'Iniciando download do XML no portal da NF-e…'),
+                self::linha('info', 'JOB_STARTED', 'Consulta avulsa enfileirada…'),
             ],
             'error' => null,
             'storage_path' => null,
             'nome_arquivo' => null,
+            'fonte' => null,
+            'started_at' => now()->toIso8601String(),
+            'finished_at' => null,
+            'duracao_ms' => null,
         ];
 
         Cache::put(self::chave($token), $payload, now()->addHours(2));
@@ -72,18 +76,51 @@ class NfeXmlDownloadProgresso
         Cache::put(self::chave($token), $data, now()->addHours(2));
     }
 
-    public static function marcarSucesso(string $token, string $storagePath, string $nomeArquivo): void
+    /**
+     * Consome evento NDJSON do runner Node.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    public static function consumirEventoRunner(string $token, array $event): void
+    {
+        if (($event['type'] ?? null) !== 'event') {
+            return;
+        }
+
+        $eventType = (string) ($event['eventType'] ?? 'EVENT');
+        if ($eventType === 'TRACE_SAVED') {
+            return;
+        }
+
+        self::adicionarLog(
+            $token,
+            (string) ($event['level'] ?? 'info'),
+            $eventType,
+            (string) ($event['message'] ?? $eventType)
+        );
+    }
+
+    public static function marcarSucesso(string $token, string $storagePath, string $nomeArquivo, ?string $fonte = null): void
     {
         $data = self::obter($token);
         if ($data === null) {
             return;
         }
 
+        $finished = now();
         $data['status'] = 'succeeded';
         $data['storage_path'] = $storagePath;
         $data['nome_arquivo'] = $nomeArquivo;
+        $data['fonte'] = $fonte;
         $data['error'] = null;
-        $data['logs'][] = self::linha('info', 'RUN_FINISHED', 'XML disponível para download.');
+        $data['finished_at'] = $finished->toIso8601String();
+        $data['duracao_ms'] = self::calcularDuracaoMs($data['started_at'] ?? null, $finished);
+        $labelFonte = ExecucaoProgressoPresenter::labelFonteDownload($fonte);
+        $data['logs'][] = self::linha(
+            'info',
+            'RUN_FINISHED',
+            'XML disponível para download.'.($labelFonte ? ' Origem: '.$labelFonte : '')
+        );
 
         Cache::put(self::chave($token), $data, now()->addHours(2));
     }
@@ -95,8 +132,11 @@ class NfeXmlDownloadProgresso
             return;
         }
 
+        $finished = now();
         $data['status'] = 'failed';
         $data['error'] = $mensagem;
+        $data['finished_at'] = $finished->toIso8601String();
+        $data['duracao_ms'] = self::calcularDuracaoMs($data['started_at'] ?? null, $finished);
         $data['logs'][] = self::linha('error', 'RUN_FAILED', $mensagem);
 
         Cache::put(self::chave($token), $data, now()->addHours(2));
@@ -113,6 +153,21 @@ class NfeXmlDownloadProgresso
         Storage::disk('local')->put($relative, $xml);
 
         return $relative;
+    }
+
+    private static function calcularDuracaoMs(?string $startedAt, \DateTimeInterface $finished): ?int
+    {
+        if ($startedAt === null || $startedAt === '') {
+            return null;
+        }
+
+        try {
+            $start = \Carbon\Carbon::parse($startedAt);
+
+            return (int) max(0, $start->diffInMilliseconds($finished));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

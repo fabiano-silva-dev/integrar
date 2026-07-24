@@ -342,8 +342,8 @@
                                                                 wire:loading.attr="disabled"
                                                                 wire:target="baixarXml({{ $doc->id }})"
                                                                 class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                                                                title="Baixar XML no portal da NF-e">
-                                                            <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">XML</span>
+                                                                title="Baixar XML da NF-e e visualizar o DANFE em PDF">
+                                                            <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">XML/PDF</span>
                                                             <span wire:loading wire:target="baixarXml({{ $doc->id }})">…</span>
                                                         </button>
                                                     @else
@@ -389,9 +389,9 @@
     @if ($xmlModalAberto)
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
              wire:click.self="fecharModalXml">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
                  wire:click.stop>
-                <div class="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                <div class="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 shrink-0">
                     <div class="min-w-0">
                         <h2 class="text-lg font-semibold text-gray-900">Download do XML</h2>
                         <p class="text-xs text-gray-500 mt-0.5 font-mono truncate" title="{{ $xmlChave }}">
@@ -401,68 +401,31 @@
                     <button type="button" wire:click="fecharModalXml" class="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="Fechar">&times;</button>
                 </div>
 
-                <div class="px-5 py-3 border-b border-gray-50 flex flex-wrap items-center gap-2 text-sm">
-                    @if ($xmlStatus === 'running')
-                        <span class="inline-flex items-center gap-2 rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-medium">
-                            <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                            Em andamento
-                        </span>
-                    @elseif ($xmlStatus === 'succeeded')
-                        <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-medium">Concluído</span>
-                    @elseif ($xmlStatus === 'failed')
-                        <span class="inline-flex items-center rounded-full bg-red-50 text-red-700 px-3 py-1 text-xs font-medium">Falhou</span>
-                    @endif
+                <div class="flex-1 overflow-y-auto px-5 py-4 bg-slate-50">
+                    @include('livewire.automacao-fiscal.partials.painel-progresso-avulso', [
+                        'progresso' => $xmlProgresso,
+                        'pipeline' => $xmlPipeline,
+                        'logs' => $xmlLogs,
+                        'status' => $xmlStatus,
+                        'emAndamento' => $xmlStatus === 'running',
+                        'token' => $xmlToken,
+                        'erro' => $xmlErro,
+                        'nomeArquivo' => $xmlNomeArquivo,
+                        'fonte' => $xmlFonte,
+                        'duracaoMs' => $xmlDuracaoMs,
+                        'finishedAt' => $xmlFinishedAt,
+                        'parametros' => $xmlParametros,
+                        'contextoLabel' => 'NF-e · DistDFe / WS Contabilista',
+                        'etapaAtual' => $xmlEtapaAtual,
+                        'compact' => true,
+                    ])
                 </div>
 
-                <div class="flex-1 overflow-y-auto px-5 py-4 bg-slate-950 text-slate-100"
-                     id="xml-download-logs"
-                     wire:key="xml-logs-{{ count($xmlLogs) }}-{{ $xmlStatus }}"
-                     x-data
-                     x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })">
-                    <div class="space-y-2 font-mono text-xs">
-                        @forelse ($xmlLogs as $log)
-                            <div @class([
-                                'rounded-lg border px-3 py-2',
-                                'border-red-500/40 bg-red-950/40' => ($log['level'] ?? '') === 'error' || ($log['eventType'] ?? '') === 'RUN_FAILED',
-                                'border-amber-500/40 bg-amber-950/30' => ($log['level'] ?? '') === 'warn' || ($log['eventType'] ?? '') === 'MANUAL_CONFIRMATION_DETECTED',
-                                'border-emerald-500/30 bg-emerald-950/20' => in_array(($log['eventType'] ?? ''), ['AUTHENTICATION_CONFIRMED', 'RUN_FINISHED'], true),
-                                'border-slate-700 bg-slate-900/60' => ! in_array(($log['level'] ?? ''), ['error', 'warn'], true)
-                                    && ! in_array(($log['eventType'] ?? ''), ['RUN_FAILED', 'MANUAL_CONFIRMATION_DETECTED', 'AUTHENTICATION_CONFIRMED', 'RUN_FINISHED'], true),
-                            ])>
-                                <div class="flex items-center justify-between gap-2">
-                                    <span class="text-slate-300">{{ $log['eventType'] ?? 'EVENT' }}</span>
-                                    <span class="text-slate-500">{{ $log['at'] ?? '' }}</span>
-                                </div>
-                                <p class="mt-0.5 text-slate-100">{{ $log['message'] ?? '' }}</p>
-                            </div>
-                        @empty
-                            <p class="text-slate-400 py-6 text-center">Aguardando primeiros eventos…</p>
-                        @endforelse
-                    </div>
-                </div>
-
-                <div class="px-5 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-white">
-                    <div class="text-sm text-gray-600 min-w-0 flex-1">
-                        @if ($xmlStatus === 'failed' && $xmlErro)
-                            <p class="text-red-600">{{ $xmlErro }}</p>
-                        @elseif ($xmlStatus === 'succeeded')
-                            <p class="text-emerald-700">XML pronto{{ $xmlNomeArquivo ? ': '.$xmlNomeArquivo : '' }}</p>
-                        @else
-                            <p>Acompanhe as etapas da automação no portal da NF-e.</p>
-                        @endif
-                    </div>
-                    <div class="flex gap-2">
-                        @if ($xmlStatus === 'succeeded' && $xmlToken)
-                            <a href="{{ route('automacao-fiscal.documento.xml.arquivo', $xmlToken) }}"
-                               class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                                Baixar XML
-                            </a>
-                        @endif
-                        <button type="button" wire:click="fecharModalXml"
-                                class="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
-                            {{ $xmlStatus === 'running' ? 'Minimizar' : 'Fechar' }}
-                        </button>
-                    </div>
+                <div class="px-5 py-4 border-t border-gray-100 flex justify-end gap-2 bg-white shrink-0">
+                    <button type="button" wire:click="fecharModalXml"
+                            class="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                        {{ $xmlStatus === 'running' ? 'Minimizar' : 'Fechar' }}
+                    </button>
                 </div>
             </div>
         </div>

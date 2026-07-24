@@ -17,7 +17,7 @@ class BaixarDocumentoFiscalXmlJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 600;
+    public int $timeout = 900;
 
     public int $tries = 1;
 
@@ -57,31 +57,20 @@ class BaixarDocumentoFiscalXmlJob implements ShouldQueue
                 $this->token,
                 'info',
                 'RUN_STARTED',
-                'Abrindo automação do portal nacional da NF-e…'
+                'Iniciando download do XML (DistDFe/ciência → WS Contabilista)…'
             );
 
-            $resultado = $service->baixar($documento, function (array $event) {
-                $type = (string) ($event['type'] ?? 'event');
-                if ($type !== 'event') {
-                    return;
-                }
-
-                $level = (string) ($event['level'] ?? 'info');
-                $eventType = (string) ($event['eventType'] ?? 'EVENT');
-                $message = (string) ($event['message'] ?? $eventType);
-
-                if (in_array($eventType, ['SCREENSHOT_SAVED', 'TRACE_SAVED'], true)) {
-                    return;
-                }
-
-                NfeXmlDownloadProgresso::adicionarLog($this->token, $level, $eventType, $message);
-            });
+            $resultado = $service->baixar(
+                $documento,
+                fn (array $event) => NfeXmlDownloadProgresso::consumirEventoRunner($this->token, $event),
+            );
 
             $path = NfeXmlDownloadProgresso::gravarXml($this->token, $resultado['xml']);
             NfeXmlDownloadProgresso::marcarSucesso(
                 $this->token,
                 $path,
-                $resultado['nome_arquivo']
+                $resultado['nome_arquivo'],
+                $resultado['fonte'] ?? null
             );
         } catch (Throwable $e) {
             report($e);
