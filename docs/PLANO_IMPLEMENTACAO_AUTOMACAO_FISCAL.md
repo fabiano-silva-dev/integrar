@@ -8,17 +8,22 @@
 **Baseline consultada:** commit `a32da960d0e720378a95e27603e304a1eba60260`  
 **Nome sugerido no repositório:** `docs/PLANO_IMPLEMENTACAO_AUTOMACAO_FISCAL.md`
 
-### Status da implementação (atualizado em 23/07/2026)
+### Status da implementação (atualizado em 24/07/2026)
 
 Entregas já no repositório além do roteiro por fases abaixo:
 
 - **Análises fiscais** agrupadas por empresa + portal + competência (`AnaliseFiscalService`, rotas `/automacao-fiscal/analises` e `/automacao-fiscal/analises/{empresa}/{portal}/{competencia}`).
 - **Normalização de `chave_acesso`** (somente dígitos, tamanho variável) na importação de extratos NF-e/NFS-e, com idempotência por chave.
-- **Download avulso do XML** da NF-e modelo 55 via portal nacional (`portal` runner `nfe-fazenda`, serviço `NfeXmlDownloadService`, job e rotas de download).
-- Variáveis de ambiente: `NFE_FAZENDA_ENTRY_URL`, `NFE_FAZENDA_CERT_ORIGINS`, `CAPSOLVER_API_KEY` (hCaptcha com imagens), `NFE_XML_TIMEOUT_MS`.
-- Job de portal com `WithoutOverlapping` por escritório; consulta e-CAC sem notas tratada como sucesso (sem falso erro de importação).
+- **Download avulso do XML** da NF-e modelo 55 via webservices SOAP (sem portal/captcha):
+  1. DistDFe Ambiente Nacional + Ciência da Operação (`210210`) com A1 do destinatário;
+  2. WS Contabilista SEFAZ-RS com A1 do escritório (fallback).
+- Serviço `NfeXmlDownloadService`, clients em `app/Services/AutomacaoFiscal/Sefaz/`, job na fila `automacoes`.
+- **Origem do download** exibida no painel (DistDFe × Contabilista) e **DANFE em PDF** após o XML (`/automacao-fiscal/xml-download/{token}/danfe`, pacote `nfephp-org/sped-da`).
+- **Consultas avulsas** (`/automacao-fiscal/avulsas`) para testes pontuais (super_admin).
+- Variáveis: `NFE_DISTDFE_*`, `NFE_RECEPCAO_EVENTO_URL`, `NFE_CONTABILISTA_*`; `DB_QUEUE_RETRY_AFTER` padrão 960 (maior que o timeout do worker).
+- Job de portal e-CAC/NFS-e com `WithoutOverlapping` por escritório; consulta e-CAC sem notas tratada como sucesso.
 
-Após `git pull` em produção: `./atualizar-producao.sh` e rebuild do runner (`sudo ./instalar-deps-automacao-fiscal.sh --yes` ou `npm ci && npm run build` em `scripts/automacao-fiscal/runner`).
+Após `git pull` em produção: `./atualizar-producao.sh` (instala `sped-da` via composer e recompila assets). Reiniciar o worker da fila `automacoes` (systemd). Rebuild do runner Node só se houver mudança em `scripts/automacao-fiscal/runner` (`sudo ./instalar-deps-automacao-fiscal.sh --yes` ou `npm ci && npm run build` na pasta do runner).
 
 ---
 
