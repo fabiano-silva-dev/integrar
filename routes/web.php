@@ -34,10 +34,36 @@ Route::middleware(['auth'])->group(function () {
         ->name('automacao-fiscal.execucao');
     Route::get('/automacao-fiscal/artefatos/{artefato}', App\Http\Controllers\AutomacaoFiscal\AutomacaoArtefatoController::class)
         ->name('automacao-fiscal.artefato');
-    Route::get('/automacao-fiscal/analises/{coleta?}', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
+    Route::get('/automacao-fiscal/documentos/{documento}/xml', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlController::class)
+        ->whereNumber('documento')
+        ->name('automacao-fiscal.documento.xml');
+    Route::get('/automacao-fiscal/xml-download/{token}', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlArquivoController::class)
+        ->where('token', '[0-9a-fA-F-]{36}')
+        ->name('automacao-fiscal.documento.xml.arquivo');
+    Route::get('/automacao-fiscal/analises', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
         ->name('automacao-fiscal.analises');
+    Route::get('/automacao-fiscal/analises/{empresa}/{portal}/{competencia}', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
+        ->where(['empresa' => '[0-9]+', 'portal' => '[0-9]+', 'competencia' => '[0-9]{4}-[0-9]{2}'])
+        ->name('automacao-fiscal.analise');
+    Route::get('/automacao-fiscal/analises/coleta/{coleta}', function (int $coleta) {
+        $resolvido = app(\App\Services\AutomacaoFiscal\AnaliseFiscalService::class)->resolverDeColeta($coleta);
+        if (! $resolvido) {
+            return redirect()->route('automacao-fiscal.analises')
+                ->with('message', 'Não foi possível localizar a análise desta coleta.');
+        }
+
+        return redirect()->route('automacao-fiscal.analise', [
+            'empresa' => $resolvido['empresa_id'],
+            'portal' => $resolvido['portal_id'],
+            'competencia' => $resolvido['competencia'],
+        ]);
+    })->whereNumber('coleta')->name('automacao-fiscal.analises.coleta');
     Route::get('/automacao-fiscal/resumo-nfe/{coleta?}', function (?int $coleta = null) {
-        return redirect()->route('automacao-fiscal.analises', $coleta);
+        if ($coleta) {
+            return redirect()->route('automacao-fiscal.analises.coleta', $coleta);
+        }
+
+        return redirect()->route('automacao-fiscal.analises');
     });
 
     Route::get('/plano-contas', App\Livewire\GerenciadorPlanoContas::class)->name('plano-contas');

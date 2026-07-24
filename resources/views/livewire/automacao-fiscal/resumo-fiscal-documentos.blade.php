@@ -1,18 +1,21 @@
-<div class="p-6">
-    <div class="max-w-6xl mx-auto space-y-6">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+<div
+    class="p-4 sm:p-6 lg:p-8"
+    @if ($xmlModalAberto && $xmlStatus === 'running') wire:poll.1500ms="atualizarProgressoXml" @endif
+>
+    <div class="w-full max-w-[1600px] mx-auto space-y-5">
+        <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">Análises fiscais</h1>
                 <p class="text-sm text-gray-600">
-                    @if ($coletaId)
-                        Resumos, valores e agrupamentos da coleta selecionada.
+                    @if ($emDetalhe)
+                        Documentos da empresa no portal na competência selecionada.
                     @else
-                        Resumos, valores e gráficos das coletas realizadas.
+                        Uma análise por empresa, portal e competência (mês/ano).
                     @endif
                 </p>
             </div>
-            <div class="flex flex-wrap gap-3 text-sm">
-                @if ($coletaId)
+            <div class="flex flex-wrap gap-4 text-sm">
+                @if ($emDetalhe)
                     <a href="{{ route('automacao-fiscal.analises') }}" class="text-indigo-600 hover:underline">Voltar à listagem</a>
                 @endif
                 <a href="{{ route('automacao-fiscal.painel') }}" class="text-indigo-600 hover:underline">Painel da automação</a>
@@ -22,14 +25,17 @@
         @if (session()->has('message'))
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">{{ session('message') }}</div>
         @endif
+        @if (session()->has('error'))
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{{ session('error') }}</div>
+        @endif
 
         @if ($precisaSelecionarEscritorio)
             <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded">
                 Selecione um escritório no menu superior.
             </div>
-        @elseif (!$coletaId)
+        @elseif (!$emDetalhe)
             <div class="bg-white shadow-xl rounded-xl p-6 space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Empresa</label>
                         <select wire:model.live="filtro_empresa_id" class="mt-1 w-full border-gray-300 rounded-md">
@@ -40,214 +46,101 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Período início</label>
-                        <input type="date" wire:model.live="filtro_periodo_inicio" class="mt-1 w-full border-gray-300 rounded-md">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Período fim</label>
-                        <input type="date" wire:model.live="filtro_periodo_fim" class="mt-1 w-full border-gray-300 rounded-md">
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium text-gray-700">Portal</label>
-                        <select wire:model.live="filtro_portal_id" class="mt-1 w-full border-gray-300 rounded-md" @disabled($modoPeriodo)>
+                        <select wire:model.live="filtro_portal_id" class="mt-1 w-full border-gray-300 rounded-md">
                             <option value="">Todos</option>
                             @foreach($portais as $portal)
                                 <option value="{{ $portal->id }}">{{ $portal->nome }}</option>
                             @endforeach
                         </select>
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Competência</label>
+                        <input type="month" wire:model.live="filtro_competencia" class="mt-1 w-full border-gray-300 rounded-md">
+                    </div>
                 </div>
-                @if($modoPeriodo)
+                @if($filtro_empresa_id || $filtro_portal_id || $filtro_competencia !== '')
                     <div class="flex justify-end">
-                        <button type="button" wire:click="limparPeriodo" class="text-sm text-indigo-600 hover:underline">
-                            Limpar período e voltar às coletas
+                        <button type="button" wire:click="limparFiltros" class="text-sm text-indigo-600 hover:underline">
+                            Limpar filtros
                         </button>
                     </div>
-                @else
-                    <p class="text-xs text-gray-500">
-                        Selecione a empresa e o período para ver saídas/entradas emitidas pela empresa ou por terceiros.
-                    </p>
                 @endif
             </div>
 
-            @if($modoPeriodo)
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    @foreach(($resumoPeriodo['por_tipo_operacao'] ?? []) as $linha)
-                        @php $codigo = $linha['chave']; @endphp
-                        <button type="button"
-                                wire:click="$set('filtro_tipo_operacao', '{{ $filtro_tipo_operacao === $codigo ? '' : $codigo }}')"
-                                @class([
-                                    'text-left bg-white shadow rounded-xl p-4 border-2 transition-colors',
-                                    'border-indigo-600 ring-1 ring-indigo-200' => $filtro_tipo_operacao === $codigo,
-                                    'border-transparent hover:border-gray-200' => $filtro_tipo_operacao !== $codigo,
-                                ])>
-                            <p class="text-sm font-semibold text-gray-900">
-                                {{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelTipoOperacao($codigo) }}
-                            </p>
-                            <div class="mt-3 flex flex-wrap gap-4 text-sm">
-                                <div>
-                                    <p class="text-xs text-gray-500">Docs</p>
-                                    <p class="text-xl font-bold">{{ $linha['quantidade'] }}</p>
-                                </div>
-                                <div>
-                                    <p class="text-xs text-gray-500">Total</p>
-                                    <p class="text-xl font-bold">R$ {{ number_format((float) $linha['valor_total'], 2, ',', '.') }}</p>
-                                </div>
-                                <div>
-                                    <p class="text-xs text-gray-500">ICMS</p>
-                                    <p class="font-semibold">R$ {{ number_format((float) $linha['valor_icms'], 2, ',', '.') }}</p>
-                                </div>
-                            </div>
-                        </button>
-                    @endforeach
-                </div>
-
-                <div class="bg-white shadow rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase">Empresa</p>
-                        <p class="font-semibold mt-1">{{ $resumoPeriodo['empresa_nome'] ?? '—' }}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase">Período</p>
-                        <p class="font-semibold mt-1">
-                            {{ \Illuminate\Support\Carbon::parse($filtro_periodo_inicio)->format('d/m/Y') }}
-                            –
-                            {{ \Illuminate\Support\Carbon::parse($filtro_periodo_fim)->format('d/m/Y') }}
-                        </p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase">Documentos</p>
-                        <p class="font-semibold mt-1">{{ $resumoPeriodo['quantidade'] ?? 0 }}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase">Total NF-e</p>
-                        <p class="font-semibold mt-1">R$ {{ number_format((float) ($resumoPeriodo['totais_colunas']['valor_total'] ?? 0), 2, ',', '.') }}</p>
-                    </div>
-                </div>
-
-                <div class="bg-white shadow rounded-xl overflow-hidden">
-                    <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
-                        <span class="font-semibold text-sm">Documentos do período</span>
-                        @if($filtro_tipo_operacao !== '')
-                            <span class="text-xs text-indigo-700 bg-indigo-50 px-2 py-1 rounded">
-                                {{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelTipoOperacao($filtro_tipo_operacao) }}
-                            </span>
-                        @endif
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-xs">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-3 py-2 text-left">Emissão</th>
-                                    <th class="px-3 py-2 text-left">Número</th>
-                                    <th class="px-3 py-2 text-left">Operação</th>
-                                    <th class="px-3 py-2 text-left">Destinatário</th>
-                                    <th class="px-3 py-2 text-right">Total</th>
-                                    <th class="px-3 py-2 text-left">Sit</th>
-                                    <th class="px-3 py-2 text-left">Chave</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y">
-                                @forelse($documentosPeriodo ?? [] as $doc)
-                                    @php
-                                        $tipoDoc = data_get($doc->dados_complementares, 'tipo_operacao')
-                                            ?: \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::classificarTipoOperacao(
-                                                optional($empresas->firstWhere('id', (int) $filtro_empresa_id))->cnpj,
-                                                $doc->toArray()
-                                            );
-                                    @endphp
-                                    <tr>
-                                        <td class="px-3 py-2">{{ $doc->data_emissao?->format('d/m/Y') }}</td>
-                                        <td class="px-3 py-2">{{ $doc->numero }}{{ $doc->serie ? '/'.$doc->serie : '' }}</td>
-                                        <td class="px-3 py-2">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelTipoOperacao($tipoDoc) }}</td>
-                                        <td class="px-3 py-2">{{ $doc->nome_destinatario ?: $doc->cnpj_destinatario }}</td>
-                                        <td class="px-3 py-2 text-right">{{ number_format((float) $doc->valor_total, 2, ',', '.') }}</td>
-                                        <td class="px-3 py-2">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelSituacao($doc->situacao) ?? $doc->situacao }}</td>
-                                        <td class="px-3 py-2 font-mono">{{ $doc->chave_acesso }}</td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="7" class="px-3 py-8 text-center text-gray-500">
-                                            Nenhum documento neste período. Execute as consultas de extrato no painel.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                    @if($documentosPeriodo && $documentosPeriodo->hasPages())
-                        <div class="p-3 border-t">{{ $documentosPeriodo->links() }}</div>
-                    @endif
-                </div>
-            @else
             <div class="bg-white shadow-xl rounded-xl overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Empresa</th>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Período</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Portal</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Competência</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Docs</th>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Coletado em</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Total</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Atualizado em</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y">
-                            @forelse($coletas ?? [] as $coleta)
+                            @forelse($analises ?? [] as $analise)
                                 <tr
                                     class="hover:bg-indigo-50 cursor-pointer transition-colors"
-                                    onclick="window.location='{{ route('automacao-fiscal.analises', $coleta->id) }}'"
+                                    onclick="window.location='{{ route('automacao-fiscal.analise', [
+                                        'empresa' => $analise->empresa_id,
+                                        'portal' => $analise->portal_integracao_id,
+                                        'competencia' => $analise->competencia,
+                                    ]) }}'"
                                 >
-                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $coleta->empresa?->nome ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-gray-700">{{ $coleta->periodoLabel() }}</td>
-                                    <td class="px-4 py-3 text-gray-700">{{ $coleta->nomePortal() }}</td>
-                                    <td class="px-4 py-3 text-right text-gray-700">{{ $coleta->quantidade_documentos }}</td>
-                                    <td class="px-4 py-3 text-gray-500">{{ $coleta->created_at?->format('d/m/Y H:i') }}</td>
+                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $analise->empresa_nome }}</td>
+                                    <td class="px-4 py-3 text-gray-700">{{ $analise->portal_nome }}</td>
+                                    <td class="px-4 py-3 text-gray-700">{{ $analise->competencia_label }}</td>
+                                    <td class="px-4 py-3 text-right text-gray-700">{{ $analise->quantidade_documentos }}</td>
+                                    <td class="px-4 py-3 text-right text-gray-700">
+                                        R$ {{ number_format((float) $analise->valor_total, 2, ',', '.') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-500">
+                                        {{ $analise->atualizado_em ? \Illuminate\Support\Carbon::parse($analise->atualizado_em)->format('d/m/Y H:i') : '—' }}
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-4 py-10 text-center text-gray-500">
-                                        Nenhuma coleta encontrada. Execute uma consulta no painel da automação.
+                                    <td colspan="6" class="px-4 py-10 text-center text-gray-500">
+                                        Nenhuma análise encontrada. Execute consultas no painel da automação.
                                     </td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-                @if($coletas && $coletas->hasPages())
-                    <div class="p-3 border-t">{{ $coletas->links() }}</div>
+                @if($analises && $analises->hasPages())
+                    <div class="p-3 border-t">{{ $analises->links() }}</div>
                 @endif
             </div>
-            @endif
         @else
-            <div class="bg-white shadow rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div>
-                    <p class="text-xs text-gray-500 uppercase">Empresa</p>
-                    <p class="font-semibold text-gray-900 mt-1">{{ $coletaEmpresaNome ?? '—' }}</p>
+            <div class="bg-white shadow rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+                <div class="min-w-0">
+                    <p class="text-[11px] text-gray-500 uppercase tracking-wide">Empresa</p>
+                    <p class="font-semibold text-gray-900 truncate" title="{{ $analiseEmpresaNome ?? '' }}">{{ $analiseEmpresaNome ?? '—' }}</p>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[11px] text-gray-500 uppercase tracking-wide">Portal</p>
+                    <p class="font-semibold text-gray-900 truncate">{{ $analisePortalNome ?? '—' }}</p>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-500 uppercase">Período</p>
-                    <p class="font-semibold text-gray-900 mt-1">{{ $coletaPeriodoLabel ?? '—' }}</p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500 uppercase">Portal</p>
-                    <p class="font-semibold text-gray-900 mt-1">{{ $coletaPortalNome ?? '—' }}</p>
+                    <p class="text-[11px] text-gray-500 uppercase tracking-wide">Competência</p>
+                    <p class="font-semibold text-gray-900">{{ $analiseCompetenciaLabel ?? '—' }}</p>
                 </div>
             </div>
 
             @if (!empty($resumo))
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
                     @foreach (['resumo' => 'Resumo', 'grupos' => 'Agrupamentos', 'documentos' => 'Documentos', 'colunas' => 'Colunas do arquivo'] as $key => $label)
                         <button type="button" wire:click="setAba('{{ $key }}')"
-                                class="px-3 py-2 text-sm rounded-lg {{ $aba === $key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }}">
+                                class="px-4 py-2 text-sm font-medium rounded-t-lg {{ $aba === $key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">
                             {{ $label }}
                         </button>
                     @endforeach
                 </div>
-
-                @foreach($avisos as $aviso)
-                    <div class="bg-amber-50 border border-amber-300 text-amber-900 text-sm px-4 py-3 rounded-lg">{{ $aviso }}</div>
-                @endforeach
 
                 @if ($aba === 'resumo')
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -256,21 +149,17 @@
                             <p class="text-3xl font-bold mt-1">{{ $resumo['quantidade'] ?? 0 }}</p>
                         </div>
                         <div class="bg-white shadow rounded-xl p-4">
-                            <p class="text-xs text-gray-500 uppercase">Período</p>
-                            <p class="text-sm font-semibold mt-2">
-                                {{ isset($resumo['periodo_inicio']) ? \Illuminate\Support\Carbon::parse($resumo['periodo_inicio'])->format('d/m/Y') : '-' }}
-                                –
-                                {{ isset($resumo['periodo_fim']) ? \Illuminate\Support\Carbon::parse($resumo['periodo_fim'])->format('d/m/Y') : '-' }}
-                            </p>
+                            <p class="text-xs text-gray-500 uppercase">Competência</p>
+                            <p class="text-sm font-semibold mt-2">{{ $analiseCompetenciaLabel ?? '—' }}</p>
                         </div>
                         <div class="bg-white shadow rounded-xl p-4 md:col-span-2">
-                            <p class="text-xs text-gray-500 uppercase">{{ $coletaEhNfse ? 'Prestador' : 'Emitente' }}</p>
-                            <p class="text-sm font-semibold mt-2">{{ $resumo['nome_emitente'] ?? $coletaEmpresaNome ?? '-' }}</p>
+                            <p class="text-xs text-gray-500 uppercase">{{ $analiseEhNfse ? 'Prestador' : 'Emitente' }}</p>
+                            <p class="text-sm font-semibold mt-2">{{ $resumo['nome_emitente'] ?? $analiseEmpresaNome ?? '-' }}</p>
                             <p class="text-xs text-gray-500">{{ $resumo['emitente'] ?? '' }}</p>
                         </div>
                     </div>
 
-                    @if (!$coletaEhNfse)
+                    @if (!$analiseEhNfse)
                         <div class="bg-white shadow rounded-xl overflow-hidden">
                             <div class="px-4 py-3 border-b font-semibold">Por tipo de operação</div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
@@ -286,7 +175,7 @@
                                     </div>
                                 @endforeach
                                 @if(empty($resumo['por_tipo_operacao']))
-                                    <p class="text-sm text-gray-500 md:col-span-2">Sem classificação de operação nesta coleta.</p>
+                                    <p class="text-sm text-gray-500 md:col-span-2">Sem classificação de operação nesta análise.</p>
                                 @endif
                             </div>
                         </div>
@@ -309,61 +198,9 @@
                         </div>
                     @endif
 
-                    <div class="bg-white shadow rounded-xl overflow-hidden">
-                        <div class="px-4 py-3 border-b font-semibold">
-                            {{ $coletaEhNfse ? 'Total dos serviços' : 'Totais das colunas de valor' }}
-                        </div>
-                        <table class="min-w-full text-sm">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-2 text-left">Campo</th>
-                                    <th class="px-4 py-2 text-right">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y">
-                                @foreach($colunasValor as $campo => $label)
-                                    <tr>
-                                        <td class="px-4 py-2">{{ $label }}</td>
-                                        <td class="px-4 py-2 text-right font-medium">
-                                            R$ {{ number_format((float) ($resumo['totais_colunas'][$campo] ?? $resumo['valor_total'] ?? 0), 2, ',', '.') }}
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div @class([
-                        'grid gap-4 text-sm',
-                        'grid-cols-1 md:grid-cols-3' => !$coletaEhNfse,
-                        'grid-cols-1 md:grid-cols-2' => $coletaEhNfse,
-                    ])>
-                        @unless ($coletaEhNfse)
-                            <div class="bg-white shadow rounded-xl p-4">
-                                <p class="text-gray-500">Com ICMS &gt; 0</p>
-                                <p class="text-2xl font-bold">{{ $resumo['indicadores']['com_icms'] ?? 0 }}</p>
-                            </div>
-                            <div class="bg-white shadow rounded-xl p-4">
-                                <p class="text-gray-500">Sem base de ICMS</p>
-                                <p class="text-2xl font-bold">{{ $resumo['indicadores']['sem_base_icms'] ?? 0 }}</p>
-                            </div>
-                        @endunless
-                        <div class="bg-white shadow rounded-xl p-4">
-                            <p class="text-gray-500">Chaves únicas</p>
-                            <p class="text-2xl font-bold">{{ $resumo['indicadores']['chaves_unicas'] ?? $resumo['chaves_unicas'] ?? 0 }}</p>
-                        </div>
-                        @if ($coletaEhNfse)
-                            <div class="bg-white shadow rounded-xl p-4">
-                                <p class="text-gray-500">Total dos serviços</p>
-                                <p class="text-2xl font-bold">
-                                    R$ {{ number_format((float) ($resumo['valor_total'] ?? $resumo['totais_colunas']['valor_total'] ?? 0), 2, ',', '.') }}
-                                </p>
-                            </div>
-                        @endif
-                    </div>
                 @elseif ($aba === 'grupos')
                     @php
-                        if ($coletaEhNfse) {
+                        if ($analiseEhNfse) {
                             $grupos = [
                                 'por_tipo' => 'Por tipo de listagem',
                                 'por_situacao' => 'Por situação',
@@ -394,8 +231,8 @@
                                             <tr>
                                                 <th class="px-4 py-2 text-left">Grupo</th>
                                                 <th class="px-4 py-2 text-right">Qtd</th>
-                                                <th class="px-4 py-2 text-right">{{ $coletaEhNfse ? 'Total serviços' : 'Total NF-e' }}</th>
-                                                @unless ($coletaEhNfse)
+                                                <th class="px-4 py-2 text-right">{{ $analiseEhNfse ? 'Total serviços' : 'Total NF-e' }}</th>
+                                                @unless ($analiseEhNfse)
                                                     <th class="px-4 py-2 text-right">ICMS</th>
                                                     <th class="px-4 py-2 text-right">BC ICMS</th>
                                                 @endunless
@@ -405,11 +242,11 @@
                                             @forelse(($resumo[$chave] ?? []) as $linha)
                                                 <tr>
                                                     <td class="px-4 py-2">
-                                                        @if ($coletaEhNfse && $chave === 'por_tipo')
+                                                        @if ($analiseEhNfse && $chave === 'por_tipo')
                                                             {{ \App\Services\AutomacaoFiscal\ExtratoNfseParser::labelTipoListagem($linha['chave']) }}
-                                                        @elseif ($coletaEhNfse && $chave === 'por_situacao')
+                                                        @elseif ($analiseEhNfse && $chave === 'por_situacao')
                                                             {{ \App\Services\AutomacaoFiscal\ExtratoNfseParser::labelSituacao($linha['chave']) ?? $linha['chave'] }}
-                                                        @elseif ($coletaEhNfse)
+                                                        @elseif ($analiseEhNfse)
                                                             {{ $linha['chave'] }}
                                                         @else
                                                             {{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelGrupo($chave, $linha['chave']) }}
@@ -417,13 +254,15 @@
                                                     </td>
                                                     <td class="px-4 py-2 text-right">{{ $linha['quantidade'] }}</td>
                                                     <td class="px-4 py-2 text-right">R$ {{ number_format($linha['valor_total'], 2, ',', '.') }}</td>
-                                                    @unless ($coletaEhNfse)
-                                                        <td class="px-4 py-2 text-right">R$ {{ number_format($linha['valor_icms'] ?? 0, 2, ',', '.') }}</td>
-                                                        <td class="px-4 py-2 text-right">R$ {{ number_format($linha['valor_bc_icms'] ?? 0, 2, ',', '.') }}</td>
+                                                    @unless ($analiseEhNfse)
+                                                        <td class="px-4 py-2 text-right">R$ {{ number_format((float) ($linha['valor_icms'] ?? 0), 2, ',', '.') }}</td>
+                                                        <td class="px-4 py-2 text-right">R$ {{ number_format((float) ($linha['valor_bc_icms'] ?? 0), 2, ',', '.') }}</td>
                                                     @endunless
                                                 </tr>
                                             @empty
-                                                <tr><td colspan="{{ $coletaEhNfse ? 3 : 5 }}" class="px-4 py-6 text-center text-gray-500">Sem dados</td></tr>
+                                                <tr>
+                                                    <td colspan="{{ $analiseEhNfse ? 3 : 5 }}" class="px-4 py-6 text-center text-gray-500">Sem dados neste grupo.</td>
+                                                </tr>
                                             @endforelse
                                         </tbody>
                                     </table>
@@ -432,75 +271,101 @@
                         @endforeach
                     </div>
                 @elseif ($aba === 'documentos')
-                    <div class="bg-white shadow rounded-xl overflow-hidden">
+                    <div class="bg-white shadow rounded-xl overflow-hidden border border-gray-100">
                         <div class="overflow-x-auto">
-                            <table class="min-w-full text-xs">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-3 py-2 text-left">{{ $coletaEhNfse ? 'Geração' : 'Emissão' }}</th>
-                                        <th class="px-3 py-2 text-left">Número</th>
-                                        @unless ($coletaEhNfse)
-                                            <th class="px-3 py-2 text-left">Modelo</th>
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 sticky top-0 z-10">
+                                    <tr class="text-xs uppercase tracking-wide text-gray-500">
+                                        <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{{ $analiseEhNfse ? 'Geração' : 'Emissão' }}</th>
+                                        <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Número</th>
+                                        @unless ($analiseEhNfse)
+                                            <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Modelo</th>
                                         @endunless
-                                        <th class="px-3 py-2 text-left">{{ $coletaEhNfse ? 'Tomador / Prestador' : 'Destinatário' }}</th>
-                                        <th class="px-3 py-2 text-right">{{ $coletaEhNfse ? 'Serviço' : 'Total' }}</th>
-                                        @unless ($coletaEhNfse)
-                                            <th class="px-3 py-2 text-right">ICMS</th>
-                                            <th class="px-3 py-2 text-left">E/S</th>
+                                        <th class="px-3 py-2.5 text-left font-semibold min-w-[12rem]">{{ $analiseEhNfse ? 'Prestador' : 'Emitente' }}</th>
+                                        <th class="px-3 py-2.5 text-left font-semibold min-w-[12rem]">{{ $analiseEhNfse ? 'Tomador' : 'Destinatário' }}</th>
+                                        <th class="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{{ $analiseEhNfse ? 'Serviço' : 'Total' }}</th>
+                                        @unless ($analiseEhNfse)
+                                            <th class="px-3 py-2.5 text-right font-semibold whitespace-nowrap">ICMS</th>
+                                            <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">E/S</th>
                                         @endunless
-                                        <th class="px-3 py-2 text-left">Situação</th>
-                                        <th class="px-3 py-2 text-left">Chave</th>
+                                        <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Situação</th>
+                                        <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Chave</th>
+                                        @unless ($analiseEhNfse)
+                                            <th class="px-3 py-2.5 text-center font-semibold whitespace-nowrap">Ação</th>
+                                        @endunless
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y">
+                                <tbody class="divide-y divide-gray-100">
                                     @forelse($documentos ?? [] as $doc)
-                                        <tr>
-                                            <td class="px-3 py-2">{{ $doc->data_emissao?->format('d/m/Y') }}</td>
-                                            <td class="px-3 py-2">
-                                                @if ($coletaEhNfse)
+                                        @php
+                                            $nomeEmitente = $doc->nome_emitente ?: $doc->cnpj_emitente;
+                                            $nomeDestinatario = $doc->nome_destinatario ?: $doc->cnpj_destinatario;
+                                            $chaveDigits = \App\Services\AutomacaoFiscal\AnaliseFiscalService::normalizarChaveAcesso($doc->chave_acesso);
+                                            $ehModelo55 = ! $analiseEhNfse && (
+                                                trim((string) $doc->modelo) === '55'
+                                                || ($chaveDigits && strlen($chaveDigits) === 44 && substr($chaveDigits, 20, 2) === '55')
+                                            );
+                                            $podeBaixarXml = $ehModelo55 && $chaveDigits && strlen($chaveDigits) === 44;
+                                        @endphp
+                                        <tr class="hover:bg-slate-50/80">
+                                            <td class="px-3 py-2 whitespace-nowrap text-gray-700">{{ $doc->data_emissao?->format('d/m/Y') }}</td>
+                                            <td class="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                                                @if ($analiseEhNfse)
                                                     {{ $doc->numero }}
                                                 @else
                                                     {{ $doc->numero }}{{ $doc->serie ? '/'.$doc->serie : '' }}
                                                 @endif
                                             </td>
-                                            @unless ($coletaEhNfse)
-                                                <td class="px-3 py-2">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelModelo($doc->modelo) ?? $doc->modelo }}</td>
+                                            @unless ($analiseEhNfse)
+                                                <td class="px-3 py-2 whitespace-nowrap text-gray-700">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelModelo($doc->modelo) ?? $doc->modelo }}</td>
                                             @endunless
-                                            <td class="px-3 py-2">
-                                                @if ($coletaEhNfse)
-                                                    {{ $doc->nome_destinatario ?: $doc->nome_emitente ?: ($doc->cnpj_destinatario ?: $doc->cnpj_emitente) }}
-                                                @else
-                                                    {{ $doc->nome_destinatario ?: $doc->cnpj_destinatario }}
-                                                @endif
-                                            </td>
-                                            <td class="px-3 py-2 text-right">{{ number_format((float)$doc->valor_total, 2, ',', '.') }}</td>
-                                            @unless ($coletaEhNfse)
-                                                <td class="px-3 py-2 text-right">{{ number_format((float)$doc->valor_icms, 2, ',', '.') }}</td>
-                                                <td class="px-3 py-2">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelEntradaSaida($doc->entrada_saida) ?? $doc->entrada_saida }}</td>
+                                            <td class="px-3 py-2 text-gray-800 max-w-[16rem] truncate" title="{{ $nomeEmitente }}">{{ $nomeEmitente }}</td>
+                                            <td class="px-3 py-2 text-gray-800 max-w-[16rem] truncate" title="{{ $nomeDestinatario }}">{{ $nomeDestinatario }}</td>
+                                            <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums text-gray-900">{{ number_format((float)$doc->valor_total, 2, ',', '.') }}</td>
+                                            @unless ($analiseEhNfse)
+                                                <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums text-gray-700">{{ number_format((float)$doc->valor_icms, 2, ',', '.') }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-gray-700">{{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelEntradaSaida($doc->entrada_saida) ?? $doc->entrada_saida }}</td>
                                             @endunless
-                                            <td class="px-3 py-2">
-                                                @if ($coletaEhNfse)
+                                            <td class="px-3 py-2 whitespace-nowrap text-gray-700">
+                                                @if ($analiseEhNfse)
                                                     {{ \App\Services\AutomacaoFiscal\ExtratoNfseParser::labelSituacao($doc->situacao) ?? $doc->situacao }}
                                                 @else
                                                     {{ \App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser::labelSituacao($doc->situacao) ?? $doc->situacao }}
                                                 @endif
                                             </td>
-                                            <td class="px-3 py-2 font-mono">{{ $doc->chave_acesso }}</td>
+                                            <td class="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap" title="{{ $doc->chave_acesso }}">{{ $doc->chave_acesso }}</td>
+                                            @unless ($analiseEhNfse)
+                                                <td class="px-3 py-2 text-center whitespace-nowrap">
+                                                    @if ($podeBaixarXml)
+                                                        <button type="button"
+                                                                wire:click="baixarXml({{ $doc->id }})"
+                                                                wire:loading.attr="disabled"
+                                                                wire:target="baixarXml({{ $doc->id }})"
+                                                                class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                                                                title="Baixar XML no portal da NF-e">
+                                                            <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">XML</span>
+                                                            <span wire:loading wire:target="baixarXml({{ $doc->id }})">…</span>
+                                                        </button>
+                                                    @else
+                                                        <span class="text-gray-300">—</span>
+                                                    @endif
+                                                </td>
+                                            @endunless
                                         </tr>
                                     @empty
-                                        <tr><td colspan="{{ $coletaEhNfse ? 6 : 9 }}" class="px-3 py-6 text-center text-gray-500">Nenhum documento listado.</td></tr>
+                                        <tr><td colspan="{{ $analiseEhNfse ? 7 : 11 }}" class="px-3 py-10 text-center text-gray-500">Nenhum documento listado.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
                         @if($documentos)
-                            <div class="p-3">{{ $documentos->links() }}</div>
+                            <div class="p-3 border-t border-gray-100">{{ $documentos->links() }}</div>
                         @endif
                     </div>
                 @elseif ($aba === 'colunas')
                     <div class="bg-white shadow rounded-xl p-4">
                         <p class="text-sm text-gray-600 mb-3">
-                            @if ($coletaEhNfse)
+                            @if ($analiseEhNfse)
                                 Campos presentes no extratonfse.txt (Portal Nacional da NFS-e):
                             @else
                                 Campos presentes no extrato e-CAC RS (cabeçalho da NF-e):
@@ -515,9 +380,91 @@
                 @endif
             @else
                 <div class="bg-white shadow rounded-xl p-8 text-center text-gray-500">
-                    Esta coleta não possui resumo disponível.
+                    Nenhum documento nesta análise.
                 </div>
             @endif
         @endif
     </div>
+
+    @if ($xmlModalAberto)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+             wire:click.self="fecharModalXml">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+                 wire:click.stop>
+                <div class="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 class="text-lg font-semibold text-gray-900">Download do XML</h2>
+                        <p class="text-xs text-gray-500 mt-0.5 font-mono truncate" title="{{ $xmlChave }}">
+                            {{ $xmlChave ?: '—' }}
+                        </p>
+                    </div>
+                    <button type="button" wire:click="fecharModalXml" class="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="Fechar">&times;</button>
+                </div>
+
+                <div class="px-5 py-3 border-b border-gray-50 flex flex-wrap items-center gap-2 text-sm">
+                    @if ($xmlStatus === 'running')
+                        <span class="inline-flex items-center gap-2 rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-medium">
+                            <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                            Em andamento
+                        </span>
+                    @elseif ($xmlStatus === 'succeeded')
+                        <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-medium">Concluído</span>
+                    @elseif ($xmlStatus === 'failed')
+                        <span class="inline-flex items-center rounded-full bg-red-50 text-red-700 px-3 py-1 text-xs font-medium">Falhou</span>
+                    @endif
+                </div>
+
+                <div class="flex-1 overflow-y-auto px-5 py-4 bg-slate-950 text-slate-100"
+                     id="xml-download-logs"
+                     wire:key="xml-logs-{{ count($xmlLogs) }}-{{ $xmlStatus }}"
+                     x-data
+                     x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })">
+                    <div class="space-y-2 font-mono text-xs">
+                        @forelse ($xmlLogs as $log)
+                            <div @class([
+                                'rounded-lg border px-3 py-2',
+                                'border-red-500/40 bg-red-950/40' => ($log['level'] ?? '') === 'error' || ($log['eventType'] ?? '') === 'RUN_FAILED',
+                                'border-amber-500/40 bg-amber-950/30' => ($log['level'] ?? '') === 'warn' || ($log['eventType'] ?? '') === 'MANUAL_CONFIRMATION_DETECTED',
+                                'border-emerald-500/30 bg-emerald-950/20' => in_array(($log['eventType'] ?? ''), ['AUTHENTICATION_CONFIRMED', 'RUN_FINISHED'], true),
+                                'border-slate-700 bg-slate-900/60' => ! in_array(($log['level'] ?? ''), ['error', 'warn'], true)
+                                    && ! in_array(($log['eventType'] ?? ''), ['RUN_FAILED', 'MANUAL_CONFIRMATION_DETECTED', 'AUTHENTICATION_CONFIRMED', 'RUN_FINISHED'], true),
+                            ])>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-slate-300">{{ $log['eventType'] ?? 'EVENT' }}</span>
+                                    <span class="text-slate-500">{{ $log['at'] ?? '' }}</span>
+                                </div>
+                                <p class="mt-0.5 text-slate-100">{{ $log['message'] ?? '' }}</p>
+                            </div>
+                        @empty
+                            <p class="text-slate-400 py-6 text-center">Aguardando primeiros eventos…</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="px-5 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-white">
+                    <div class="text-sm text-gray-600 min-w-0 flex-1">
+                        @if ($xmlStatus === 'failed' && $xmlErro)
+                            <p class="text-red-600">{{ $xmlErro }}</p>
+                        @elseif ($xmlStatus === 'succeeded')
+                            <p class="text-emerald-700">XML pronto{{ $xmlNomeArquivo ? ': '.$xmlNomeArquivo : '' }}</p>
+                        @else
+                            <p>Acompanhe as etapas da automação no portal da NF-e.</p>
+                        @endif
+                    </div>
+                    <div class="flex gap-2">
+                        @if ($xmlStatus === 'succeeded' && $xmlToken)
+                            <a href="{{ route('automacao-fiscal.documento.xml.arquivo', $xmlToken) }}"
+                               class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                Baixar XML
+                            </a>
+                        @endif
+                        <button type="button" wire:click="fecharModalXml"
+                                class="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                            {{ $xmlStatus === 'running' ? 'Minimizar' : 'Fechar' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

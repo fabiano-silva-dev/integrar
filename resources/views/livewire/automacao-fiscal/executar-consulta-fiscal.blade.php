@@ -459,7 +459,17 @@
                                 </div>
 
                                 @if ($ultima->mensagem_usuario)
-                                    <div class="px-5 py-3 border-t border-gray-100 text-sm text-gray-800">
+                                    @php
+                                        $msgVazia = (bool) preg_match(
+                                            '/nenhuma\s+nf-?e|n[aã]o\s+foram\s+localizad|sem\s+documentos\s+no\s+filtro/i',
+                                            (string) $ultima->mensagem_usuario
+                                        );
+                                    @endphp
+                                    <div @class([
+                                        'px-5 py-3 border-t text-sm',
+                                        'border-amber-100 bg-amber-50 text-amber-900' => $msgVazia && in_array($ultima->status, ['sucesso', 'sucesso_parcial'], true),
+                                        'border-gray-100 text-gray-800' => !($msgVazia && in_array($ultima->status, ['sucesso', 'sucesso_parcial'], true)),
+                                    ])>
                                         {{ $ultima->mensagem_usuario }}
                                     </div>
                                 @endif

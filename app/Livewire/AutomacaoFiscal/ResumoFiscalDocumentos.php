@@ -2,13 +2,17 @@
 
 namespace App\Livewire\AutomacaoFiscal;
 
+use App\Jobs\AutomacaoFiscal\BaixarDocumentoFiscalXmlJob;
 use App\Models\DocumentoFiscal;
-use App\Models\DocumentoFiscalColeta;
 use App\Models\Empresa;
 use App\Models\PortalIntegracao;
+use App\Services\AutomacaoFiscal\AnaliseFiscalService;
 use App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser;
 use App\Services\AutomacaoFiscal\ExtratoNfseParser;
+use App\Services\AutomacaoFiscal\NfeXmlDownloadProgresso;
+use App\Services\AutomacaoFiscal\NfeXmlDownloadService;
 use App\Services\OperadoraContext;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -20,33 +24,39 @@ class ResumoFiscalDocumentos extends Component
 
     public $filtro_empresa_id = null;
     public $filtro_portal_id = null;
-    public string $filtro_periodo_inicio = '';
-    public string $filtro_periodo_fim = '';
-    public string $filtro_tipo_operacao = '';
-    public ?int $coletaId = null;
+    public string $filtro_competencia = '';
+
+    public ?int $analiseEmpresaId = null;
+    public ?int $analisePortalId = null;
+    public ?string $analiseCompetencia = null;
+
     public array $resumo = [];
-    public array $avisos = [];
-    public array $resumoPeriodo = [];
     public string $aba = 'resumo';
-    public ?string $coletaEmpresaNome = null;
-    public ?string $coletaPortalNome = null;
-    public ?string $coletaPeriodoLabel = null;
+    public ?string $analiseEmpresaNome = null;
+    public ?string $analisePortalNome = null;
+    public ?string $analiseCompetenciaLabel = null;
+    public bool $analiseEhNfse = false;
 
-    /** Coleta do Portal Nacional da NFS-e (sem ICMS/modelo NF-e). */
-    public bool $coletaEhNfse = false;
+    public bool $xmlModalAberto = false;
+    public ?string $xmlToken = null;
+    public string $xmlStatus = 'idle';
+    /** @var list<array{at: string, level: string, eventType: string, message: string}> */
+    public array $xmlLogs = [];
+    public ?string $xmlErro = null;
+    public ?string $xmlNomeArquivo = null;
+    public ?string $xmlChave = null;
+    public ?int $xmlDocumentoId = null;
 
-    public function mount(?int $coleta = null): void
+    public function mount(?int $empresa = null, ?int $portal = null, ?string $competencia = null): void
     {
-        if ($coleta) {
-            $this->carregarColeta($coleta);
+        if ($empresa && $portal && $competencia) {
+            $this->carregarAnalise($empresa, $portal, $competencia);
         }
     }
 
     public function updatedFiltroEmpresaId(): void
     {
         $this->resetPage('listagemPage');
-        $this->resetPage('periodoPage');
-        $this->recalcularResumoPeriodo();
     }
 
     public function updatedFiltroPortalId(): void
@@ -54,93 +64,25 @@ class ResumoFiscalDocumentos extends Component
         $this->resetPage('listagemPage');
     }
 
-    public function updatedFiltroPeriodoInicio(): void
+    public function updatedFiltroCompetencia(): void
     {
-        $this->resetPage('periodoPage');
-        $this->recalcularResumoPeriodo();
+        $this->resetPage('listagemPage');
     }
 
-    public function updatedFiltroPeriodoFim(): void
+    public function carregarAnalise(int $empresaId, int $portalId, string $competencia): void
     {
-        $this->resetPage('periodoPage');
-        $this->recalcularResumoPeriodo();
-    }
+        $dados = app(AnaliseFiscalService::class)->carregar($empresaId, $portalId, $competencia);
 
-    public function updatedFiltroTipoOperacao(): void
-    {
-        $this->resetPage('periodoPage');
-    }
-
-    public function carregarColeta(int $id): void
-    {
-        $coleta = DocumentoFiscalColeta::query()
-            ->with([
-                'empresa',
-                'execucao.portalRecurso.portal',
-                'execucao.empresaIntegracao.portal',
-            ])
-            ->findOrFail($id);
-
-        $this->coletaId = $coleta->id;
-        $this->coletaEmpresaNome = $coleta->empresa?->nome;
-        $this->coletaPortalNome = $coleta->nomePortal();
-        $this->coletaPeriodoLabel = $coleta->periodoLabel();
-        $this->resumo = $coleta->resumo ?? [];
-        $this->avisos = [];
+        $this->analiseEmpresaId = $empresaId;
+        $this->analisePortalId = $portalId;
+        $this->analiseCompetencia = $competencia;
+        $this->analiseEmpresaNome = $dados['empresa']->nome;
+        $this->analisePortalNome = $dados['portal']?->nome ?? '—';
+        $this->analiseCompetenciaLabel = $dados['competencia_label'];
+        $this->analiseEhNfse = $dados['eh_nfse'];
+        $this->resumo = $dados['resumo'];
         $this->aba = 'resumo';
-        $this->coletaEhNfse = $this->detectarColetaNfse($coleta);
-
-        if ($this->coletaEhNfse && $coleta->empresa) {
-            // Usa o resumo da coleta (extrato completo). Só remonta se estiver vazio.
-            if (empty($this->resumo['quantidade'])) {
-                $docs = DocumentoFiscal::query()
-                    ->where('empresa_id', $coleta->empresa_id)
-                    ->where('tipo_documento', 'nfse')
-                    ->when(
-                        $coleta->periodo_inicio && $coleta->periodo_fim,
-                        fn ($q) => $q->whereBetween('data_emissao', [
-                            $coleta->periodo_inicio->format('Y-m-d'),
-                            $coleta->periodo_fim->format('Y-m-d'),
-                        ])
-                    )
-                    ->get()
-                    ->map(fn (DocumentoFiscal $d) => $d->toArray())
-                    ->all();
-
-                if ($docs !== []) {
-                    $this->resumo = app(ExtratoNfseParser::class)->montarResumo($docs);
-                }
-            }
-        } elseif (empty($this->resumo['por_tipo_operacao']) && $coleta->empresa) {
-            // Garante bloco de operações mesmo em coletas antigas de NF-e.
-            $docs = DocumentoFiscal::query()
-                ->where('empresa_id', $coleta->empresa_id)
-                ->when(
-                    $coleta->periodo_inicio && $coleta->periodo_fim,
-                    fn ($q) => $q->whereBetween('data_emissao', [
-                        $coleta->periodo_inicio->format('Y-m-d'),
-                        $coleta->periodo_fim->format('Y-m-d'),
-                    ])
-                )
-                ->get()
-                ->map(fn (DocumentoFiscal $d) => $d->toArray())
-                ->all();
-            $extra = app(ExtratoNfeEcacRsParser::class)->montarResumo($docs, $coleta->empresa->cnpj);
-            $this->resumo['por_tipo_operacao'] = $extra['por_tipo_operacao'] ?? [];
-        }
-
         $this->resetPage();
-    }
-
-    private function detectarColetaNfse(DocumentoFiscalColeta $coleta): bool
-    {
-        if ($coleta->origem === 'nfse_nacional_extrato_txt') {
-            return true;
-        }
-
-        $portalCodigo = $coleta->portalIntegracao()?->codigo;
-
-        return $portalCodigo === 'nfse_nacional';
     }
 
     public function setAba(string $aba): void
@@ -149,190 +91,126 @@ class ResumoFiscalDocumentos extends Component
         $this->resetPage();
     }
 
-    public function limparPeriodo(): void
+    public function limparFiltros(): void
     {
-        $this->filtro_periodo_inicio = '';
-        $this->filtro_periodo_fim = '';
-        $this->filtro_tipo_operacao = '';
-        $this->resumoPeriodo = [];
-        $this->resetPage('periodoPage');
+        $this->filtro_empresa_id = null;
+        $this->filtro_portal_id = null;
+        $this->filtro_competencia = '';
+        $this->resetPage('listagemPage');
     }
 
-    private function recalcularResumoPeriodo(): void
+    public function baixarXml(int $documentoId): void
     {
-        $this->resumoPeriodo = [];
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
+            session()->flash('error', 'Selecione um escritório no menu superior.');
 
-        if (!$this->filtro_empresa_id || $this->filtro_periodo_inicio === '' || $this->filtro_periodo_fim === '') {
             return;
         }
 
-        $empresa = Empresa::query()->find((int) $this->filtro_empresa_id);
-        if (!$empresa) {
+        $documento = DocumentoFiscal::query()->whereKey($documentoId)->firstOrFail();
+        $service = app(NfeXmlDownloadService::class);
+
+        if (! $service->ehModelo55($documento) || ! $service->chaveNfeValida($documento)) {
+            session()->flash('error', 'Download de XML disponível apenas para NF-e modelo 55 com chave válida.');
+
             return;
         }
 
-        $docs = DocumentoFiscal::query()
-            ->where('empresa_id', $empresa->id)
-            ->whereBetween('data_emissao', [$this->filtro_periodo_inicio, $this->filtro_periodo_fim])
-            ->orderBy('data_emissao')
-            ->get()
-            ->map(function (DocumentoFiscal $d) use ($empresa) {
-                $arr = $d->toArray();
-                $arr['tipo_operacao'] = data_get($d->dados_complementares, 'tipo_operacao')
-                    ?: ExtratoNfeEcacRsParser::classificarTipoOperacao($empresa->cnpj, $arr);
+        $chave = AnaliseFiscalService::normalizarChaveAcesso($documento->chave_acesso);
+        $token = (string) Str::uuid();
+        $operadoraId = OperadoraContext::id() ?? (int) $documento->empresa_operadora_id;
 
-                return $arr;
-            })
-            ->all();
+        NfeXmlDownloadProgresso::iniciar($token, $documento->id, $operadoraId, $chave);
+        NfeXmlDownloadProgresso::adicionarLog(
+            $token,
+            'info',
+            'JOB_QUEUED',
+            'Na fila — aguardando worker de automações…'
+        );
 
-        $this->resumoPeriodo = app(ExtratoNfeEcacRsParser::class)->montarResumo($docs, $empresa->cnpj);
-        $this->resumoPeriodo['empresa_nome'] = $empresa->nome;
+        $this->xmlModalAberto = true;
+        $this->xmlToken = $token;
+        $this->xmlStatus = 'running';
+        $this->xmlLogs = NfeXmlDownloadProgresso::obter($token)['logs'] ?? [];
+        $this->xmlErro = null;
+        $this->xmlNomeArquivo = null;
+        $this->xmlChave = $chave;
+        $this->xmlDocumentoId = $documento->id;
+
+        BaixarDocumentoFiscalXmlJob::dispatch($token, $documento->id, $operadoraId);
+    }
+
+    public function atualizarProgressoXml(): void
+    {
+        if (! $this->xmlToken || ! $this->xmlModalAberto) {
+            return;
+        }
+
+        $data = NfeXmlDownloadProgresso::obter($this->xmlToken);
+        if ($data === null) {
+            return;
+        }
+
+        $this->xmlStatus = (string) ($data['status'] ?? 'running');
+        $this->xmlLogs = is_array($data['logs'] ?? null) ? $data['logs'] : [];
+        $this->xmlErro = isset($data['error']) ? (string) $data['error'] : null;
+        $this->xmlNomeArquivo = isset($data['nome_arquivo']) ? (string) $data['nome_arquivo'] : null;
+        $this->xmlChave = isset($data['chave']) ? (string) $data['chave'] : $this->xmlChave;
+    }
+
+    public function fecharModalXml(): void
+    {
+        $this->xmlModalAberto = false;
+        if ($this->xmlStatus !== 'running') {
+            $this->xmlToken = null;
+            $this->xmlStatus = 'idle';
+            $this->xmlLogs = [];
+            $this->xmlErro = null;
+            $this->xmlNomeArquivo = null;
+            $this->xmlChave = null;
+            $this->xmlDocumentoId = null;
+        }
     }
 
     public function render()
     {
         $empresas = Empresa::query()->where('ativo', true)->orderBy('nome')->get();
         $portais = PortalIntegracao::query()->where('ativo', true)->orderBy('nome')->get();
-        $coletas = null;
+        $analises = null;
         $documentos = null;
-        $documentosPeriodo = null;
         $precisaSelecionarEscritorio = OperadoraContext::superAdminPrecisaSelecionarEscritorio();
-        $modoPeriodo = !$this->coletaId
-            && $this->filtro_empresa_id
-            && $this->filtro_periodo_inicio !== ''
-            && $this->filtro_periodo_fim !== '';
+        $emDetalhe = $this->analiseEmpresaId
+            && $this->analisePortalId
+            && $this->analiseCompetencia;
 
-        if (!$precisaSelecionarEscritorio && !$this->coletaId && !$modoPeriodo) {
-            $coletas = DocumentoFiscalColeta::query()
-                ->with([
-                    'empresa',
-                    'execucao.portalRecurso.portal',
-                    'execucao.empresaIntegracao.portal',
-                ])
-                ->when(
-                    $this->filtro_empresa_id,
-                    fn ($q) => $q->where('empresa_id', (int) $this->filtro_empresa_id)
-                )
-                ->when(
-                    $this->filtro_portal_id,
-                    function ($q) {
-                        $portalId = (int) $this->filtro_portal_id;
-                        $portal = PortalIntegracao::query()->find($portalId);
-                        $q->where(function ($inner) use ($portalId, $portal) {
-                            $inner->whereHas(
-                                'execucao.portalRecurso',
-                                fn ($qr) => $qr->where('portal_integracao_id', $portalId)
-                            )->orWhereHas(
-                                'execucao.empresaIntegracao',
-                                fn ($qi) => $qi->where('portal_integracao_id', $portalId)
-                            );
-
-                            if ($portal?->codigo === 'ecac_rs') {
-                                $inner->orWhere(function ($origem) {
-                                    $origem->whereNull('automacao_execucao_id')
-                                        ->where('origem', 'ecac_rs_extrato_txt');
-                                });
-                            }
-
-                            if ($portal?->codigo === 'nfse_nacional') {
-                                $inner->orWhere(function ($origem) {
-                                    $origem->whereNull('automacao_execucao_id')
-                                        ->where('origem', 'nfse_nacional_extrato_txt');
-                                });
-                            }
-                        });
-                    }
-                )
-                ->orderByDesc('id')
-                ->paginate(20, pageName: 'listagemPage');
+        if (! $precisaSelecionarEscritorio && ! $emDetalhe) {
+            $analises = app(AnaliseFiscalService::class)->listar(
+                $this->filtro_empresa_id ? (int) $this->filtro_empresa_id : null,
+                $this->filtro_portal_id ? (int) $this->filtro_portal_id : null,
+                $this->filtro_competencia !== '' ? $this->filtro_competencia : null,
+            );
         }
 
-        if (!$precisaSelecionarEscritorio && $modoPeriodo) {
-            if ($this->resumoPeriodo === []) {
-                $this->recalcularResumoPeriodo();
-            }
-
-            $empresa = Empresa::query()->find((int) $this->filtro_empresa_id);
-            $idsFiltrados = null;
-            if ($this->filtro_tipo_operacao !== '' && $empresa) {
-                $tipo = $this->filtro_tipo_operacao;
-                $idsFiltrados = DocumentoFiscal::query()
-                    ->where('empresa_id', $empresa->id)
-                    ->whereBetween('data_emissao', [$this->filtro_periodo_inicio, $this->filtro_periodo_fim])
-                    ->get()
-                    ->filter(function (DocumentoFiscal $d) use ($empresa, $tipo) {
-                        $arr = $d->toArray();
-                        $classificado = data_get($d->dados_complementares, 'tipo_operacao')
-                            ?: ExtratoNfeEcacRsParser::classificarTipoOperacao($empresa->cnpj, $arr);
-
-                        return $classificado === $tipo;
-                    })
-                    ->pluck('id')
-                    ->all();
-            }
-
-            $documentosPeriodo = DocumentoFiscal::query()
-                ->where('empresa_id', (int) $this->filtro_empresa_id)
-                ->whereBetween('data_emissao', [$this->filtro_periodo_inicio, $this->filtro_periodo_fim])
-                ->when(is_array($idsFiltrados), fn ($q) => $q->whereIn('id', $idsFiltrados ?: [0]))
+        if (! $precisaSelecionarEscritorio && $emDetalhe && $this->aba === 'documentos') {
+            $documentos = app(AnaliseFiscalService::class)
+                ->queryDocumentos(
+                    (int) $this->analiseEmpresaId,
+                    (int) $this->analisePortalId,
+                    (string) $this->analiseCompetencia
+                )
                 ->orderByDesc('data_emissao')
                 ->orderByDesc('numero')
-                ->paginate(25, pageName: 'periodoPage');
-        }
-
-        if (!$precisaSelecionarEscritorio && $this->coletaId && $this->aba === 'documentos') {
-            $coleta = DocumentoFiscalColeta::find($this->coletaId);
-            if ($coleta) {
-                $documentos = DocumentoFiscal::query()
-                    ->where('empresa_id', $coleta->empresa_id)
-                    ->when(
-                        $this->coletaEhNfse,
-                        fn ($q) => $q->where('tipo_documento', 'nfse')
-                    )
-                    ->when(
-                        ! $this->coletaEhNfse && $coleta->automacao_execucao_id,
-                        fn ($q) => $q->where('automacao_execucao_id', $coleta->automacao_execucao_id)
-                    )
-                    ->when(
-                        !empty($this->resumo['periodo_inicio']) && !empty($this->resumo['periodo_fim']),
-                        fn ($q) => $q->whereBetween('data_emissao', [
-                            $this->resumo['periodo_inicio'],
-                            $this->resumo['periodo_fim'],
-                        ])
-                    )
-                    ->when(
-                        $this->coletaEhNfse && empty($this->resumo['periodo_inicio'])
-                            && $coleta->periodo_inicio && $coleta->periodo_fim,
-                        fn ($q) => $q->whereBetween('data_emissao', [
-                            $coleta->periodo_inicio->format('Y-m-d'),
-                            $coleta->periodo_fim->format('Y-m-d'),
-                        ])
-                    )
-                    ->orderByDesc('data_emissao')
-                    ->orderByDesc('numero')
-                    ->paginate(25);
-            }
+                ->paginate(25);
         }
 
         return view('livewire.automacao-fiscal.resumo-fiscal-documentos', [
             'empresas' => $empresas,
             'portais' => $portais,
-            'coletas' => $coletas,
+            'analises' => $analises,
             'documentos' => $documentos,
-            'documentosPeriodo' => $documentosPeriodo,
-            'modoPeriodo' => $modoPeriodo,
-            'tiposOperacao' => ExtratoNfeEcacRsParser::TIPOS_OPERACAO,
-            'colunasValor' => $this->coletaEhNfse
-                ? ['valor_total' => 'Total dos serviços']
-                : [
-                    'valor_total' => 'Total NF-e',
-                    'valor_bc_icms' => 'Base ICMS',
-                    'valor_icms' => 'ICMS',
-                    'valor_bc_icms_st' => 'Base ICMS ST',
-                    'valor_icms_st' => 'ICMS ST',
-                ],
+            'emDetalhe' => $emDetalhe,
             'precisaSelecionarEscritorio' => $precisaSelecionarEscritorio,
-            'labelsColunasArquivo' => $this->coletaEhNfse
+            'labelsColunasArquivo' => $this->analiseEhNfse
                 ? ExtratoNfseParser::COLUNAS
                 : ExtratoNfeEcacRsParser::COLUNAS,
         ]);

@@ -154,8 +154,8 @@ trait MenuTrait
                         'name' => 'Análises fiscais',
                         'icon' => 'document',
                         'url' => route('automacao-fiscal.analises'),
-                        'active' => request()->routeIs('automacao-fiscal.analises'),
-                        'title' => 'Resumos, valores e gráficos das coletas fiscais',
+                        'active' => request()->routeIs('automacao-fiscal.analises') || request()->routeIs('automacao-fiscal.analise'),
+                        'title' => 'Análises por empresa, portal e competência',
                     ],
 
                 ],

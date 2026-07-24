@@ -11,6 +11,7 @@ use App\Rules\EmpresaDoEscritorio;
 use App\Services\AutomacaoFiscal\AutomacaoArtefatoService;
 use App\Services\AutomacaoFiscal\AutomacaoExecucaoService;
 use App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter;
+use App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -904,13 +905,7 @@ class ExecutarConsultaFiscal extends Component
     public function labelEnumCurto(string $chave, string $valor): string
     {
         if ($chave === 'operacao') {
-            return match ($valor) {
-                'saida-consulente' => 'Saídas emitidas pela empresa',
-                'saida-terceiros' => 'Saídas emitidas por terceiros',
-                'entrada-consulente' => 'Entradas emitidas pela empresa',
-                'entrada-terceiros' => 'Entradas emitidas por terceiros',
-                default => $valor,
-            };
+            return ExtratoNfeEcacRsParser::labelTipoOperacao($valor);
         }
 
         return $this->labelEnum($chave, $valor);
@@ -1060,6 +1055,20 @@ class ExecutarConsultaFiscal extends Component
                         || in_array((string) $log->etapa, ['RUN_FAILED', 'JOB_FAILED', 'erro'], true)
                         || str_contains(mb_strtolower((string) $log->mensagem), 'falha')
                         || str_contains(mb_strtolower((string) $log->mensagem), 'erro'));
+
+                    // Sucesso com consulta vazia: não exibir falso positivo de importação.
+                    if (in_array($ultima->status, ['sucesso', 'sucesso_parcial'], true)) {
+                        $erros = $erros->reject(function ($log) {
+                            $msg = mb_strtolower((string) $log->mensagem);
+                            $etapa = (string) ($log->etapa ?? '');
+
+                            return $etapa === 'IMPORT_FAILED'
+                                || str_contains($msg, 'cabeçalho incompatível')
+                                || str_contains($msg, 'extratonfe-vazio')
+                                || str_contains($msg, 'nenhuma nf-e')
+                                || str_contains($msg, 'não foram localizadas nfes');
+                        })->values();
+                    }
                 }
             }
         }
