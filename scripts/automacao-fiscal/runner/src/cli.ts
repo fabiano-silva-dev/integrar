@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 const inputSchema = z.object({
   runId: z.string().min(1),
-  portal: z.enum(['ecac-rs', 'nfse-emissor']).default('ecac-rs'),
+  portal: z.enum(['ecac-rs', 'nfse-emissor', 'nfe-fazenda']).default('ecac-rs'),
   operation: z.string().min(1).default('validate-access'),
   mode: z.enum(['fake', 'discovery', 'certificate']).optional(),
   params: z.record(z.unknown()).default({}),

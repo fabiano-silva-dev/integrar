@@ -54,35 +54,48 @@ export const EcacRsExtractSelectors = {
       .or(scope.getByLabel(/Cancelad/i))
       .first(),
 
+  /** Preferir submit/button visível "Consultar" (evita outro controle role=button no DOM). */
   consultarButton: (scope: FormScope) =>
     scope
-      .getByRole('button', { name: /consultar|pesquisar|buscar/i })
-      .or(scope.getByRole('link', { name: /consultar|pesquisar/i }))
-      .or(
-        scope.locator(
-          'input[type="submit"][value*="Consultar" i], input[type="button"][value*="Consultar" i]',
-        ),
+      .locator(
+        'input[type="submit"][value="Consultar"], input[type="button"][value="Consultar"], input[type="submit"][value*="Consultar" i], input[type="button"][value*="Consultar" i]',
       )
+      .or(scope.getByRole('button', { name: /^consultar$/i }))
+      .or(scope.getByRole('button', { name: /consultar|pesquisar|buscar/i }))
       .first(),
 
-  /** Link real pós-consulta: "Gerar arquivo Texto(txt) das notas..." */
+  /**
+   * Exportação pós-consulta (textos observados no portal):
+   * - "Exportar resultado completo da pesquisa para arquivo texto"
+   * - "Gerar arquivo Texto(txt) das notas..."
+   */
   exportarButton: (scope: FormScope) =>
     scope
       .getByRole('link', {
-        name: /gerar\s*arquivo\s*texto|arquivo\s*texto\s*\(?\s*txt|exportar|download|baixar/i,
+        name: /exportar\s*resultado|gerar\s*arquivo\s*texto|arquivo\s*texto\s*\(?\s*txt|download|baixar/i,
       })
       .or(
         scope.getByRole('button', {
-          name: /gerar\s*arquivo\s*texto|arquivo\s*texto\s*\(?\s*txt|exportar|download|baixar/i,
+          name: /exportar\s*resultado|gerar\s*arquivo\s*texto|arquivo\s*texto\s*\(?\s*txt|download|baixar/i,
         }),
       )
-      .or(scope.getByText(/gerar\s*arquivo\s*texto\s*\(?\s*txt/i))
+      .or(
+        scope.locator(
+          'input[type="submit"][value*="Exportar" i], input[type="button"][value*="Exportar" i], a:has-text("Exportar"), a:has-text("Gerar arquivo")',
+        ),
+      )
+      .or(scope.getByText(/exportar\s*resultado\s*completo|gerar\s*arquivo\s*texto\s*\(?\s*txt/i))
       .first(),
 
   resultadosMarker: (scope: FormScope) =>
     scope
-      .getByText(/Extrato NF-e\/NFC-e\s*-\s*Resultados|Total de Linhas|Gerar arquivo Texto/i)
+      .getByText(
+        /Extrato NF-e(?:\/NFC-e)?\s*-\s*Resultados|Total de Linhas|Exportar resultado completo|Gerar arquivo Texto/i,
+      )
       .first(),
+
+  filtrosMarker: (scope: FormScope) =>
+    scope.getByText(/Extrato NF-e\/NFC-e\s*-\s*Filtros/i).first(),
 
   altcha: (scope: FormScope) =>
     scope

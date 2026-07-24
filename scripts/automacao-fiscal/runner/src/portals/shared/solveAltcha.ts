@@ -62,24 +62,9 @@ export async function solveAltchaInBrowser(
 
   const deadline = Date.now() + timeoutMs;
   let verified = false;
-  // String evita tipagem DOM no tsc do runner (lib sem "dom").
-  const checkVerifiedJs = `(() => {
-    const el = document.querySelector('altcha-widget, [data-altcha]');
-    if (el) {
-      const state =
-        (typeof el.getState === 'function' ? el.getState() : null) ||
-        el.getAttribute('data-state') ||
-        el.getAttribute('state');
-      if (String(state).toLowerCase() === 'verified') return true;
-      const hidden = el.querySelector('input[type="hidden"][name*="altcha" i]');
-      if (hidden && hidden.value && hidden.value.length > 20) return true;
-    }
-    const named = document.querySelector('input[name="altcha"], input[name*="altcha" i]');
-    return Boolean(named && named.value && named.value.length > 20);
-  })()`;
 
   while (Date.now() < deadline) {
-    verified = Boolean(await page.evaluate(checkVerifiedJs).catch(() => false));
+    verified = await isAltchaVerified(page);
     if (verified) {
       break;
     }
@@ -112,39 +97,67 @@ export async function isAltchaPresent(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
+/**
+ * Exige payload/token real do ALTCHA.
+ * Não confiar só em "Verificado" na UI — o rótulo pode ficar sem token após postback parcial.
+ */
 export async function isAltchaVerified(page: Page): Promise<boolean> {
-  const checkVerifiedJs = `(() => {
-    const el = document.querySelector('altcha-widget, [data-altcha]');
-    if (el) {
-      const state =
-        (typeof el.getState === 'function' ? el.getState() : null) ||
-        el.getAttribute('data-state') ||
-        el.getAttribute('state');
-      if (String(state).toLowerCase() === 'verified') return true;
-      const hidden = el.querySelector('input[type="hidden"][name*="altcha" i]');
-      if (hidden && hidden.value && hidden.value.length > 20) return true;
+  const checkTokenJs = `(() => {
+    const tokenOk = (value) => Boolean(value && String(value).length > 20);
+
+    const named = document.querySelectorAll('input[name="altcha"], input[name*="altcha" i], input[type="hidden"][name*="altcha" i]');
+    for (const input of named) {
+      if (tokenOk(input.value)) return true;
     }
-    if (document.body?.innerText && /\\bVerificado\\b/i.test(document.body.innerText)
-      && /\\bALTCHA\\b/i.test(document.body.innerText)) {
-      return true;
+
+    const widget = document.querySelector('altcha-widget, [data-altcha]');
+    if (!widget) return false;
+
+    const roots = [widget];
+    if (widget.shadowRoot) roots.push(widget.shadowRoot);
+    for (const root of roots) {
+      const hidden = root.querySelector?.('input[type="hidden"][name*="altcha" i], input[type="hidden"]');
+      if (hidden && tokenOk(hidden.value)) return true;
     }
-    const named = document.querySelector('input[name="altcha"], input[name*="altcha" i]');
-    return Boolean(named && named.value && named.value.length > 20);
+
+    // Alguns builds expõem o payload só via getState()/state.
+    try {
+      const state = typeof widget.getState === 'function' ? widget.getState() : null;
+      if (state && typeof state === 'object') {
+        const payload = state.payload || state.token || state.value;
+        if (tokenOk(payload)) return true;
+      }
+    } catch (_) {}
+
+    return false;
   })()`;
-  return Boolean(await page.evaluate(checkVerifiedJs).catch(() => false));
+  return Boolean(await page.evaluate(checkTokenJs).catch(() => false));
 }
 
-/** Resolve ALTCHA só se o widget existir e ainda não estiver verified. */
+/** Resolve ALTCHA só se o widget existir e ainda não tiver token válido. */
 export async function ensureAltchaSolved(
   page: Page,
   context: AutomationContext,
-  options: { timeoutMs?: number; screenshotPrefix?: string } = {},
+  options: { timeoutMs?: number; screenshotPrefix?: string; force?: boolean } = {},
 ): Promise<void> {
   if (!(await isAltchaPresent(page))) {
     return;
   }
-  if (await isAltchaVerified(page)) {
+  if (!options.force && (await isAltchaVerified(page))) {
     return;
+  }
+  if (options.force) {
+    await page
+      .evaluate(`(() => {
+        const el = document.querySelector('altcha-widget, [data-altcha]');
+        if (!el) return;
+        try { el.reset?.(); } catch (_) {}
+        try { el.setAttribute?.('data-state', ''); } catch (_) {}
+        for (const input of document.querySelectorAll('input[name="altcha"], input[name*="altcha" i]')) {
+          input.value = '';
+        }
+      })()`)
+      .catch(() => undefined);
   }
   await solveAltchaInBrowser(page, context, options);
 }

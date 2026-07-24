@@ -59,7 +59,7 @@ function assertEntryInAllowlist(
   }
 }
 
-export const portalCodeSchema = z.enum(['ecac-rs', 'nfse-emissor']);
+export const portalCodeSchema = z.enum(['ecac-rs', 'nfse-emissor', 'nfe-fazenda']);
 export type PortalCode = z.infer<typeof portalCodeSchema>;
 
 export const envSchema = z
@@ -87,6 +87,21 @@ export const envSchema = z
       .min(1)
       .default('nfse.gov.br')
       .transform((value) => parseHostSuffixes(value)),
+    NFE_FAZENDA_MODE: z.enum(['fake', 'discovery', 'certificate']).default('certificate'),
+    NFE_FAZENDA_ENTRY_URL: z
+      .string()
+      .url()
+      .default(
+        'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=resumo&tipoConteudo=7PhJ+gAVw2g=',
+      ),
+    NFE_FAZENDA_CERT_ORIGINS: csvOrigins.default('https://www.nfe.fazenda.gov.br'),
+    NFE_FAZENDA_ALLOWED_HOST_SUFFIXES: z
+      .string()
+      .min(1)
+      .default('nfe.fazenda.gov.br,fazenda.gov.br')
+      .transform((value) => parseHostSuffixes(value)),
+    /** Chave CapSolver para resolver hCaptcha do portal nacional da NF-e. */
+    CAPSOLVER_API_KEY: z.string().optional().default(''),
     ECAC_A1_PFX_FILE: z.string().min(1).default('/run/secrets/ecac_a1_pfx'),
     ECAC_A1_PASSWORD_FILE: z.string().min(1).default('/run/secrets/ecac_a1_password'),
     PORT: z.coerce.number().int().positive().default(3000),
@@ -104,6 +119,12 @@ export const envSchema = z
       data.NFSE_EMISSOR_ENTRY_URL,
       data.NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES,
       'NFSE_EMISSOR_ENTRY_URL',
+      ctx,
+    );
+    assertEntryInAllowlist(
+      data.NFE_FAZENDA_ENTRY_URL,
+      data.NFE_FAZENDA_ALLOWED_HOST_SUFFIXES,
+      'NFE_FAZENDA_ENTRY_URL',
       ctx,
     );
   });
@@ -144,21 +165,43 @@ export function resolvePortalMode(config: EnvConfig, portal: PortalCode): Automa
   if (config.AUTOMATION_FAKE_MODE) {
     return 'fake';
   }
-  return portal === 'nfse-emissor' ? config.NFSE_EMISSOR_MODE : config.ECAC_RS_MODE;
+  if (portal === 'nfse-emissor') {
+    return config.NFSE_EMISSOR_MODE;
+  }
+  if (portal === 'nfe-fazenda') {
+    return config.NFE_FAZENDA_MODE;
+  }
+  return config.ECAC_RS_MODE;
 }
 
 export function portalEntryUrl(config: EnvConfig, portal: PortalCode): string {
-  return portal === 'nfse-emissor' ? config.NFSE_EMISSOR_ENTRY_URL : config.ECAC_RS_ENTRY_URL;
+  if (portal === 'nfse-emissor') {
+    return config.NFSE_EMISSOR_ENTRY_URL;
+  }
+  if (portal === 'nfe-fazenda') {
+    return config.NFE_FAZENDA_ENTRY_URL;
+  }
+  return config.ECAC_RS_ENTRY_URL;
 }
 
 export function portalAllowedHosts(config: EnvConfig, portal: PortalCode): string[] {
-  return portal === 'nfse-emissor'
-    ? config.NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES
-    : config.ECAC_RS_ALLOWED_HOST_SUFFIXES;
+  if (portal === 'nfse-emissor') {
+    return config.NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES;
+  }
+  if (portal === 'nfe-fazenda') {
+    return config.NFE_FAZENDA_ALLOWED_HOST_SUFFIXES;
+  }
+  return config.ECAC_RS_ALLOWED_HOST_SUFFIXES;
 }
 
 export function portalCertOrigins(config: EnvConfig, portal: PortalCode): string[] {
-  return portal === 'nfse-emissor' ? config.NFSE_EMISSOR_CERT_ORIGINS : config.ECAC_RS_CERT_ORIGINS;
+  if (portal === 'nfse-emissor') {
+    return config.NFSE_EMISSOR_CERT_ORIGINS;
+  }
+  if (portal === 'nfe-fazenda') {
+    return config.NFE_FAZENDA_CERT_ORIGINS;
+  }
+  return config.ECAC_RS_CERT_ORIGINS;
 }
 
 type AutomationModeLike = 'fake' | 'discovery' | 'certificate';

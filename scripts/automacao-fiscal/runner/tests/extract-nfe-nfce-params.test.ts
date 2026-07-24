@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  formatCnpjBr,
   isoToBrDate,
   parseExtractNfeNfceParams,
 } from '../src/portals/ecac-rs/extractNfeNfceParams.js';
@@ -55,5 +56,10 @@ describe('extractNfeNfceParams', () => {
         }),
       /IE ou CNPJ/i,
     );
+  });
+
+  it('formata CNPJ com máscara do portal', () => {
+    assert.equal(formatCnpjBr('95070777000139'), '95.070.777/0001-39');
+    assert.equal(formatCnpjBr('95.070.777/0001-39'), '95.070.777/0001-39');
   });
 });

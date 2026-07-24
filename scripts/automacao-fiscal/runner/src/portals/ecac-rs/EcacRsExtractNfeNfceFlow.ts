@@ -95,48 +95,58 @@ export class EcacRsExtractNfeNfceFlow {
 
     await ensureAltchaSolved(page, context, { screenshotPrefix: '11-altcha-filled' });
 
-    const consultar = EcacRsExtractSelectors.consultarButton(scope);
-    if (!(await consultar.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      throw ecacError(
-        'PORTAL_LAYOUT_CHANGED',
-        'Botão Consultar não encontrado no formulário de extrato',
-        { params, url: sanitizeUrl(page.url()) },
-      );
-    }
-
-    // Consultar NÃO inicia download — só monta a grade. Evitar waitForEvent longo aqui.
-    await consultar.click({ force: true });
-    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
-    await sleep(1_500);
+    let consultaDialog = await this.submitConsulta(context, page, scope);
     await context.saveScreenshot('12-after-consultar.png', page);
 
-    await ensureAltchaSolved(page, context, { screenshotPrefix: '12-altcha-post' });
+    if (this.isEmptyResultDialog(consultaDialog)) {
+      return this.emptyExtractSuccess(context, auth, params, started, consultaDialog);
+    }
 
-    // Se a consulta não avançou (ALTCHA resetou), reenvia uma vez.
     const resultados = EcacRsExtractSelectors.resultadosMarker(scope);
-    if (!(await resultados.isVisible({ timeout: 8_000 }).catch(() => false))) {
+    if (!(await resultados.isVisible({ timeout: 12_000 }).catch(() => false))) {
+      // ALTCHA pode invalidar o post — resolve e reenvia.
       if (await this.isCaptchaVisible(page)) {
         const challenge = EcacRsSelectors.captchaOrMfa(page).first();
         await challenge.click({ force: true }).catch(() => undefined);
         await sleep(1_000);
       }
       await ensureAltchaSolved(page, context, { screenshotPrefix: '12b-altcha-retry' });
-      if (await consultar.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await consultar.click({ force: true });
-        await page.waitForLoadState('domcontentloaded').catch(() => undefined);
-        await sleep(1_500);
+      consultaDialog = await this.submitConsulta(context, page, scope, { viaEvaluate: true });
+      await context.saveScreenshot('12c-after-consultar-retry.png', page);
+
+      if (this.isEmptyResultDialog(consultaDialog)) {
+        return this.emptyExtractSuccess(context, auth, params, started, consultaDialog);
       }
     }
 
     await resultados.waitFor({ state: 'visible', timeout: 45_000 }).catch(() => undefined);
     await context.saveScreenshot('13-resultados.png', page);
 
-    const exportar = EcacRsExtractSelectors.exportarButton(scope);
-    if (!(await exportar.isVisible({ timeout: 15_000 }).catch(() => false))) {
+    const aindaNosFiltros = await EcacRsExtractSelectors.filtrosMarker(scope)
+      .isVisible({ timeout: 1_000 })
+      .catch(() => false);
+    const temResultados = await resultados.isVisible({ timeout: 1_000 }).catch(() => false);
+    const portalHint = await this.readPortalHints(scope);
+
+    if (!temResultados) {
       throw ecacError(
         'PORTAL_LAYOUT_CHANGED',
-        'Resultados visíveis, mas link "Gerar arquivo Texto(txt)" não encontrado.',
-        { params, url: sanitizeUrl(page.url()) },
+        aindaNosFiltros
+          ? `Consulta não avançou dos Filtros (Consultar não gerou Resultados).${portalHint}`
+          : `Tela de Resultados do extrato não apareceu após Consultar.${portalHint}`,
+        { params, url: sanitizeUrl(page.url()), portalHint, aindaNosFiltros },
+      );
+    }
+
+    const exportar = EcacRsExtractSelectors.exportarButton(scope);
+    if (!(await exportar.isVisible({ timeout: 15_000 }).catch(() => false))) {
+      const vazio = await this.hasEmptyResultMessage(scope);
+      throw ecacError(
+        'PORTAL_LAYOUT_CHANGED',
+        vazio
+          ? `Consulta sem notas no período — botão de exportação não disponível.${portalHint}`
+          : `Resultados visíveis, mas botão/link de exportar extrato (.txt) não encontrado.${portalHint}`,
+        { params, url: sanitizeUrl(page.url()), portalHint, vazio },
       );
     }
 
@@ -219,6 +229,286 @@ export class EcacRsExtractNfeNfceFlow {
       .catch(() => false);
   }
 
+  /** Clica Consultar de forma a disparar postback ASP.NET. Retorna texto de dialog, se houver. */
+  private async submitConsulta(
+    context: AutomationContext,
+    page: Page,
+    scope: FormScope,
+    options: { viaEvaluate?: boolean } = {},
+  ): Promise<string | null> {
+    const consultar = EcacRsExtractSelectors.consultarButton(scope);
+    if (!(await consultar.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      throw ecacError(
+        'PORTAL_LAYOUT_CHANGED',
+        'Botão Consultar não encontrado no formulário de extrato',
+        { url: sanitizeUrl(page.url()) },
+      );
+    }
+
+    // Garante token real; só força reset se ainda não houver payload válido.
+    const hadToken = await page
+      .evaluate(`(() => {
+        const inputs = document.querySelectorAll('input[name="altcha"], input[name*="altcha" i]');
+        for (const input of inputs) {
+          if (input.value && input.value.length > 20) return true;
+        }
+        return false;
+      })()`)
+      .catch(() => false);
+
+    await ensureAltchaSolved(page, context, {
+      screenshotPrefix: options.viaEvaluate ? '12b-altcha-before-click' : '12-altcha-before-click',
+      force: !hadToken,
+    });
+
+    const buttonMeta = await consultar
+      .evaluate((el) => {
+        const input = el as {
+          outerHTML?: string;
+          type?: string;
+          name?: string;
+          disabled?: boolean;
+          getAttribute?: (n: string) => string | null;
+          form?: { id?: string; name?: string; getAttribute?: (n: string) => string | null } | null;
+        };
+        return {
+          type: input.type || null,
+          name: input.name || null,
+          disabled: Boolean(input.disabled),
+          onclick: input.getAttribute?.('onclick') || null,
+          formaction: input.getAttribute?.('formaction') || null,
+          formOnsubmit: input.form?.getAttribute?.('onsubmit') || null,
+          formId: input.form?.id || input.form?.name || null,
+          html: (input.outerHTML || '').slice(0, 400),
+        };
+      })
+      .catch(() => null);
+
+    const hasToken = await page
+      .evaluate(`(() => {
+        const inputs = document.querySelectorAll('input[name="altcha"], input[name*="altcha" i]');
+        for (const input of inputs) {
+          if (input.value && input.value.length > 20) return true;
+        }
+        return false;
+      })()`)
+      .catch(() => false);
+
+    await context.emitEvent({
+      level: 'info',
+      eventType: 'NAVIGATION_STARTED',
+      message: 'Enviando Consultar do extrato',
+      metadata: {
+        viaEvaluate: Boolean(options.viaEvaluate),
+        altchaToken: Boolean(hasToken),
+        button: buttonMeta,
+      },
+    });
+
+    await consultar.scrollIntoViewIfNeeded().catch(() => undefined);
+
+    const seenRequests: string[] = [];
+    const onRequest = (request: { method: () => string; url: () => string }): void => {
+      const url = request.url();
+      if (/sefaz\.rs\.gov\.br/i.test(url)) {
+        seenRequests.push(`${request.method()} ${url}`.slice(0, 180));
+      }
+    };
+    page.on('request', onRequest);
+
+    let dialogMessage: string | null = null;
+    page.once('dialog', (dialog) => {
+      dialogMessage = dialog.message();
+      void context.emitEvent({
+        level: 'warn',
+        eventType: 'LAYOUT_CHANGED',
+        message: `Dialog do portal ao Consultar: ${dialog.message()}`,
+      });
+      void dialog.accept().catch(() => undefined);
+    });
+
+    const postPromise = page
+      .waitForResponse(
+        (response) =>
+          /nfe-ics-ext/i.test(response.url()) &&
+          ['POST', 'GET'].includes(response.request().method()) &&
+          response.status() < 500,
+        { timeout: 20_000 },
+      )
+      .catch(() => null);
+
+    if (options.viaEvaluate) {
+      await consultar
+        .evaluate((el) => {
+          const input = el as {
+            click: () => void;
+            form?: { requestSubmit?: (submitter?: unknown) => void };
+            type?: string;
+          };
+          input.click();
+          if (input.type === 'submit' && input.form?.requestSubmit) {
+            input.form.requestSubmit(el);
+          }
+        })
+        .catch(async () => {
+          await consultar.click({ force: true });
+        });
+    } else {
+      await consultar.click({ timeout: 5_000 }).catch(async () => {
+        await consultar.click({ force: true });
+      });
+    }
+
+    const post = await postPromise;
+    // Dialog pode chegar logo após o POST — dá um respiro.
+    await sleep(400);
+    page.off('request', onRequest);
+
+    if (dialogMessage && !this.isEmptyResultDialog(dialogMessage)) {
+      throw ecacError(
+        'PORTAL_LAYOUT_CHANGED',
+        `Portal rejeitou a consulta: ${dialogMessage}`,
+        { url: sanitizeUrl(page.url()), button: buttonMeta, dialogMessage },
+      );
+    }
+
+    if (dialogMessage) {
+      return dialogMessage;
+    }
+
+    if (!post) {
+      await context.emitEvent({
+        level: 'warn',
+        eventType: 'LAYOUT_CHANGED',
+        message: 'Consultar não gerou POST — tentando submit nativo / __doPostBack',
+        metadata: { seenRequests: seenRequests.slice(-8), button: buttonMeta },
+      });
+
+      const postbackName =
+        buttonMeta && typeof buttonMeta === 'object' && 'name' in buttonMeta
+          ? String((buttonMeta as { name?: string | null }).name || '')
+          : '';
+
+      await scope
+        .evaluate(
+          `((name) => {
+            const w = window;
+            if (name && typeof w.__doPostBack === 'function') {
+              w.__doPostBack(name, '');
+              return 'doPostBack';
+            }
+            const btn = document.querySelector(
+              'input[type="submit"][value="Consultar"], input[type="button"][value="Consultar"]'
+            );
+            if (btn && btn.name && typeof w.__doPostBack === 'function') {
+              w.__doPostBack(btn.name, '');
+              return 'doPostBack-btn';
+            }
+            if (btn && btn.form) {
+              if (typeof btn.form.requestSubmit === 'function') {
+                btn.form.requestSubmit(btn);
+                return 'requestSubmit';
+              }
+              btn.click();
+              return 'click';
+            }
+            const form = document.querySelector('form');
+            form?.submit?.();
+            return form ? 'form.submit' : 'none';
+          })(${JSON.stringify(postbackName)})`,
+        )
+        .catch(() => 'error');
+
+      await page
+        .waitForResponse(
+          (response) => /nfe-ics-ext/i.test(response.url()),
+          { timeout: 15_000 },
+        )
+        .catch(() => null);
+    } else {
+      await context.emitEvent({
+        level: 'info',
+        eventType: 'NAVIGATION_FINISHED',
+        message: `Consultar gerou navegação ${post.request().method()} ${post.status()}`,
+      });
+    }
+
+    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+    await sleep(2_000);
+    return dialogMessage;
+  }
+
+  private isEmptyResultDialog(message: string | null | undefined): boolean {
+    if (!message) {
+      return false;
+    }
+    return /n[aã]o\s+foram\s+localizad|nenhuma\s+nfe|sem\s+notas|n[aã]o\s+foram\s+encontrad/i.test(
+      message,
+    );
+  }
+
+  private async emptyExtractSuccess(
+    context: AutomationContext,
+    auth: Awaited<ReturnType<EcacRsCertificateFlow['authenticate']>>,
+    params: ExtractNfeNfceParams,
+    started: number,
+    dialogMessage: string | null,
+  ): Promise<AutomationResult> {
+    // Não gravar .txt placeholder — evita falso erro na importação PHP.
+    await context.emitEvent({
+      level: 'info',
+      eventType: 'RUN_FINISHED',
+      message: 'Nenhuma NF-e/NFC-e encontrada com o filtro informado.',
+      metadata: { empty: true, dialogMessage, params },
+    });
+
+    return {
+      status: 'succeeded',
+      finalUrl: sanitizeUrl(auth.page.url()),
+      durationMs: Date.now() - started,
+      resultData: {
+        params,
+        empty: true,
+        dialogMessage,
+        quantidade: 0,
+        message: 'Nenhuma NF-e/NFC-e encontrada com o filtro informado.',
+        detection: auth.detection,
+        observedHosts: unique(auth.observedHosts),
+        redirects: auth.redirects.map(sanitizeUrl),
+      },
+    };
+  }
+
+  private async readPortalHints(scope: FormScope): Promise<string> {
+    const js = `(() => {
+      const texts = [];
+      const nodes = document.querySelectorAll(
+        '.erro, .error, .alert, .validation-summary-errors, font[color="red"], font[color="#ff0000"], span[style*="color:red"], span[style*="color: red"]'
+      );
+      for (const n of nodes) {
+        const t = (n.textContent || '').replace(/\\s+/g, ' ').trim();
+        // Ignora rótulos fixos do formulário (ex.: "Máx. 31 dias").
+        if (/m[aá]x\\.?\\s*31\\s*dias/i.test(t)) continue;
+        if (/banco\\s+de\\s+dados\\s+atualizado/i.test(t)) continue;
+        if (t.length > 3 && t.length < 240) texts.push(t);
+      }
+      const body = (document.body?.innerText || '').replace(/\\s+/g, ' ');
+      const m = body.match(/(per[ií]odo\\s*inv[aá]lido[^.]{0,80}|informe\\s+(a\\s+)?(ie|cnpj|per[ií]odo)[^.]{0,60}|nenhuma\\s+nota[^.]{0,60}|n[aã]o\\s+foram\\s+encontrad[^.]{0,60})/i);
+      if (m && !/m[aá]x\\.?\\s*31\\s*dias/i.test(m[0])) texts.push(m[0].trim());
+      return [...new Set(texts)].slice(0, 5).join(' | ');
+    })()`;
+    const hint = String((await scope.evaluate(js).catch(() => '')) || '').trim();
+    return hint ? ` Detalhe do portal: ${hint}` : '';
+  }
+
+  private async hasEmptyResultMessage(scope: FormScope): Promise<boolean> {
+    return scope
+      .getByText(/nenhuma\s+nota|n[aã]o\s+foram\s+encontrad|sem\s+resultados|total\s+de\s+linhas:\s*0/i)
+      .first()
+      .isVisible({ timeout: 1_500 })
+      .catch(() => false);
+  }
+
   private async fillForm(
     context: AutomationContext,
     page: Page,
@@ -236,7 +526,15 @@ export class EcacRsExtractNfeNfceFlow {
       await this.fillText(context, scope, EcacRsExtractSelectors.ieInput(scope), params.ie, 'IE');
     }
     if (params.cnpj) {
-      await this.fillText(context, scope, EcacRsExtractSelectors.cnpjInput(scope), params.cnpj, 'CNPJ');
+      // Portal valida com alert "CNPJ deve ser numérico" — enviar só dígitos.
+      // A máscara visual (se houver) é aplicada pelo próprio ASP.NET no blur.
+      await this.fillText(
+        context,
+        scope,
+        EcacRsExtractSelectors.cnpjInput(scope),
+        params.cnpj.replace(/\D/g, ''),
+        'CNPJ',
+      );
     }
 
     await this.fillText(
@@ -356,6 +654,14 @@ export class EcacRsExtractNfeNfceFlow {
       }, value);
     }
 
+    // Dispara máscara ASP.NET (CNPJ/datas) após preencher.
+    await target.evaluate((el) => {
+      const input = el as { dispatchEvent: (e: Event) => boolean; blur?: () => void };
+      input.dispatchEvent(new Event('keyup', { bubbles: true }));
+      input.dispatchEvent(new Event('blur', { bubbles: true }));
+      input.blur?.();
+    }).catch(() => undefined);
+
     const current = await target.inputValue().catch(() => '');
     const normalizedCurrent = current.replace(/\D/g, '');
     const normalizedValue = value.replace(/\D/g, '');
@@ -368,6 +674,7 @@ export class EcacRsExtractNfeNfceFlow {
         input.value = v;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new Event('blur', { bubbles: true }));
       }, value);
       const again = await target.inputValue().catch(() => '');
       if (again.replace(/\D/g, '') !== normalizedValue && again !== value) {

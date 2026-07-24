@@ -72,6 +72,15 @@ export function isoToBrDate(iso: string): string {
   return `${day}/${month}/${year}`;
 }
 
+/** Máscara CNPJ do formulário nfe-ics-ext (sem máscara o Consultar pode não postar). */
+export function formatCnpjBr(digitsOrMasked: string): string {
+  const digits = digitsOrMasked.replace(/\D/g, '');
+  if (digits.length !== 14) {
+    return digitsOrMasked;
+  }
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
 /** Textos reais do formulário nfe-ics-ext.aspx (Sefaz RS). */
 export const OPERACAO_LABELS: Record<ExtractNfeNfceParams['operacao'], RegExp> = {
   'saida-consulente': /sa[ií]da\s+emitidas\s+pelo\s+consulente/i,

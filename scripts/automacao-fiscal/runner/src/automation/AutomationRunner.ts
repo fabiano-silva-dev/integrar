@@ -24,6 +24,7 @@ import type {
   PortalAdapter,
 } from './types.js';
 import { EcacRsAdapter } from '../portals/ecac-rs/EcacRsAdapter.js';
+import { NfeFazendaAdapter } from '../portals/nfe-fazenda/NfeFazendaAdapter.js';
 import { NfseEmissorAdapter } from '../portals/nfse-emissor/NfseEmissorAdapter.js';
 
 export class AutomationRunner {
@@ -363,6 +364,9 @@ export class AutomationRunner {
 function createPortalAdapter(portal: PortalCode): PortalAdapter {
   if (portal === 'nfse-emissor') {
     return new NfseEmissorAdapter();
+  }
+  if (portal === 'nfe-fazenda') {
+    return new NfeFazendaAdapter();
   }
   return new EcacRsAdapter();
 }

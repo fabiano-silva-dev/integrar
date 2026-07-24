@@ -14,7 +14,7 @@
     "dev": "tsx watch src/server/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts",
+    "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts tests/download-nfe-xml-params.test.ts",
     "test:all": "tsx --test tests/**/*.test.ts",
     "test:browser": "tsx --test tests/fake-mode.test.ts tests/timeout.test.ts tests/mtls.test.ts",
     "format": "prettier --write ."
