@@ -101,7 +101,15 @@ class EcacRsPortal implements PortalAutomacao
 
         // Eventos/artefatos já foram gravados ao vivo — evita duplicar.
         if ($statusRunner === 'succeeded') {
+            if ($this->saidaIndicaConsultaVazia($saida)) {
+                return $this->resultadoConsultaVazia($saida, $params);
+            }
+
             $import = $this->importarExtratoSeHouver($execucao, $saida);
+
+            if (($import['vazio'] ?? false) === true) {
+                return $this->resultadoConsultaVazia($saida, $params, $import['mensagem'] ?? null);
+            }
 
             return new ResultadoAutomacao(
                 status: 'sucesso',
@@ -208,10 +216,95 @@ class EcacRsPortal implements PortalAutomacao
     }
 
     /**
+     * @param  array<string, mixed>  $saida
+     * @param  array<string, mixed>  $params
+     */
+    private function resultadoConsultaVazia(array $saida, array $params, ?string $mensagem = null): ResultadoAutomacao
+    {
+        return new ResultadoAutomacao(
+            status: 'sucesso',
+            mensagemUsuario: $mensagem ?: $this->mensagemConsultaVazia($saida),
+            quantidadeEncontrada: 0,
+            quantidadeImportada: 0,
+            quantidadeIgnorada: 0,
+            quantidadeErros: 0,
+            logs: [],
+            metadados: ['runner' => $saida['result'] ?? [], 'params' => $params, 'vazio' => true]
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $saida
+     */
+    private function mensagemConsultaVazia(array $saida): string
+    {
+        return 'Nenhuma NF-e/NFC-e encontrada com o filtro informado.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $saida
+     */
+    private function saidaIndicaConsultaVazia(array $saida): bool
+    {
+        if ((bool) data_get($saida, 'result.resultData.empty')) {
+            return true;
+        }
+
+        if ((int) data_get($saida, 'result.resultData.quantidade', -1) === 0
+            && data_get($saida, 'result.resultData.empty') !== false
+            && (
+                $this->textoIndicaConsultaVazia((string) data_get($saida, 'result.resultData.dialogMessage', ''))
+                || $this->textoIndicaConsultaVazia((string) data_get($saida, 'result.resultData.message', ''))
+            )
+        ) {
+            return true;
+        }
+
+        foreach ((array) ($saida['events'] ?? []) as $evento) {
+            $mensagem = (string) ($evento['message'] ?? $evento['mensagem'] ?? '');
+            if ($this->textoIndicaConsultaVazia($mensagem)) {
+                return true;
+            }
+            if ((bool) data_get($evento, 'metadata.empty') || (bool) data_get($evento, 'metadata.metadata.empty')) {
+                return true;
+            }
+        }
+
+        foreach ((array) ($saida['artifacts'] ?? []) as $artifact) {
+            $nome = strtolower((string) ($artifact['filename'] ?? $artifact['nome'] ?? ''));
+            if (str_contains($nome, 'vazio')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function textoIndicaConsultaVazia(string $texto): bool
+    {
+        return (bool) preg_match(
+            '/n[aã]o\s+foram\s+localizad|nenhuma\s+nf-?e|sem\s+nf-?e|consulta\s+sem\s+nf-?e|sem\s+registros/i',
+            $texto
+        );
+    }
+
+    private function artefatoEhExtratoImportavel(AutomacaoArtefato $a): bool
+    {
+        $nome = strtolower((string) $a->nome_original);
+        if ($nome === '' || str_contains($nome, 'vazio')) {
+            return false;
+        }
+
+        return $a->tipo === 'download'
+            || str_ends_with($nome, '.txt')
+            || str_contains($nome, 'extrato');
+    }
+
+    /**
      * Após extract bem-sucedido, importa o .txt do extrato para Análises fiscais.
      *
-     * @param  array{status: string, result: array<string, mixed>}  $saida
-     * @return array{mensagem?: string, encontrada?: int, importada?: int, ignorada?: int, coleta_id?: int}
+     * @param  array{status: string, result: array<string, mixed>, events?: list<array<string, mixed>>, artifacts?: list<array<string, mixed>>}  $saida
+     * @return array{mensagem?: string, encontrada?: int, importada?: int, ignorada?: int, coleta_id?: int, vazio?: bool}
      */
     private function importarExtratoSeHouver(AutomacaoExecucao $execucao, array $saida): array
     {
@@ -220,16 +313,20 @@ class EcacRsPortal implements PortalAutomacao
             return [];
         }
 
+        if ($this->saidaIndicaConsultaVazia($saida)) {
+            return [
+                'vazio' => true,
+                'mensagem' => $this->mensagemConsultaVazia($saida),
+                'encontrada' => 0,
+                'importada' => 0,
+                'ignorada' => 0,
+            ];
+        }
+
         $execucao->loadMissing(['empresa', 'artefatos']);
 
         $download = $execucao->artefatos
-            ->filter(function (AutomacaoArtefato $a) {
-                $nome = strtolower((string) $a->nome_original);
-
-                return $a->tipo === 'download'
-                    || str_ends_with($nome, '.txt')
-                    || str_contains($nome, 'extrato');
-            })
+            ->filter(fn (AutomacaoArtefato $a) => $this->artefatoEhExtratoImportavel($a))
             ->sortByDesc('id')
             ->first();
 
@@ -237,26 +334,21 @@ class EcacRsPortal implements PortalAutomacao
             $dir = storage_path('app/automacao-fiscal-runner/'.$execucao->uuid.'/artifacts/'.$execucao->uuid);
             $this->artefatos->persistirDiretorioRunner($execucao, $dir);
             $execucao->unsetRelation('artefatos');
-            $download = $execucao->artefatos()
-                ->where(function ($q) {
-                    $q->where('tipo', 'download')
-                        ->orWhere('nome_original', 'like', '%.txt')
-                        ->orWhere('nome_original', 'like', '%Extrato%');
-                })
-                ->latest('id')
+            $execucao->load('artefatos');
+            $download = $execucao->artefatos
+                ->filter(fn (AutomacaoArtefato $a) => $this->artefatoEhExtratoImportavel($a))
+                ->sortByDesc('id')
                 ->first();
         }
 
         if (!$download) {
-            $this->logs->registrar(
-                $execucao,
-                'warning',
-                'Extrato concluído no portal, mas o arquivo .txt não foi persistido no IntegraExpert.',
-                'DOWNLOAD_MISSING',
-            );
-
+            // Runner em succeeded sem .txt importável = portal sem notas (não é erro de gravação).
             return [
-                'mensagem' => 'Consulta concluída, mas o arquivo do extrato não foi gravado. Execute novamente.',
+                'vazio' => true,
+                'mensagem' => $this->mensagemConsultaVazia($saida),
+                'encontrada' => 0,
+                'importada' => 0,
+                'ignorada' => 0,
             ];
         }
 
@@ -275,6 +367,17 @@ class EcacRsPortal implements PortalAutomacao
             ];
         }
 
+        $inicioArquivo = mb_strtolower((string) file_get_contents($caminho, false, null, 0, 240));
+        if (str_contains($inicioArquivo, 'sem registros')) {
+            return [
+                'vazio' => true,
+                'mensagem' => $this->mensagemConsultaVazia($saida),
+                'encontrada' => 0,
+                'importada' => 0,
+                'ignorada' => 0,
+            ];
+        }
+
         try {
             $resultado = app(ImportadorExtratoNfeService::class)->importarArquivo(
                 $execucao->empresa,
@@ -283,6 +386,18 @@ class EcacRsPortal implements PortalAutomacao
                 $execucao->id
             );
         } catch (\Throwable $e) {
+            if (str_contains($e->getMessage(), 'Cabeçalho incompatível')
+                && (str_contains($inicioArquivo, 'sem registros') || str_contains(strtolower((string) $download->nome_original), 'vazio'))
+            ) {
+                return [
+                    'vazio' => true,
+                    'mensagem' => $this->mensagemConsultaVazia($saida),
+                    'encontrada' => 0,
+                    'importada' => 0,
+                    'ignorada' => 0,
+                ];
+            }
+
             $this->logs->registrar(
                 $execucao,
                 'error',

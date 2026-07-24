@@ -140,6 +140,184 @@ class CertificadoDigitalService
         return Storage::path($certificado->arquivo_path);
     }
 
+    /**
+     * Certificado A1 ativo cujo titular (CNPJ/CPF) corresponde ao documento informado.
+     */
+    public function resolverAtivoPorDocumento(string $documento): ?CertificadoDigital
+    {
+        $digits = preg_replace('/\D+/', '', $documento) ?? '';
+        if ($digits === '' || (strlen($digits) !== 11 && strlen($digits) !== 14)) {
+            return null;
+        }
+
+        return CertificadoDigital::query()
+            ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->whereRaw(
+                "REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(documento_titular, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ?",
+                [$digits]
+            )
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * CNPJs (14 dígitos) com certificado A1 ativo no escritório atual.
+     *
+     * @return array<string, true>
+     */
+    public function mapaCnpjsComCertificadoA1(): array
+    {
+        $mapa = [];
+
+        $certificados = CertificadoDigital::query()
+            ->with(['empresa:id,cnpj'])
+            ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
+            ->get(['id', 'documento_titular', 'empresa_id']);
+
+        foreach ($certificados as $cert) {
+            $doc = preg_replace('/\D+/', '', (string) $cert->documento_titular) ?? '';
+            if (strlen($doc) === 14) {
+                $mapa[$doc] = true;
+            }
+
+            $cnpjEmpresa = preg_replace('/\D+/', '', (string) ($cert->empresa?->cnpj ?? '')) ?? '';
+            if (strlen($cnpjEmpresa) === 14) {
+                $mapa[$cnpjEmpresa] = true;
+            }
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Extrai certificado e chave privada PEM para mTLS (arquivos temporários).
+     * O chamador deve invocar o cleanup ao terminar.
+     *
+     * @return array{cert: string, key: string, cleanup: \Closure}
+     */
+    public function materializarCredenciaisMtls(CertificadoDigital $certificado): array
+    {
+        $caminho = $this->caminhoAbsoluto($certificado);
+        if ($caminho === null || ! is_file($caminho)) {
+            throw new RuntimeException('Arquivo do certificado A1 não encontrado no storage.');
+        }
+
+        $binario = file_get_contents($caminho);
+        if ($binario === false || $binario === '') {
+            throw new RuntimeException('Não foi possível ler o certificado A1.');
+        }
+
+        $senha = (string) $certificado->senha_criptografada;
+        $creds = $this->extrairCertEChavePem($binario, $senha);
+
+        $workDir = sys_get_temp_dir() . '/nfe-mtls-' . Str::uuid();
+        File::ensureDirectoryExists($workDir, 0700);
+
+        $certPath = $workDir . '/client.crt.pem';
+        $keyPath = $workDir . '/client.key.pem';
+        File::put($certPath, $creds['cert']);
+        File::put($keyPath, $creds['key']);
+        chmod($certPath, 0600);
+        chmod($keyPath, 0600);
+
+        return [
+            'cert' => $certPath,
+            'key' => $keyPath,
+            'cleanup' => static function () use ($workDir): void {
+                File::deleteDirectory($workDir);
+            },
+        ];
+    }
+
+    /**
+     * @return array{cert: string, key: string}
+     */
+    private function extrairCertEChavePem(string $binario, string $senha): array
+    {
+        $certs = [];
+        if (@openssl_pkcs12_read($binario, $certs, $senha) && ! empty($certs['cert']) && ! empty($certs['pkey'])) {
+            return [
+                'cert' => $certs['cert'],
+                'key' => $certs['pkey'],
+            ];
+        }
+
+        return $this->extrairCertEChavePemViaOpenSsl($binario, $senha);
+    }
+
+    /**
+     * @return array{cert: string, key: string}
+     */
+    private function extrairCertEChavePemViaOpenSsl(string $binario, string $senha): array
+    {
+        $workDir = sys_get_temp_dir() . '/pfx-mtls-' . Str::uuid();
+        File::ensureDirectoryExists($workDir, 0700);
+
+        $pfxPath = $workDir . '/cert.pfx';
+        $passPath = $workDir . '/pass.txt';
+        $certPath = $workDir . '/cert.pem';
+        $keyPath = $workDir . '/key.pem';
+
+        try {
+            File::put($pfxPath, $binario);
+            File::put($passPath, $senha);
+            chmod($pfxPath, 0600);
+            chmod($passPath, 0600);
+
+            $certArgs = [
+                'pkcs12',
+                '-in', $pfxPath,
+                '-passin', 'file:' . $passPath,
+                '-nokeys',
+                '-out', $certPath,
+            ];
+            $keyArgs = [
+                'pkcs12',
+                '-in', $pfxPath,
+                '-passin', 'file:' . $passPath,
+                '-nocerts',
+                '-nodes',
+                '-out', $keyPath,
+            ];
+
+            $rCert = $this->runOpenSsl($certArgs);
+            if ($rCert['code'] !== 0) {
+                $rCert = $this->runOpenSsl([...$certArgs, '-legacy']);
+            }
+            $rKey = $this->runOpenSsl($keyArgs);
+            if ($rKey['code'] !== 0) {
+                $rKey = $this->runOpenSsl([...$keyArgs, '-legacy']);
+            }
+
+            if ($rCert['code'] !== 0 || $rKey['code'] !== 0) {
+                throw new RuntimeException(
+                    'Não foi possível extrair certificado e chave do A1 para consulta à SEFAZ.'
+                );
+            }
+
+            $certPem = File::get($certPath);
+            $keyPem = File::get($keyPath);
+            if (
+                ! is_string($certPem) || ! str_contains($certPem, 'BEGIN CERTIFICATE')
+                || ! is_string($keyPem) || ! str_contains($keyPem, 'PRIVATE KEY')
+            ) {
+                throw new RuntimeException('Credenciais PEM do certificado A1 inválidas.');
+            }
+
+            return ['cert' => $certPem, 'key' => $keyPem];
+        } finally {
+            File::deleteDirectory($workDir);
+        }
+    }
+
     private function extrairCertificadoPem(string $binario, string $senha): string
     {
         $certs = [];

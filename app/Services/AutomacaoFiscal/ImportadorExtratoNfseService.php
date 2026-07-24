@@ -88,15 +88,18 @@ class ImportadorExtratoNfseService
 
             foreach ($parsed['documentos'] as $doc) {
                 $doc = ExtratoNfseParser::completarComEmpresa($doc, $empresa->cnpj, $empresa->nome);
+                // Identidade do documento: chave_acesso (tamanho variável por tipo/portal).
+                $chave = AnaliseFiscalService::normalizarChaveAcesso($doc['chave_acesso'] ?? null);
+                $doc['chave_acesso'] = $chave;
                 $documentos[] = $doc;
 
-                if (empty($doc['chave_acesso'])) {
+                if ($chave === null) {
                     $ignorados++;
                     continue;
                 }
 
                 $hash = hash('sha256', json_encode([
-                    $doc['chave_acesso'],
+                    $chave,
                     $doc['valor_total'],
                     $doc['situacao'],
                     $doc['entrada_saida'],
@@ -104,7 +107,7 @@ class ImportadorExtratoNfseService
 
                 $existente = DocumentoFiscal::query()
                     ->where('empresa_id', $empresa->id)
-                    ->where('chave_acesso', $doc['chave_acesso'])
+                    ->where('chave_acesso', $chave)
                     ->first();
 
                 $payload = [
@@ -114,8 +117,8 @@ class ImportadorExtratoNfseService
                     'portal_recurso_id' => $recurso?->id,
                     'automacao_execucao_id' => $execucaoId,
                     'tipo_documento' => 'nfse',
-                    'chave_acesso' => $doc['chave_acesso'],
-                    'identificador_externo' => $doc['identificador_externo'] ?? $doc['chave_acesso'],
+                    'chave_acesso' => $chave,
+                    'identificador_externo' => $doc['identificador_externo'] ?? $chave,
                     'numero' => $doc['numero'],
                     'serie' => $doc['serie'],
                     'modelo' => $doc['modelo'],

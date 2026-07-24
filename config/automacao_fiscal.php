@@ -33,4 +33,27 @@ return [
     ),
 
     'nfse_cert_origins' => env('NFSE_EMISSOR_CERT_ORIGINS', 'https://certificado.nfse.gov.br'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Download de XML NF-e (modelo 55) via portal nacional (Playwright)
+    |--------------------------------------------------------------------------
+    |
+    | Automação do consultaRecaptcha.aspx + "Download do documento" com A1.
+    | hCaptcha resolvido via CapSolver (CAPSOLVER_API_KEY).
+    |
+    */
+    'nfe_fazenda_entry_url' => env(
+        'NFE_FAZENDA_ENTRY_URL',
+        'https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=resumo&tipoConteudo=7PhJ+gAVw2g='
+    ),
+
+    'nfe_fazenda_cert_origins' => env(
+        'NFE_FAZENDA_CERT_ORIGINS',
+        'https://www.nfe.fazenda.gov.br'
+    ),
+
+    'capsolver_api_key' => env('CAPSOLVER_API_KEY', ''),
+
+    'nfe_xml_timeout_ms' => (int) env('NFE_XML_TIMEOUT_MS', 300000),
 ];

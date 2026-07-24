@@ -7,7 +7,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // NF-e = 44 dígitos; NFS-e nacional = 50 dígitos.
+        // Chave de acesso do documento (NF-e/NFC-e ~44; NFS-e pode ser maior). Identidade para upsert.
         DB::statement('ALTER TABLE documentos_fiscais MODIFY chave_acesso VARCHAR(64) NULL');
     }
 

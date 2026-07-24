@@ -84,15 +84,18 @@ class ImportadorExtratoNfeService
                     : null;
                 $doc['tipo_operacao'] = $tipoOp;
                 $doc['dados_complementares'] = $complementares;
+                // Identidade do documento: chave_acesso (tamanho variável por tipo/portal).
+                $chave = AnaliseFiscalService::normalizarChaveAcesso($doc['chave_acesso'] ?? null);
+                $doc['chave_acesso'] = $chave;
                 $documentos[] = $doc;
 
-                if (empty($doc['chave_acesso'])) {
+                if ($chave === null) {
                     $ignorados++;
                     continue;
                 }
 
                 $hash = hash('sha256', json_encode([
-                    $doc['chave_acesso'],
+                    $chave,
                     $doc['valor_total'],
                     $doc['situacao'],
                     $doc['valor_icms'],
@@ -100,7 +103,7 @@ class ImportadorExtratoNfeService
 
                 $existente = DocumentoFiscal::query()
                     ->where('empresa_id', $empresa->id)
-                    ->where('chave_acesso', $doc['chave_acesso'])
+                    ->where('chave_acesso', $chave)
                     ->first();
 
                 $payload = [
@@ -110,7 +113,7 @@ class ImportadorExtratoNfeService
                     'portal_recurso_id' => $recurso?->id,
                     'automacao_execucao_id' => $execucaoId,
                     'tipo_documento' => $doc['tipo_documento'],
-                    'chave_acesso' => $doc['chave_acesso'],
+                    'chave_acesso' => $chave,
                     'numero' => $doc['numero'],
                     'serie' => $doc['serie'],
                     'modelo' => $doc['modelo'],

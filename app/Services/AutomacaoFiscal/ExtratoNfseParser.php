@@ -201,7 +201,7 @@ class ExtratoNfseParser
      */
     private function normalizarLinha(array $mapa, int $linha): array
     {
-        $chave = preg_replace('/\D+/', '', (string) ($mapa['Chave_NFS-e'] ?? '')) ?: null;
+        $chave = AnaliseFiscalService::normalizarChaveAcesso($mapa['Chave_NFS-e'] ?? null);
         $tipo = strtolower(trim((string) ($mapa['Tipo'] ?? 'emitidas')));
         if (! in_array($tipo, ['emitidas', 'recebidas'], true)) {
             $tipo = 'emitidas';

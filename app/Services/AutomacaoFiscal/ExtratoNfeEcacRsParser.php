@@ -207,7 +207,7 @@ class ExtratoNfeEcacRsParser
     private function normalizarLinha(array $mapa, int $linha): array
     {
         $emissao = $this->parseData($mapa['dt_Emit'] ?? null);
-        $chave = preg_replace('/\D/', '', $mapa['Chave_NF-e'] ?? '') ?: null;
+        $chave = AnaliseFiscalService::normalizarChaveAcesso($mapa['Chave_NF-e'] ?? null);
 
         return [
             'linha' => $linha,
@@ -382,11 +382,19 @@ class ExtratoNfeEcacRsParser
         return $digits;
     }
 
+    /**
+     * Ótica do portal (emitente) + ótica de análise da empresa (entre parênteses).
+     *
+     * - saida-consulente: vendas/saídas da empresa
+     * - saida-terceiros: compras — saída do terceiro com a empresa como destinatária
+     * - entrada-consulente: entradas emitidas pela própria empresa
+     * - entrada-terceiros: contra-notas / devoluções (entrada no documento, emitente terceiro)
+     */
     public const TIPOS_OPERACAO = [
-        'saida-consulente' => 'Saídas emitidas pela empresa',
-        'saida-terceiros' => 'Saídas emitidas por terceiros',
-        'entrada-consulente' => 'Entradas emitidas pela empresa',
-        'entrada-terceiros' => 'Entradas emitidas por terceiros',
+        'saida-consulente' => 'Saídas emitidas pela empresa (Saídas Próprias)',
+        'saida-terceiros' => 'Saídas emitidas por terceiros (Entradas de Terceiros)',
+        'entrada-consulente' => 'Entradas emitidas pela empresa (Entradas Próprias)',
+        'entrada-terceiros' => 'Entradas emitidas por terceiros (Contra Notas / Saídas Devolução)',
     ];
 
     public static function somenteDigitos(?string $valor): string
