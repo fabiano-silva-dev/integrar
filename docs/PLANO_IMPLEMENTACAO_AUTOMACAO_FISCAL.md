@@ -8,6 +8,18 @@
 **Baseline consultada:** commit `a32da960d0e720378a95e27603e304a1eba60260`  
 **Nome sugerido no repositório:** `docs/PLANO_IMPLEMENTACAO_AUTOMACAO_FISCAL.md`
 
+### Status da implementação (atualizado em 23/07/2026)
+
+Entregas já no repositório além do roteiro por fases abaixo:
+
+- **Análises fiscais** agrupadas por empresa + portal + competência (`AnaliseFiscalService`, rotas `/automacao-fiscal/analises` e `/automacao-fiscal/analises/{empresa}/{portal}/{competencia}`).
+- **Normalização de `chave_acesso`** (somente dígitos, tamanho variável) na importação de extratos NF-e/NFS-e, com idempotência por chave.
+- **Download avulso do XML** da NF-e modelo 55 via portal nacional (`portal` runner `nfe-fazenda`, serviço `NfeXmlDownloadService`, job e rotas de download).
+- Variáveis de ambiente: `NFE_FAZENDA_ENTRY_URL`, `NFE_FAZENDA_CERT_ORIGINS`, `CAPSOLVER_API_KEY` (hCaptcha com imagens), `NFE_XML_TIMEOUT_MS`.
+- Job de portal com `WithoutOverlapping` por escritório; consulta e-CAC sem notas tratada como sucesso (sem falso erro de importação).
+
+Após `git pull` em produção: `./atualizar-producao.sh` e rebuild do runner (`sudo ./instalar-deps-automacao-fiscal.sh --yes` ou `npm ci && npm run build` em `scripts/automacao-fiscal/runner`).
+
 ---
 
 ## 1. Decisão de produto
