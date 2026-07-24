@@ -30,6 +30,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('automacao-fiscal.painel');
     Route::get('/automacao-fiscal/executar', App\Livewire\AutomacaoFiscal\ExecutarConsultaFiscal::class)
         ->name('automacao-fiscal.executar');
+    Route::get('/automacao-fiscal/avulsas', App\Livewire\AutomacaoFiscal\ExecutarConsultaAvulsa::class)
+        ->name('automacao-fiscal.avulsas');
+    Route::get('/automacao-fiscal/avulsas/{tipo}', App\Livewire\AutomacaoFiscal\ExecutarConsultaAvulsa::class)
+        ->where('tipo', '[a-z0-9_]+')
+        ->name('automacao-fiscal.avulsa');
     Route::get('/automacao-fiscal/execucoes/{execucao}', App\Livewire\AutomacaoFiscal\ExecutarConsultaFiscal::class)
         ->name('automacao-fiscal.execucao');
     Route::get('/automacao-fiscal/artefatos/{artefato}', App\Http\Controllers\AutomacaoFiscal\AutomacaoArtefatoController::class)

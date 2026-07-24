@@ -151,6 +151,14 @@ trait MenuTrait
                         'roles' => ['admin'],
                     ],
                     [
+                        'name' => 'Consultas avulsas',
+                        'icon' => 'document',
+                        'url' => route('automacao-fiscal.avulsas'),
+                        'active' => request()->routeIs('automacao-fiscal.avulsas') || request()->routeIs('automacao-fiscal.avulsa'),
+                        'title' => 'Consultas pontuais para teste e implantação (sem empresa/portal)',
+                        'roles' => ['super_admin'],
+                    ],
+                    [
                         'name' => 'Análises fiscais',
                         'icon' => 'document',
                         'url' => route('automacao-fiscal.analises'),
