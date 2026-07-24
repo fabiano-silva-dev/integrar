@@ -1,0 +1,51 @@
+---
+description: Reiniciar worker da fila automacoes após liberar ajuste
+alwaysApply: true
+---
+
+# Fila `automacoes` — reiniciar worker ao liberar ajuste
+
+## Obrigação
+
+Sempre que **liberar um ajuste** que altere código PHP/Jobs/Services usados pela Automação Fiscal (ou qualquer job na fila `automacoes`), o agente deve **reiniciar o worker** antes de encerrar a tarefa — não só avisar o usuário.
+
+Isso inclui mudanças em:
+
+- `app/Jobs/AutomacaoFiscal/**`
+- `app/Services/AutomacaoFiscal/**`
+- `app/Livewire/AutomacaoFiscal/**` (quando dispararem jobs)
+- `config/automacao_fiscal.php`
+- runner Node chamado pelos jobs (`scripts/automacao-fiscal/runner/**`) — reiniciar worker também, para garantir novo ciclo limpo
+
+## Comando (desenvolvimento — Docker)
+
+```bash
+# Encerrar workers da fila automacoes (container sem /bin/kill — usar PHP)
+docker compose exec app php -r '
+foreach (glob("/proc/[0-9]*") as $d) {
+  $cmd = @file_get_contents($d."/cmdline");
+  if ($cmd === false) continue;
+  $cmd = str_replace("\0", " ", $cmd);
+  if (str_contains($cmd, "php artisan queue:work database --queue=automacoes") && !str_contains($cmd, "php -r")) {
+    posix_kill((int) basename($d), 9);
+  }
+}
+'
+
+# Subir de novo
+docker compose exec -d app php artisan queue:work database --queue=automacoes,default --timeout=900 --sleep=2 --tries=1
+```
+
+Confirmar que um único processo `queue:work database --queue=automacoes,default` está ativo (`docker top integrar-app | grep automacoes`).
+
+**Importante:** `config/queue.php` → `retry_after` da conexão `database` deve ser **maior** que o `--timeout` do worker (padrão 960 > 900). Se `retry_after` for curto (ex.: 90), jobs longos (Contabilista/DistDFe) parecem “fila parada” e caem em `MaxAttemptsExceededException`.
+
+## Produção (nativo)
+
+Reiniciar a unit systemd correspondente (ex.: `integrar-queue-automacoes` / `integraexpert-queue-automacoes`), **não** usar `docker compose`.
+
+## Checklist ao finalizar ajuste
+
+- [ ] Alterou código consumido por jobs da fila `automacoes`?
+- [ ] Se sim → worker reiniciado e processo novo confirmado
+- [ ] Informar na resposta ao usuário que o worker foi reiniciado
