@@ -19,11 +19,15 @@ export default {
         'from-indigo-600',
         'to-violet-700',
         'bg-gradient-to-br',
-        'lg:pl-64',
-        'lg:pl-[4.5rem]',
-        'w-64',
-        'w-[4.5rem]',
+        'lg:pl-24',
+        'w-24',
+        'group/sidebar',
+        'group-hover/sidebar:opacity-100',
+        'group-focus-within/sidebar:opacity-100',
+        'min-h-[2rem]',
+        'text-[10px]',
     ],
+
 
     theme: {
         extend: {
