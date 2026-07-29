@@ -102,7 +102,7 @@ class ConversorLaravel:
             tipos = self._detectar_tipos(df)
             
             # Converter datas
-            df = self._converter_datas(df, tipos)
+            df, formatos_data = self._converter_datas(df, tipos)
 
             # Evitar códigos/contas saírem como 5.0 no CSV (float64 por NaN)
             df = self._normalizar_floats_para_csv(df)
@@ -120,7 +120,8 @@ class ConversorLaravel:
                 'colunas': len(df.columns),
                 'colunas_data': len([t for t in tipos.values() if 'data' in str(t)]),
                 'colunas_numero': len([t for t in tipos.values() if 'numero' in str(t)]),
-                'colunas_texto': len([t for t in tipos.values() if 'texto' in str(t)])
+                'colunas_texto': len([t for t in tipos.values() if 'texto' in str(t)]),
+                'formatos_data': formatos_data,
             }
             
         except Exception as e:
@@ -172,24 +173,77 @@ class ConversorLaravel:
                 return True
         
         return False
+
+    def _detectar_dayfirst(self, serie):
+        """
+        Varre a coluna e infere DD/MM (True) ou MM/DD (False).
+
+        Regras:
+        - parte1 > 12 ⇒ só pode ser dia ⇒ DD/MM
+        - parte2 > 12 ⇒ só pode ser dia ⇒ MM/DD
+        - evidências conflitantes ou todas ambíguas (ambas ≤ 12) ⇒ DD/MM (padrão BR)
+        - só ISO (YYYY-MM-DD) ⇒ DD/MM (irrelevante para to_datetime)
+        """
+        import re
+
+        padrao_barra = re.compile(r'^\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})\s*$')
+        padrao_iso = re.compile(r'^\s*\d{4}-\d{1,2}-\d{1,2}\s*$')
+
+        evidencia_dd_mm = False
+        evidencia_mm_dd = False
+
+        for valor in serie.dropna().astype(str):
+            texto = valor.strip()
+            if not texto or texto.lower() in ('nan', 'nat', 'none'):
+                continue
+            if padrao_iso.match(texto):
+                continue
+            match = padrao_barra.match(texto)
+            if not match:
+                continue
+
+            parte1 = int(match.group(1))
+            parte2 = int(match.group(2))
+
+            if parte1 > 12:
+                evidencia_dd_mm = True
+            if parte2 > 12:
+                evidencia_mm_dd = True
+
+        if evidencia_dd_mm and not evidencia_mm_dd:
+            return True
+        if evidencia_mm_dd and not evidencia_dd_mm:
+            return False
+
+        # Ambíguo ou conflito: padrão brasileiro.
+        return True
     
     def _converter_datas(self, df, tipos):
-        """Converte colunas de data (sempre dayfirst=True — padrão brasileiro DD/MM/AAAA)."""
+        """Converte colunas de data após detectar DD/MM vs MM/DD na coluna."""
+        formatos_detectados = {}
+
         for coluna, tipo in tipos.items():
-            if 'data' in str(tipo):
-                try:
-                    if tipo == 'data_texto':
-                        # Sem dayfirst, pandas assume MM/DD e inverte 09/05 → 05/09.
-                        df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
-                    elif not pd.api.types.is_datetime64_any_dtype(df[coluna]):
-                        df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
+            if 'data' not in str(tipo):
+                continue
 
-                    # Formatar como dd/mm/yyyy
+            try:
+                if pd.api.types.is_datetime64_any_dtype(df[coluna]):
+                    formatos_detectados[coluna] = 'datetime'
                     df[coluna] = df[coluna].dt.strftime('%d/%m/%Y')
-                except Exception:
-                    pass  # Manter original se der erro
+                    continue
 
-        return df
+                dayfirst = self._detectar_dayfirst(df[coluna])
+                formatos_detectados[coluna] = 'dd/mm' if dayfirst else 'mm/dd'
+                df[coluna] = pd.to_datetime(
+                    df[coluna],
+                    errors='coerce',
+                    dayfirst=dayfirst,
+                )
+                df[coluna] = df[coluna].dt.strftime('%d/%m/%Y')
+            except Exception:
+                pass  # Manter original se der erro
+
+        return df, formatos_detectados
 
     def _normalizar_floats_para_csv(self, df):
         """
