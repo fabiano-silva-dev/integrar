@@ -103,6 +103,9 @@ class ConversorLaravel:
             
             # Converter datas
             df = self._converter_datas(df, tipos)
+
+            # Evitar códigos/contas saírem como 5.0 no CSV (float64 por NaN)
+            df = self._normalizar_floats_para_csv(df)
             
             # Salvar CSV
             df.to_csv(arquivo_saida, index=False, sep=delimitador, encoding='utf-8')
@@ -184,7 +187,36 @@ class ConversorLaravel:
                     pass  # Manter original se der erro
         
         return df
-    
+
+    def _normalizar_floats_para_csv(self, df):
+        """
+        Pandas promove colunas com células vazias a float64 (5 → 5.0).
+        No CSV isso quebra códigos de conta. Inteiros saem sem casa decimal;
+        valores fracionários (ex.: 197.4) permanecem.
+        """
+        df = df.copy()
+
+        for coluna in df.columns:
+            if not pd.api.types.is_float_dtype(df[coluna]):
+                continue
+
+            df[coluna] = df[coluna].map(self._formatar_float_celula)
+
+        return df
+
+    @staticmethod
+    def _formatar_float_celula(valor):
+        if pd.isna(valor):
+            return ''
+
+        numero = float(valor)
+        # Sempre string: evita o pandas promover de volta a float64
+        # (ex.: coluna Valor só com números, sem células vazias).
+        if numero.is_integer():
+            return str(int(numero))
+
+        return str(numero)
+
     def _retornar_json(self):
         """Retorna resultado em JSON"""
         return json.dumps(self.resultado, ensure_ascii=False)
