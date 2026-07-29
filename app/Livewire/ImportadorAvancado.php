@@ -942,13 +942,16 @@ class ImportadorAvancado extends Component
             return date('Y-m-d'); // Data atual como fallback
         }
         
-        // Tentar diferentes formatos de data
-        $formatos = ['d/m/Y', 'Y-m-d', 'd-m-Y', 'm/d/Y'];
+        // Formatos brasileiros e ISO — nunca m/d/Y (inverte dias ≤ 12).
+        $formatos = ['d/m/Y', 'Y-m-d', 'd-m-Y'];
         
         foreach ($formatos as $formato) {
-            $data_obj = \DateTime::createFromFormat($formato, $data);
-            if ($data_obj) {
-                return $data_obj->format('Y-m-d');
+            $data_obj = \DateTime::createFromFormat('!' . $formato, $data);
+            if ($data_obj instanceof \DateTime) {
+                $erros = \DateTime::getLastErrors();
+                if (($erros['warning_count'] ?? 0) === 0 && ($erros['error_count'] ?? 0) === 0) {
+                    return $data_obj->format('Y-m-d');
+                }
             }
         }
         

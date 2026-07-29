@@ -174,18 +174,21 @@ class ConversorLaravel:
         return False
     
     def _converter_datas(self, df, tipos):
-        """Converte colunas de data"""
+        """Converte colunas de data (sempre dayfirst=True — padrão brasileiro DD/MM/AAAA)."""
         for coluna, tipo in tipos.items():
             if 'data' in str(tipo):
                 try:
                     if tipo == 'data_texto':
-                        df[coluna] = pd.to_datetime(df[coluna], errors='coerce')
-                    
+                        # Sem dayfirst, pandas assume MM/DD e inverte 09/05 → 05/09.
+                        df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
+                    elif not pd.api.types.is_datetime64_any_dtype(df[coluna]):
+                        df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
+
                     # Formatar como dd/mm/yyyy
                     df[coluna] = df[coluna].dt.strftime('%d/%m/%Y')
-                except:
+                except Exception:
                     pass  # Manter original se der erro
-        
+
         return df
 
     def _normalizar_floats_para_csv(self, df):

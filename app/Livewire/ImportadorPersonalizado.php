@@ -1716,7 +1716,7 @@ class ImportadorPersonalizado extends Component
             return $data;
         }
         
-        // Tentar formatos brasileiros comuns
+        // Formatos brasileiros e ISO — nunca m/d/Y (inverte dias ≤ 12).
         $formatos = [
             'd/m/Y',    // 23/07/2025
             'd-m-Y',    // 23-07-2025
@@ -1726,9 +1726,12 @@ class ImportadorPersonalizado extends Component
         ];
         
         foreach ($formatos as $formato) {
-            $dataObj = \DateTime::createFromFormat($formato, $data);
-            if ($dataObj !== false) {
-                return $dataObj->format('Y-m-d');
+            $dataObj = \DateTime::createFromFormat('!' . $formato, $data);
+            if ($dataObj instanceof \DateTime) {
+                $erros = \DateTime::getLastErrors();
+                if (($erros['warning_count'] ?? 0) === 0 && ($erros['error_count'] ?? 0) === 0) {
+                    return $dataObj->format('Y-m-d');
+                }
             }
         }
         
