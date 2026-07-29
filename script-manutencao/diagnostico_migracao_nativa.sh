@@ -289,7 +289,8 @@ report_project() {
         "Composer: $(composer --version 2>/dev/null || echo 'não instalado')" \
         "Node: $(node -v 2>/dev/null || echo 'não instalado')" \
         "npm: $(npm -v 2>/dev/null || echo 'não instalado')" \
-        "Python: $(python3 --version 2>/dev/null || echo 'não instalado')"
+        "Python: $(python3 --version 2>/dev/null || echo 'não instalado')" \
+        "pdftotext: $(pdftotext -v 2>&1 | head -1 || echo 'não instalado')"
 
     if command -v php >/dev/null 2>&1; then
         if php -r 'exit(version_compare(PHP_VERSION, "8.2", ">=") ? 0 : 1);' 2>/dev/null; then
@@ -300,6 +301,12 @@ report_project() {
         check_php_extensions
     else
         status_warn "PHP CLI não instalado no host (normal se tudo ainda está no Docker)"
+    fi
+
+    if command -v pdftotext >/dev/null 2>&1; then
+        status_ok "pdftotext disponível (importação PDF do plano de contas Domínio)"
+    else
+        status_warn "pdftotext ausente — instale poppler-utils (necessário para importar plano de contas em PDF)"
     fi
 
     subsection "Permissões storage/ e bootstrap/cache/"

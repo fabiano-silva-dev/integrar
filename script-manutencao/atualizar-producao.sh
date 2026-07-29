@@ -129,6 +129,11 @@ warn_missing_npm() {
     warn "  sudo apt-get install -y nodejs"
     warn "Ou use --skip-npm se os assets em public/build/ já estiverem atualizados."
 }
+
+warn_missing_pdftotext() {
+    warn "pdftotext não encontrado — importação de plano de contas em PDF Domínio vai falhar."
+    warn "Instale com: sudo apt-get install -y poppler-utils"
+}
 run_as_deploy_user() {
     if is_root; then
         sudo -u "$DEPLOY_USER" "$@"
@@ -360,6 +365,10 @@ main() {
     fix_deploy_permissions
 
     reload_services
+
+    if [[ "$MODE" == native ]] && ! command -v pdftotext >/dev/null 2>&1; then
+        warn_missing_pdftotext
+    fi
 
     echo ""
     ok "Atualização concluída!"

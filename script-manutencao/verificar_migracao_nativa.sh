@@ -364,6 +364,11 @@ check_python() {
     fi
 }
 
+check_plano_contas_deps() {
+    section "Plano de contas (PDF Domínio)"
+    run_check "pdftotext (poppler-utils) disponível" command -v pdftotext
+}
+
 check_systemd() {
     section "Fila e agendador"
     command -v systemctl >/dev/null 2>&1 || {
@@ -429,6 +434,7 @@ main() {
     check_apache
     check_laravel
     check_python
+    check_plano_contas_deps
     check_systemd
     check_docker
     write_summary

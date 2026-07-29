@@ -2,11 +2,16 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="$(basename "$0")"
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly DEFAULT_DOMAIN="integraexpert.com.br"
+readonly DEFAULT_DB_NAME="integrar"
+
+# Raiz do repositório (pai de script-manutencao/), salvo se --project-dir for passado.
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_USER="${SUDO_USER:-www-data}"
 APP_GROUP="www-data"
-DOMAIN="_"
-DB_NAME="integrar"
+DOMAIN="$DEFAULT_DOMAIN"
+DB_NAME="$DEFAULT_DB_NAME"
 DB_USER="integrar"
 DB_PASSWORD=""
 BACKUP_FILE=""
@@ -39,10 +44,10 @@ Migra a aplicação Integrar do Docker para serviços nativos.
 Opções:
   --yes                 Confirma todas as etapas (uso em automação).
   --dry-run             Exibe os comandos sem alterar o servidor.
-  --project-dir CAMINHO Diretório absoluto da aplicação.
-  --domain DOMÍNIO      Domínio configurado no Apache (padrão: sem ServerName).
-  --app-user USUÁRIO    Dono dos arquivos e processo da fila.
-  --db-name NOME        Banco MySQL de destino.
+  --project-dir CAMINHO Diretório absoluto da aplicação (padrão: raiz do repositório).
+  --domain DOMÍNIO      Domínio no Apache (padrão: $DEFAULT_DOMAIN).
+  --app-user USUÁRIO    Dono dos arquivos e processo da fila (padrão: usuário do sudo).
+  --db-name NOME        Banco MySQL de destino (padrão: $DEFAULT_DB_NAME).
   --db-user USUÁRIO     Usuário MySQL da aplicação.
   --db-password SENHA   Senha MySQL (omitida, será solicitada).
   --backup-file ARQUIVO Importa um dump existente em vez do Docker.
@@ -269,7 +274,7 @@ configure_application() {
 
     set_env_value "$env_file" APP_ENV production
     set_env_value "$env_file" APP_DEBUG false
-    [[ "$DOMAIN" == "_" ]] || set_env_value "$env_file" APP_URL "https://$DOMAIN"
+    set_env_value "$env_file" APP_URL "https://$DOMAIN"
     if ! $SKIP_DATABASE; then
         set_env_value "$env_file" DB_CONNECTION mysql
         set_env_value "$env_file" DB_HOST 127.0.0.1
@@ -279,25 +284,59 @@ configure_application() {
         set_env_value "$env_file" DB_PASSWORD "$DB_PASSWORD"
     fi
 
+    # Deploy user dono; grupo www-data para o PHP-FPM gravar storage/cache/build.
     run chown -R "$APP_USER:$APP_GROUP" "$PROJECT_DIR"
-    run chmod -R ug+rwX "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+    run mkdir -p "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache" "$PROJECT_DIR/public/build"
+    run chmod -R ug+rwX "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache" "$PROJECT_DIR/public/build"
+    if ! $DRY_RUN; then
+        find "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache" -type d -exec chmod g+s {} +
+    else
+        printf '[dry-run] find %s %s -type d -exec chmod g+s {} +\n' \
+            "$PROJECT_DIR/storage" "$PROJECT_DIR/bootstrap/cache"
+    fi
     run chmod 640 "$env_file"
+    if id "$APP_USER" >/dev/null 2>&1 && ! id -nG "$APP_USER" 2>/dev/null | grep -qw "$APP_GROUP"; then
+        run usermod -aG "$APP_GROUP" "$APP_USER"
+        warn "Usuário $APP_USER adicionado ao grupo $APP_GROUP — faça logout/login se composer/npm falharem por permissão."
+    fi
     run sudo -u "$APP_USER" composer install --working-dir="$PROJECT_DIR" \
         --no-dev --prefer-dist --optimize-autoloader --no-interaction
     run sudo -u "$APP_USER" npm --prefix "$PROJECT_DIR" ci
     run sudo -u "$APP_USER" npm --prefix "$PROJECT_DIR" run build
+    run chown -R "$APP_USER:$APP_GROUP" "$PROJECT_DIR/public/build"
+    [[ -d "$PROJECT_DIR/vendor" ]] && run chown -R "$APP_USER:$APP_GROUP" "$PROJECT_DIR/vendor"
 
     if ! $DRY_RUN && ! grep -q '^APP_KEY=base64:' "$env_file"; then
         run sudo -u "$APP_USER" php "$PROJECT_DIR/artisan" key:generate --force
     fi
     run sudo -u "$APP_USER" python3 -m venv --system-site-packages "$PROJECT_DIR/.venv"
     run "$PROJECT_DIR/.venv/bin/pip" install -r "$PROJECT_DIR/scripts/requirements.txt"
-    run sudo -u "$APP_USER" php "$PROJECT_DIR/artisan" storage:link
+    run sudo -u www-data php "$PROJECT_DIR/artisan" storage:link
+    ensure_www_html_symlink
+}
+
+ensure_www_html_symlink() {
+    # Compatibilidade com paths hardcoded dos conversores Python (/var/www/html/scripts/).
+    if [[ -L /var/www/html ]]; then
+        local current
+        current="$(readlink -f /var/www/html 2>/dev/null || true)"
+        if [[ "$current" == "$PROJECT_DIR" ]]; then
+            info "/var/www/html já aponta para $PROJECT_DIR"
+            return
+        fi
+        warn "/var/www/html aponta para $current — atualizando para $PROJECT_DIR"
+        run rm -f /var/www/html
+    elif [[ -e /var/www/html ]]; then
+        warn "/var/www/html existe e não é symlink — não será alterado automaticamente."
+        return
+    fi
+    run mkdir -p /var/www
+    run ln -sfn "$PROJECT_DIR" /var/www/html
 }
 
 run_migrations() {
-    run sudo -u "$APP_USER" php "$PROJECT_DIR/artisan" migrate --force
-    run sudo -u "$APP_USER" php "$PROJECT_DIR/artisan" optimize
+    run sudo -u www-data php "$PROJECT_DIR/artisan" migrate --force
+    run sudo -u www-data php "$PROJECT_DIR/artisan" optimize
 }
 
 write_file() {
@@ -312,11 +351,10 @@ write_file() {
 
 configure_apache() {
     [[ -n "$PHP_FPM_SOCKET" ]] || configure_php
-    local config server_name=""
-    [[ "$DOMAIN" == "_" ]] || server_name="    ServerName $DOMAIN
-"
+    local config
     config="<VirtualHost *:80>
-${server_name}    DocumentRoot $PROJECT_DIR/public
+    ServerName $DOMAIN
+    DocumentRoot $PROJECT_DIR/public
     DirectoryIndex index.php
 
     <Directory $PROJECT_DIR/public>
@@ -363,8 +401,8 @@ After=network.target mysql.service
 
 [Service]
 Type=simple
-User=$APP_USER
-Group=$APP_GROUP
+User=www-data
+Group=www-data
 WorkingDirectory=$PROJECT_DIR
 ExecStart=/usr/bin/php $PROJECT_DIR/artisan queue:work --sleep=3 --tries=3 --timeout=300
 Restart=always
@@ -380,8 +418,8 @@ After=network.target mysql.service
 
 [Service]
 Type=simple
-User=$APP_USER
-Group=$APP_GROUP
+User=www-data
+Group=www-data
 WorkingDirectory=$PROJECT_DIR
 ExecStart=/usr/bin/php $PROJECT_DIR/artisan schedule:work
 Restart=always
@@ -420,7 +458,9 @@ run_health_checks() {
     check "PHP-FPM ativo" bash -c 'systemctl is-active --quiet "php$(php -r "echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;")-fpm"'
     $SKIP_DATABASE || check "MySQL e credenciais da aplicação" \
         mysql --protocol=TCP -h127.0.0.1 -u"$DB_USER" "-p$DB_PASSWORD" -e "USE \`$DB_NAME\`; SELECT 1;"
-    check "Laravel inicializa em produção" sudo -u "$APP_USER" php "$PROJECT_DIR/artisan" about --only=environment
+    check "Laravel inicializa em produção" sudo -u www-data php "$PROJECT_DIR/artisan" about --only=environment
+    check "pdftotext (plano de contas PDF Domínio)" command -v pdftotext
+    check "Symlink /var/www/html" bash -c "[[ \"\$(readlink -f /var/www/html)\" == \"$PROJECT_DIR\" ]]"
     check "Worker da fila ativo" systemctl is-active --quiet integrar-queue
     check "Agendador ativo" systemctl is-active --quiet integrar-scheduler
     check "Resposta HTTP local" curl --fail --silent --show-error -H "Host: $DOMAIN" http://127.0.0.1/
@@ -488,7 +528,7 @@ EOF
 
     printf '\n'
     success "Processo finalizado. Etapas concluídas: ${#COMPLETED_ACTIONS[@]}"
-    [[ "$DOMAIN" == "_" ]] || info "Aplicação disponível em http://$DOMAIN (configure TLS antes de liberar ao público)."
+    info "Aplicação disponível em http://$DOMAIN (configure TLS antes de liberar ao público)."
     [[ -z "$BACKUP_FILE" ]] || info "Backup preservado em: $BACKUP_FILE"
 }
 

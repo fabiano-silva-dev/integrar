@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
+    poppler-utils \
     python3 \
     python3-pip \
     python3-pandas \

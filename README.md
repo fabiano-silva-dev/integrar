@@ -57,16 +57,17 @@ Uma aplicação web desenvolvida em Laravel + Livewire para processamento e gere
 
 ## 🚀 Instalação nativa em produção (sem Docker)
 
-O script `instalar-nativo-producao.sh` automatiza a migração em servidores
+O script `instalar-nativo-producao.sh` automatiza a instalação nativa em servidores
 Debian/Ubuntu. Ele pede confirmação antes de cada ação e pode:
 
-- instalar Apache, PHP-FPM, MySQL, Composer, Node.js e dependências Python;
-- gerar um dump consistente do MySQL que está no Docker;
+- instalar Apache, PHP-FPM, MySQL, Composer, Node.js, `poppler-utils` (`pdftotext` para plano de contas PDF) e dependências Python;
+- gerar um dump do MySQL que está no Docker (quando disponível) ou importar `--backup-file`;
 - parar os containers sem remover os volumes;
 - criar o banco e usuário MySQL nativos e restaurar o dump;
-- configurar `.env`, permissões, Composer, Vite e o ambiente Python;
-- configurar o VirtualHost do Apache, worker da fila e agendador Laravel no systemd;
-- executar migrações, otimizações e testes de saúde.
+- configurar `.env`, permissões (deploy user + grupo `www-data`), Composer, Vite e o ambiente Python;
+- criar symlink `/var/www/html` → projeto (conversores Python);
+- configurar o VirtualHost do Apache, worker da fila e agendador Laravel no systemd (`www-data`);
+- executar migrações, otimizações e testes de saúde (inclui `pdftotext`).
 
 Antes de alterar o servidor, simule todo o fluxo:
 
@@ -76,33 +77,28 @@ sudo ./instalar-nativo-producao.sh \
   --yes
 ```
 
-Para executar a migração com confirmação em cada etapa:
+Para executar a instalação com confirmação em cada etapa (na raiz do projeto):
 
 ```bash
-cd /home/fabiano/Projetos/integrar_dalongaro
+cd /home/fabiano/Projetos/integrar
 sudo ./instalar-nativo-producao.sh
 ```
 
 Sem parâmetros, o script usa automaticamente:
-- **Origem (Docker):** `/home/fabiano/Projetos/integrar_dalongaro`
-- **Destino (nativo):** `/home/fabiano/Projetos/integrar`
+- **Projeto:** raiz do repositório (onde está o atalho `./instalar-nativo-producao.sh`)
 - **Domínio:** `integraexpert.com.br`
 - **Banco:** `integrar`
 
-O projeto Docker **permanece intacto**; os dados do banco `integrar_dalongaro` são
-copiados para o banco nativo `integrar`.
-
-Caso o container antigo não esteja disponível, indique um dump:
+Caso o container Docker não esteja disponível, indique um dump:
 
 ```bash
 sudo ./instalar-nativo-producao.sh --backup-file /backup/integrar.sql
 ```
 
 > **Atenção:** mantenha os volumes Docker até validar a aplicação nativa. O
-> script executa `docker compose down`, mas nunca remove volumes. O `APP_URL`
-> usa `http://integraexpert.com.br` por padrão; após configurar TLS (Certbot),
-> ajuste com `--app-url-scheme https`. Credenciais e nomes dos containers MySQL
-> são detectados automaticamente a partir do `docker-compose.yml`.
+> script executa `docker compose down`, mas nunca remove volumes. Após configurar
+> TLS (Certbot), o `APP_URL` já aponta para `https://integraexpert.com.br`.
+> Credenciais do banco Docker, quando usadas no dump, seguem o container ativo.
 
 Os testes isolados do instalador não exigem root e não alteram o sistema:
 

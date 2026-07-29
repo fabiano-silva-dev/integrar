@@ -30,6 +30,13 @@ sudo ./instalar-nativo-producao.sh          # atalho na raiz
 sudo ./script-manutencao/instalar-nativo-producao.sh --dry-run --yes
 ```
 
+Pacotes de SO incluem `poppler-utils` (`pdftotext`), necessário para importar plano de contas em PDF Domínio.
+Em servidor já migrado sem esse pacote:
+
+```bash
+sudo apt-get install -y poppler-utils
+```
+
 ## Dependências da Automação Fiscal (produção nativa)
 
 Instalador **idempotente e separado** do deploy diário (não roda Chromium/`apt` em todo `git pull`).

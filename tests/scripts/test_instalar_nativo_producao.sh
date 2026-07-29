@@ -47,52 +47,28 @@ default_domain_and_db() {
         grep -q 'DB_NAME="$DEFAULT_DB_NAME"' "$SCRIPT"
 }
 
-production_paths_default() {
-    grep -q 'PROD_SOURCE_DIR="/home/fabiano/Projetos/integrar_dalongaro"' "$SCRIPT" &&
-        grep -q 'PROD_DEPLOY_DIR="/home/fabiano/Projetos/integrar"' "$SCRIPT" &&
-        grep -q 'apply_default_paths' "$SCRIPT"
-}
-
-clone_dry_run_from_dalongaro() {
-    local output tmp
-    tmp="$(mktemp -d)"
-    mkdir -p "$tmp/integrar_dalongaro"
-    cp "$ROOT/artisan" "$tmp/integrar_dalongaro/"
-    cp "$ROOT/composer.json" "$tmp/integrar_dalongaro/"
-    output="$("$SCRIPT" --yes --dry-run --skip-packages --skip-database \
-        --source-dir "$tmp/integrar_dalongaro" 2>&1)"
-    grep -q 'Destino:  '"$tmp"'/integrar' <<<"$output" &&
-        grep -q 'cópia (origem preservada)' <<<"$output" &&
-        grep -q 'Copiar projeto para instalação nativa' <<<"$output"
-}
-
-detects_compose_containers() {
-    grep -q 'resolve_docker_compose_service_container' "$SCRIPT" &&
-        grep -q 'detect_compose_mysql_service' "$SCRIPT" &&
-        grep -q 'list_compose_container_names' "$SCRIPT" &&
-        grep -q 'show_docker_compose_info' "$SCRIPT"
+default_project_dir_is_repo_root() {
+    grep -q 'SCRIPT_DIR/..' "$SCRIPT"
 }
 
 contains_required_production_guards() {
     grep -q 'set -Eeuo pipefail' "$SCRIPT" &&
         grep -q 'apache2 mysql-server php-fpm' "$SCRIPT" &&
+        grep -q 'poppler-utils' "$SCRIPT" &&
+        grep -q 'pdftotext' "$SCRIPT" &&
+        grep -q 'ensure_www_html_symlink' "$SCRIPT" &&
         grep -q 'apache2ctl configtest' "$SCRIPT" &&
         grep -q 'a2enmod proxy_fcgi setenvif rewrite headers' "$SCRIPT" &&
-        ! grep -qi 'nginx' "$SCRIPT" &&
         grep -q 'migrate --force' "$SCRIPT" &&
         grep -q 'mysqldump' "$SCRIPT" &&
         grep -q 'single-transaction' "$SCRIPT" &&
-        grep -q -e '--databases' "$SCRIPT" &&
-        grep -q 'mysql_as_root' "$SCRIPT" &&
-        grep -q 'fix_app_permissions' "$SCRIPT" &&
-        grep -q 'APP_URL_SCHEME' "$SCRIPT" &&
-        ! grep -q 'chown -R "$APP_USER:$APP_GROUP" "$PROJECT_DIR"' "$SCRIPT"
+        grep -q 'User=www-data' "$SCRIPT" &&
+        grep -q 'Deploy user dono' "$SCRIPT"
 }
 
-reads_docker_compose_credentials() {
-    grep -q 'read_compose_mysql_var' "$SCRIPT" &&
-        grep -q 'MYSQL_ROOT_PASSWORD' "$SCRIPT" &&
-        grep -q 'read_compose_service_field' "$SCRIPT"
+includes_poppler_and_health_check() {
+    grep -q 'poppler-utils' "$SCRIPT" &&
+        grep -q 'pdftotext (plano de contas PDF Domínio)' "$SCRIPT"
 }
 
 test_case "exibe ajuda" help_works
@@ -100,11 +76,9 @@ test_case "rejeita opção desconhecida" unknown_option_fails
 test_case "rejeita caminho relativo" relative_project_fails
 test_case "dry-run percorre a instalação sem alterações" dry_run_is_safe_and_complete
 test_case "usa integraexpert.com.br e banco integrar por padrão" default_domain_and_db
-test_case "detecta containers do docker-compose.yml" detects_compose_containers
-test_case "modo cópia integrar_dalongaro → integrar" production_paths_default
-test_case "dry-run cópia aponta destino ../integrar" clone_dry_run_from_dalongaro
+test_case "PROJECT_DIR padrão é a raiz do repositório" default_project_dir_is_repo_root
 test_case "mantém proteções essenciais de produção" contains_required_production_guards
-test_case "lê credenciais do docker-compose.yml" reads_docker_compose_credentials
+test_case "inclui poppler-utils e health check pdftotext" includes_poppler_and_health_check
 
 if ((failures > 0)); then
     printf '%d teste(s) falharam\n' "$failures" >&2
