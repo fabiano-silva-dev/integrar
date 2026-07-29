@@ -128,10 +128,12 @@
                                 <x-busca-plano-conta
                                     valor-model="novoLancamento.conta_debito"
                                     :valor="$novoLancamento['conta_debito'] ?? ''"
+                                    :descricao="$descricoesContaNovo[$novoLancamento['conta_debito'] ?? ''] ?? null"
                                     :pesquisa-habilitada="$empresaTemPlanoNovo"
                                     :resultados="$sugestoesContaDebitoNovo"
                                     selecionar-method="selecionarContaDebitoNovo"
-                                    placeholder="Ex: 254"
+                                    buscar-method="atualizarSugestoesContaDebitoNovo"
+                                    placeholder="Código ou nome"
                                 />
                                 @error('novoLancamento.conta_debito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
@@ -140,10 +142,12 @@
                                 <x-busca-plano-conta
                                     valor-model="novoLancamento.conta_credito"
                                     :valor="$novoLancamento['conta_credito'] ?? ''"
+                                    :descricao="$descricoesContaNovo[$novoLancamento['conta_credito'] ?? ''] ?? null"
                                     :pesquisa-habilitada="$empresaTemPlanoNovo"
                                     :resultados="$sugestoesContaCreditoNovo"
                                     selecionar-method="selecionarContaCreditoNovo"
-                                    placeholder="Ex: 254"
+                                    buscar-method="atualizarSugestoesContaCreditoNovo"
+                                    placeholder="Código ou nome"
                                 />
                                 @error('novoLancamento.conta_credito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
@@ -219,10 +223,12 @@
                                 <x-busca-plano-conta
                                     valor-model="dadosEdicao.conta_debito"
                                     :valor="$dadosEdicao['conta_debito'] ?? ''"
+                                    :descricao="$descricoesContaEdicao[$dadosEdicao['conta_debito'] ?? ''] ?? null"
                                     :pesquisa-habilitada="$empresaTemPlanoEdicao"
                                     :resultados="$sugestoesContaDebitoEdicao"
                                     selecionar-method="selecionarContaDebitoEdicao"
-                                    placeholder="Ex: 254"
+                                    buscar-method="atualizarSugestoesContaDebitoEdicao"
+                                    placeholder="Código ou nome"
                                 />
                                 @error('dadosEdicao.conta_debito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
@@ -231,10 +237,12 @@
                                 <x-busca-plano-conta
                                     valor-model="dadosEdicao.conta_credito"
                                     :valor="$dadosEdicao['conta_credito'] ?? ''"
+                                    :descricao="$descricoesContaEdicao[$dadosEdicao['conta_credito'] ?? ''] ?? null"
                                     :pesquisa-habilitada="$empresaTemPlanoEdicao"
                                     :resultados="$sugestoesContaCreditoEdicao"
                                     selecionar-method="selecionarContaCreditoEdicao"
-                                    placeholder="Ex: 254"
+                                    buscar-method="atualizarSugestoesContaCreditoEdicao"
+                                    placeholder="Código ou nome"
                                 />
                                 @error('dadosEdicao.conta_credito') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                             </div>
@@ -369,6 +377,12 @@
                             $debitoOriginal = $lancamento->conta_debito_original;
                             $creditoAtual = $lancamento->conta_credito;
                             $creditoOriginal = $lancamento->conta_credito_original;
+                            $empresaIdLinha = (int) $lancamento->empresa_id;
+                            $temPlanoLinha = (bool) ($empresaTemPlanoPorId[$empresaIdLinha] ?? false);
+                            $nomeDebito = $mapaNomesContas[$empresaIdLinha . ':' . $debitoAtual] ?? null;
+                            $nomeCredito = $mapaNomesContas[$empresaIdLinha . ':' . $creditoAtual] ?? null;
+                            $buscaDebitoAberta = $contaInlineLancamentoId == $lancamento->id && $contaInlineCampo === 'conta_debito';
+                            $buscaCreditoAberta = $contaInlineLancamentoId == $lancamento->id && $contaInlineCampo === 'conta_credito';
                         @endphp
                         <tr class="hover:bg-gray-50 {{ $temAlteracaoConta ? 'bg-yellow-50' : '' }} {{ $lancamento->conferido ? 'bg-green-50' : '' }}" 
                             wire:click="toggleConferido({{ $lancamento->id }})" 
@@ -405,28 +419,32 @@
                                 </div>
                             </td>
                             <td class="px-1 py-3 text-sm text-gray-900">
-                                <div class="flex items-center gap-1" onclick="event.stopPropagation()">
-                                    <input type="text"
-                                           value="{{ $debitoAtual }}"
-                                           wire:blur="iniciarEdicao({{ $lancamento->id }}, 'conta_debito', $event.target.value)"
-                                           class="w-full rounded border-2 border-black text-xs bg-white focus:border-blue-500 input-debito"
-                                           placeholder="Débito"
-                                           data-lancamento-id="{{ $lancamento->id }}"
-                                           data-campo="conta_debito"
-                                           onkeydown="handleKeyDown(event, this)"
-                                </div>
+                                <x-conta-lancamento-inline
+                                    :lancamento-id="$lancamento->id"
+                                    campo="conta_debito"
+                                    :valor="$debitoAtual"
+                                    :nome="$nomeDebito"
+                                    :tem-plano="$temPlanoLinha"
+                                    :aberto="$buscaDebitoAberta"
+                                    :busca="$buscaDebitoAberta ? $contaInlineBusca : ''"
+                                    :resultados="$buscaDebitoAberta ? $sugestoesContaInline : []"
+                                    input-class="input-debito"
+                                    placeholder="Débito"
+                                />
                             </td>
                             <td class="px-1 py-3 text-sm text-gray-900">
-                                <div class="flex items-center gap-1" onclick="event.stopPropagation()">
-                                    <input type="text"
-                                           value="{{ $creditoAtual }}"
-                                           wire:blur="iniciarEdicao({{ $lancamento->id }}, 'conta_credito', $event.target.value)"
-                                           class="w-full rounded border-2 border-black text-xs bg-white focus:border-blue-500 input-credito"
-                                           placeholder="Crédito"
-                                           data-lancamento-id="{{ $lancamento->id }}"
-                                           data-campo="conta_credito"
-                                           onkeydown="handleKeyDownCredito(event, this)"
-                                </div>
+                                <x-conta-lancamento-inline
+                                    :lancamento-id="$lancamento->id"
+                                    campo="conta_credito"
+                                    :valor="$creditoAtual"
+                                    :nome="$nomeCredito"
+                                    :tem-plano="$temPlanoLinha"
+                                    :aberto="$buscaCreditoAberta"
+                                    :busca="$buscaCreditoAberta ? $contaInlineBusca : ''"
+                                    :resultados="$buscaCreditoAberta ? $sugestoesContaInline : []"
+                                    input-class="input-credito"
+                                    placeholder="Crédito"
+                                />
                             </td>
                             <td class="px-1 py-3 text-center text-sm text-gray-900 break-words whitespace-normal" onclick="event.stopPropagation()">
                                 @if($editandoId === $lancamento->id && $editandoCampo === 'valor')

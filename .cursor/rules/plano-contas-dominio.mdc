@@ -1,6 +1,6 @@
 ---
 description: Plano de contas Domínio — código vs classificação, importação PDF e validações
-globs: app/Services/Importacao/*PlanoContas*,app/Livewire/*PlanoContas*,app/Models/PlanoConta.php
+globs: app/Services/Importacao/*PlanoContas*,app/Services/PlanoContaResolver.php,app/Livewire/*PlanoContas*,app/Livewire/TabelaLancamentos.php,app/Models/PlanoConta.php,resources/views/components/busca-plano-conta.blade.php,resources/views/components/conta-lancamento-inline.blade.php
 alwaysApply: false
 ---
 
@@ -21,10 +21,11 @@ alwaysApply: false
 ## Regras de negócio
 
 1. **Unicidade:** validar duplicidade somente em `codigo`, nunca em `classificacao`.
-2. **Pesquisa:** se o usuário informar número, buscar em `codigo` (e `codigo_reduzido`); classificação é auxiliar para visualização.
+2. **Pesquisa:** se o usuário informar número, buscar em `codigo` (e `codigo_reduzido`); classificação é auxiliar para visualização. Termo mínimo: **1 caractere** (`PlanoContaResolver::buscar`).
 3. **Hierarquia:** `codigo_pai` resolve pelo mapa `classificacao → codigo` da conta-pai (segmento anterior da classificação), não pela classificação como chave primária.
 4. **Importação PDF:** usar `ExtratorPlanoContasPdfService` (`pdftotext -layout`); layout `dominio_nativo`.
 5. **Sinônimos de mapeamento:** `classificacao` **não** entra nos sinônimos de `codigo` em `ImportadorPlanoContasService::SINONIMOS`.
+6. **Descrição na grade/modais:** códigos nos lançamentos (zeros à esquerda removidos) → nome via `PlanoContaResolver::mapearDescricoes`. UI: `<x-busca-plano-conta>` (modais) e `<x-conta-lancamento-inline>` (colunas débito/crédito em `TabelaLancamentos`).
 
 ## Listagem (`gerenciador-plano-contas`)
 

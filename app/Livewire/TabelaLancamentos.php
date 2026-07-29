@@ -35,6 +35,12 @@ class TabelaLancamentos extends Component
     public $sugestoesContaCreditoNovo = [];
     public $sugestoesContaDebitoEdicao = [];
     public $sugestoesContaCreditoEdicao = [];
+
+    // Busca inline de conta (débito/crédito na grade)
+    public $contaInlineLancamentoId = null;
+    public $contaInlineCampo = '';
+    public $contaInlineBusca = '';
+    public $sugestoesContaInline = [];
     
     // Edição inline
     public $editandoId = null;
@@ -726,26 +732,58 @@ class TabelaLancamentos extends Component
         return Importacao::where('id', $this->novoLancamento['importacao_id'])->value('empresa_id');
     }
 
-    public function updatedNovoLancamentoContaDebito($valor): void
-    {
-        $this->sugestoesContaDebitoNovo = $this->buscarContasPlanoSugestoes($this->empresaIdNovoLancamento(), (string) $valor);
-    }
-
-    public function updatedNovoLancamentoContaCredito($valor): void
-    {
-        $this->sugestoesContaCreditoNovo = $this->buscarContasPlanoSugestoes($this->empresaIdNovoLancamento(), (string) $valor);
-    }
-
     public function updatedDadosEdicaoContaDebito($valor): void
     {
-        $empresaId = $this->lancamentoEditando?->empresa_id;
-        $this->sugestoesContaDebitoEdicao = $this->buscarContasPlanoSugestoes($empresaId, (string) $valor);
+        $this->atualizarSugestoesContaDebitoEdicao();
     }
 
     public function updatedDadosEdicaoContaCredito($valor): void
     {
+        $this->atualizarSugestoesContaCreditoEdicao();
+    }
+
+    public function atualizarSugestoesContaDebitoEdicao(): void
+    {
         $empresaId = $this->lancamentoEditando?->empresa_id;
-        $this->sugestoesContaCreditoEdicao = $this->buscarContasPlanoSugestoes($empresaId, (string) $valor);
+        $this->sugestoesContaDebitoEdicao = $this->buscarContasPlanoSugestoes(
+            $empresaId,
+            (string) ($this->dadosEdicao['conta_debito'] ?? '')
+        );
+    }
+
+    public function atualizarSugestoesContaCreditoEdicao(): void
+    {
+        $empresaId = $this->lancamentoEditando?->empresa_id;
+        $this->sugestoesContaCreditoEdicao = $this->buscarContasPlanoSugestoes(
+            $empresaId,
+            (string) ($this->dadosEdicao['conta_credito'] ?? '')
+        );
+    }
+
+    public function atualizarSugestoesContaDebitoNovo(): void
+    {
+        $this->sugestoesContaDebitoNovo = $this->buscarContasPlanoSugestoes(
+            $this->empresaIdNovoLancamento(),
+            (string) ($this->novoLancamento['conta_debito'] ?? '')
+        );
+    }
+
+    public function atualizarSugestoesContaCreditoNovo(): void
+    {
+        $this->sugestoesContaCreditoNovo = $this->buscarContasPlanoSugestoes(
+            $this->empresaIdNovoLancamento(),
+            (string) ($this->novoLancamento['conta_credito'] ?? '')
+        );
+    }
+
+    public function updatedNovoLancamentoContaDebito($valor): void
+    {
+        $this->atualizarSugestoesContaDebitoNovo();
+    }
+
+    public function updatedNovoLancamentoContaCredito($valor): void
+    {
+        $this->atualizarSugestoesContaCreditoNovo();
     }
 
     public function selecionarContaDebitoNovo(string $codigo): void
@@ -770,6 +808,80 @@ class TabelaLancamentos extends Component
     {
         $this->dadosEdicao['conta_credito'] = $codigo;
         $this->sugestoesContaCreditoEdicao = [];
+    }
+
+    public function abrirBuscaContaInline(int $lancamentoId, string $campo): void
+    {
+        if (!in_array($campo, ['conta_debito', 'conta_credito'], true)) {
+            return;
+        }
+
+        $lancamento = Lancamento::find($lancamentoId);
+        if (!$lancamento || !$this->empresaTemPlanoAtivo($lancamento->empresa_id)) {
+            return;
+        }
+
+        $this->contaInlineLancamentoId = $lancamentoId;
+        $this->contaInlineCampo = $campo;
+        $this->contaInlineBusca = (string) ($lancamento->{$campo} ?? '');
+        $this->sugestoesContaInline = $this->buscarContasPlanoSugestoes(
+            $lancamento->empresa_id,
+            $this->contaInlineBusca
+        );
+    }
+
+    public function updatedContaInlineBusca($valor): void
+    {
+        if (!$this->contaInlineLancamentoId) {
+            $this->sugestoesContaInline = [];
+            return;
+        }
+
+        $empresaId = Lancamento::where('id', $this->contaInlineLancamentoId)->value('empresa_id');
+        $this->sugestoesContaInline = $this->buscarContasPlanoSugestoes($empresaId, (string) $valor);
+    }
+
+    public function selecionarContaInline(string $codigo): void
+    {
+        if (!$this->contaInlineLancamentoId || !$this->contaInlineCampo) {
+            return;
+        }
+
+        $this->editandoId = $this->contaInlineLancamentoId;
+        $this->editandoCampo = $this->contaInlineCampo;
+        $this->valorEditando = $codigo;
+        $this->salvarEdicao();
+        $this->fecharBuscaContaInline();
+    }
+
+    public function confirmarContaInline(): void
+    {
+        if (!$this->contaInlineLancamentoId || !$this->contaInlineCampo) {
+            return;
+        }
+
+        $lancamento = Lancamento::find($this->contaInlineLancamentoId);
+        $valorAtual = (string) ($lancamento?->{$this->contaInlineCampo} ?? '');
+        $valorNovo = trim((string) $this->contaInlineBusca);
+
+        if (!$lancamento || $valorNovo === $valorAtual) {
+            $this->fecharBuscaContaInline();
+            return;
+        }
+
+        $this->editandoId = $this->contaInlineLancamentoId;
+        $this->editandoCampo = $this->contaInlineCampo;
+        $this->valorEditando = $valorNovo;
+        $this->salvarEdicao();
+        $this->fecharBuscaContaInline();
+    }
+
+    public function fecharBuscaContaInline(): void
+    {
+        $this->contaInlineLancamentoId = null;
+        $this->contaInlineCampo = '';
+        $this->contaInlineBusca = '';
+        $this->sugestoesContaInline = [];
     }
 
     public function carregarDadosImportacao()
@@ -901,6 +1013,8 @@ class TabelaLancamentos extends Component
             'arquivo_origem' => $lancamento->arquivo_origem,
         ];
         $this->buscaTerceiroEdicao = '';
+        $this->atualizarSugestoesContaDebitoEdicao();
+        $this->atualizarSugestoesContaCreditoEdicao();
 
         $this->modalEditarLancamento = true;
         $this->fecharMenuAcoes();
@@ -1117,6 +1231,53 @@ class TabelaLancamentos extends Component
             ]);
         }
 
+        $resolver = new PlanoContaResolver();
+        $mapaNomesContas = [];
+        $empresaTemPlanoPorId = [];
+
+        foreach ($lancamentos->getCollection()->groupBy('empresa_id') as $empresaLancamentoId => $itens) {
+            $eid = (int) $empresaLancamentoId;
+            if ($eid <= 0) {
+                continue;
+            }
+
+            $empresaTemPlanoPorId[$eid] = $resolver->empresaTemPlanoAtivo($eid);
+            if (!$empresaTemPlanoPorId[$eid]) {
+                continue;
+            }
+
+            $codigos = $itens
+                ->flatMap(fn (Lancamento $l) => [$l->conta_debito, $l->conta_credito])
+                ->all();
+
+            foreach ($resolver->mapearDescricoes($eid, $codigos) as $codigo => $descricao) {
+                $mapaNomesContas[$eid . ':' . $codigo] = $descricao;
+            }
+        }
+
+        $descricoesContaEdicao = [];
+        if ($this->modalEditarLancamento && $this->lancamentoEditando?->empresa_id) {
+            $descricoesContaEdicao = $resolver->mapearDescricoes(
+                (int) $this->lancamentoEditando->empresa_id,
+                [
+                    $this->dadosEdicao['conta_debito'] ?? '',
+                    $this->dadosEdicao['conta_credito'] ?? '',
+                ]
+            );
+        }
+
+        $descricoesContaNovo = [];
+        $empresaIdNovo = $this->empresaIdNovoLancamento();
+        if ($this->modalNovoLancamento && $empresaIdNovo) {
+            $descricoesContaNovo = $resolver->mapearDescricoes(
+                $empresaIdNovo,
+                [
+                    $this->novoLancamento['conta_debito'] ?? '',
+                    $this->novoLancamento['conta_credito'] ?? '',
+                ]
+            );
+        }
+
         return view('livewire.tabela-lancamentos', [
             'lancamentos' => $lancamentos,
             'importacoes' => $importacoes,
@@ -1124,8 +1285,12 @@ class TabelaLancamentos extends Component
             'urlRegrasAmarracao' => $urlRegrasAmarracao,
             'terceirosBuscaEdicao' => $this->buscarTerceirosSugestoes($this->buscaTerceiroEdicao),
             'terceirosBuscaNovo' => $this->buscarTerceirosSugestoes($this->buscaTerceiroNovo),
-            'empresaTemPlanoNovo' => $this->empresaTemPlanoAtivo($this->empresaIdNovoLancamento()),
+            'empresaTemPlanoNovo' => $this->empresaTemPlanoAtivo($empresaIdNovo),
             'empresaTemPlanoEdicao' => $this->empresaTemPlanoAtivo($this->lancamentoEditando?->empresa_id),
+            'mapaNomesContas' => $mapaNomesContas,
+            'empresaTemPlanoPorId' => $empresaTemPlanoPorId,
+            'descricoesContaEdicao' => $descricoesContaEdicao,
+            'descricoesContaNovo' => $descricoesContaNovo,
         ]);
     }
 
