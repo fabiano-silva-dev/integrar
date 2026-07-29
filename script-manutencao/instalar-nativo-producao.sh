@@ -148,6 +148,7 @@ install_packages() {
     run env DEBIAN_FRONTEND=noninteractive apt-get install -y \
         apache2 mysql-server php-fpm php-cli php-mysql php-gd php-bcmath php-zip \
         php-curl php-mbstring php-xml php-intl unzip curl git composer \
+        poppler-utils \
         python3 python3-pip python3-venv python3-pandas python3-openpyxl \
         python3-xlrd python3-numpy
 
