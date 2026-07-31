@@ -32,6 +32,10 @@ LAYOUTS = {
         'tipo': 'csv',
         'script_csv': 'conversor_extrato_caixa_pdf_csv.py',
     },
+    'caixa_data_efetiva': {
+        'tipo': 'csv',
+        'script_csv': 'conversor_extrato_caixa_data_efetiva_pdf_csv.py',
+    },
     'santander': {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_santander_pdf_ofx.py',
