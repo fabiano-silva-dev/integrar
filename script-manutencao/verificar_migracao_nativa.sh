@@ -353,6 +353,8 @@ check_python() {
     run_check "python3 disponível" command -v python3
     run_check "pandas, openpyxl, pdfplumber importáveis" \
         python3 -c 'import pandas, openpyxl, pdfplumber'
+    run_check "PyPDF2 importável (Caixa Federal / Grafeno PDF)" \
+        python3 -c 'from PyPDF2 import PdfReader'
     if [[ -L /var/www/html ]]; then
         local target
         target="$(readlink -f /var/www/html 2>/dev/null || true)"

@@ -134,6 +134,12 @@ warn_missing_pdftotext() {
     warn "pdftotext não encontrado — importação de plano de contas em PDF Domínio vai falhar."
     warn "Instale com: sudo apt-get install -y poppler-utils"
 }
+
+warn_missing_pypdf2() {
+    warn "PyPDF2 não encontrado — conversão Caixa Federal/Grafeno PDF vai falhar."
+    warn "Instale com: sudo apt-get install -y python3-pypdf2"
+    warn "Ou: sudo pip3 install -r scripts/requirements.txt"
+}
 run_as_deploy_user() {
     if is_root; then
         sudo -u "$DEPLOY_USER" "$@"
@@ -368,6 +374,10 @@ main() {
 
     if [[ "$MODE" == native ]] && ! command -v pdftotext >/dev/null 2>&1; then
         warn_missing_pdftotext
+    fi
+
+    if [[ "$MODE" == native ]] && ! python3 -c 'from PyPDF2 import PdfReader' >/dev/null 2>&1; then
+        warn_missing_pypdf2
     fi
 
     echo ""

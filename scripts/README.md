@@ -44,6 +44,8 @@ pip install -r requirements.txt
 - `openpyxl>=3.0.0` - Leitura de arquivos .xlsx
 - `xlrd>=2.0.0` - Leitura de arquivos .xls antigos
 - `numpy>=1.21.0` - Operações numéricas
+- `pdfplumber>=0.10.0` - Extração de texto de PDFs (maioria dos bancos)
+- `PyPDF2>=3.0.0` - Extração de PDF (Caixa Federal, Caixa, Grafeno)
 
 ## 🔧 Integração com Laravel
 

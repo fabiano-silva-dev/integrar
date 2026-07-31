@@ -30,11 +30,14 @@ sudo ./instalar-nativo-producao.sh          # atalho na raiz
 sudo ./script-manutencao/instalar-nativo-producao.sh --dry-run --yes
 ```
 
-Pacotes de SO incluem `poppler-utils` (`pdftotext`), necessário para importar plano de contas em PDF Domínio.
-Em servidor já migrado sem esse pacote:
+Pacotes de SO incluem `poppler-utils` (`pdftotext`), necessário para importar plano de contas em PDF Domínio,
+e `python3-pypdf2`, necessário para conversores Caixa Federal / Grafeno.
+Em servidor já migrado sem esses pacotes:
 
 ```bash
-sudo apt-get install -y poppler-utils
+sudo apt-get install -y poppler-utils python3-pypdf2
+# ou alinhar ao requirements do projeto:
+sudo pip3 install -r scripts/requirements.txt
 ```
 
 ## Dependências da Automação Fiscal (produção nativa)

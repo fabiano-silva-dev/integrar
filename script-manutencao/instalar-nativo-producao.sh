@@ -155,7 +155,7 @@ install_packages() {
         php-curl php-mbstring php-xml php-intl unzip curl git composer \
         poppler-utils \
         python3 python3-pip python3-venv python3-pandas python3-openpyxl \
-        python3-xlrd python3-numpy
+        python3-xlrd python3-numpy python3-pypdf2
 
     if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || echo 0)" -lt 20 ]]; then
         run_shell "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -"
