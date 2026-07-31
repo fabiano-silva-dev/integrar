@@ -13,9 +13,16 @@ Binários ficam só na máquina local (`.gitignore`); este README é o catálogo
 | `caixa/internet-banking-janeiro-2026.pdf` | `caixa` — Internet Banking (modelo novo) | `conversor_extrato_caixa_pdf_csv.py` | Título `Inte-r_neT::::BanK:ing....CAIXA`, “Extrato por período”, colunas Data Mov. / Nr. Doc. |
 | `caixa/internet-banking-modelo.jpeg` | (miniatura do IB) | — | Mesmo layout do PDF acima |
 | `caixa/historico-conta-jan-a-maio-2025.pdf` | `caixa_federal` — Extrato Histórico (modelo antigo) | `conversor_extrato_caixa_federal_pdf_csv.py` | JasperReports/iText, título “Extrato Histórico da Conta”, colunas Data Mov. / Data e Hora / Nr.Doc. |
-| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | **ainda sem layout** | nenhum extrai lançamentos | Paisagem A4, “Saldo anterior ao período solicitado”, colunas Data / Data Efetiva, valores `- R$` |
+| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | `caixa_data_efetiva` — Data efetiva (paisagem) | `conversor_extrato_caixa_data_efetiva_pdf_csv.py` → OFX via `conversor_extrato_pdf_ofx.py` | Paisagem A4, “Saldo anterior ao período solicitado”, colunas Data / Data Efetiva, valores `- R$` |
 
-O PDF colado em 31/07/2026 como “caixa-federal” é o layout **data-efetiva** (3º modelo), não o histórico. A amostra real do `caixa_federal` é `historico-conta-jan-a-maio-2025.pdf`.
+PDF→OFX (família Caixa): escolher **Caixa (PDF) - Data efetiva (paisagem)**.
+
+```bash
+docker compose exec app python3 /var/www/html/scripts/conversor_extrato_pdf_ofx.py \
+  caixa_data_efetiva \
+  /var/www/html/docs/extratos/caixa/data-efetiva-paisagem-janeiro-2025.pdf \
+  /tmp/caixa-data-efetiva.ofx
+```
 
 ## Demais bancos
 
