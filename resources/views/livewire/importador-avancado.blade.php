@@ -99,13 +99,9 @@
                                     @endforeach
                                 </select>
 
-                                @if($layout_selecionado === 'caixa_federal' || $layout_selecionado === 'caixa')
+                                @if($layout_selecionado === 'caixa' || $layout_selecionado === 'caixa_federal')
                                     <p class="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                        @if($layout_selecionado === 'caixa')
-                                            Extrato do Caixa. O sistema identifica o padrão (retrato ou paisagem) e usa o conversor adequado.
-                                        @else
-                                            Extrato no formato antigo da Caixa. Se o arquivo for de outro padrão, a identificação automática corrige o motor.
-                                        @endif
+                                        Extrato da Caixa. O sistema identifica o padrão do PDF e aplica o conversor adequado.
                                     </p>
                                 @endif
                                 @error('layout_selecionado') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror

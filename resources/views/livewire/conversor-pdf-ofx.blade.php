@@ -24,7 +24,7 @@
                         </select>
                     </div>
 
-                    @if(!empty($familia_layout))
+                    @if(!empty($familia_layout) && count($layoutsDisponiveis) > 1)
                         <div>
                             @if(count($miniaturasLayout) > 0)
                                 <label class="block text-sm font-medium text-gray-700 mb-3">
@@ -58,7 +58,7 @@
                                 </div>
                             @else
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    Layout{{ count($layoutsDisponiveis) > 1 ? 's' : '' }} disponível{{ count($layoutsDisponiveis) > 1 ? 'eis' : '' }}
+                                    Layouts disponíveis
                                 </label>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     @foreach($layoutsDisponiveis as $valor => $nome)

@@ -21,8 +21,7 @@ class ConversaoPdfOfxService
                 'sicoob' => 'Sicoob (PDF)',
             ],
             'caixa' => [
-                'caixa_federal' => 'Caixa Econômica Federal (PDF) - Modelo antigo',
-                'caixa' => 'Caixa Internet Banking (PDF) - Modelo novo',
+                'caixa' => 'Caixa (PDF)',
             ],
             'sicredi' => [
                 'sicredi' => 'SICREDI (PDF)',

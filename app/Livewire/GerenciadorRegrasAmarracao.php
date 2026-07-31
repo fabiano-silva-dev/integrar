@@ -49,8 +49,7 @@ class GerenciadorRegrasAmarracao extends Component
             'dominio' => 'Domínio (TXT)',
             'grafeno' => 'Grafeno (PDF)',
             'sicoob' => 'Sicoob (PDF)',
-            'caixa_federal' => 'Caixa Econômica Federal (PDF)',
-            'caixa' => 'Caixa Internet Banking (PDF)',
+            'caixa' => 'Caixa (PDF)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
@@ -68,6 +67,9 @@ class GerenciadorRegrasAmarracao extends Component
         $this->empresa_id = session('empresa_selecionada_id');
 
         $layout = request()->query('layout');
+        if ($layout === 'caixa_federal') {
+            $layout = 'caixa';
+        }
         if (is_string($layout) && array_key_exists($layout, static::getLayoutsAvancado())) {
             $this->layout_avancado = $layout;
         }
@@ -403,9 +405,10 @@ class GerenciadorRegrasAmarracao extends Component
 
         $regrasLista = RegraAmarracaoDescricao::query()
             ->when($this->empresa_id && $this->layout_avancado, function ($q) {
+                $layouts = RegraAmarracaoDescricao::layoutsEquivalentes($this->layout_avancado);
                 $q->where('empresa_id', $this->empresa_id)
-                    ->where(function ($q2) {
-                        $q2->where('layout_avancado', $this->layout_avancado)->orWhereNull('layout_avancado');
+                    ->where(function ($q2) use ($layouts) {
+                        $q2->whereIn('layout_avancado', $layouts)->orWhereNull('layout_avancado');
                     })
                     ->when(trim($this->busca) !== '', function ($q2) {
                         $termo = '%' . trim($this->busca) . '%';

@@ -82,7 +82,9 @@ class ConversorPdfOfx extends Component
     {
         $this->resetValidation();
         $this->validateOnly('arquivo');
-        $this->mensagem_status = 'Arquivo selecionado. Escolha o layout e clique em converter.';
+        $this->mensagem_status = empty($this->layout_selecionado)
+            ? 'Arquivo selecionado. Escolha a instituição e clique em converter.'
+            : 'Arquivo selecionado. Clique em converter.';
     }
 
     public function updatedArquivoPix(): void
@@ -104,10 +106,12 @@ class ConversorPdfOfx extends Component
 
         if (count($opcoes) === 1) {
             $this->layout_selecionado = array_key_first($opcoes);
+            $this->mensagem_status = 'Instituição selecionada. Envie o PDF do extrato.';
             return;
         }
 
         $this->layout_selecionado = '';
+        $this->mensagem_status = 'Selecione o modelo do extrato e envie o PDF.';
     }
 
     public function updatedLayoutSelecionado(): void

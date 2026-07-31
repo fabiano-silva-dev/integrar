@@ -16,7 +16,7 @@ Fluxo: `caixa_extrato_layout.py` **identifica o padrão** do PDF e **chama o mot
 | `caixa/internet-banking-janeiro-2026.pdf` | Internet Banking (retrato) | `conversor_extrato_caixa_pdf_csv.py` (`converter_internet_banking`) |
 | `caixa/historico-conta-jan-a-maio-2025.pdf` | Extrato Histórico | `conversor_extrato_caixa_federal_pdf_csv.py` (`converter_historico`) |
 
-Na tela bastam as opções **Internet Banking** ou **Modelo antigo**; ambos entram no mesmo identificador.
+Na tela: uma única opção **Caixa (PDF)**. O identificador escolhe o motor (histórico, Internet Banking ou data efetiva).
 
 ```bash
 docker compose exec app python3 /var/www/html/scripts/caixa_extrato_layout.py \
