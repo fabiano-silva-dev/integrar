@@ -6,20 +6,20 @@ Organização: `docs/extratos/<banco>/<modelo>[-periodo].ext`
 
 Binários ficam só na máquina local (`.gitignore`); este README é o catálogo versionado.
 
-## Caixa — três layouts distintos
+## Caixa — layouts
 
-| Arquivo | Layout no sistema | Conversor | Como reconhecer |
-|---------|-------------------|-----------|-----------------|
-| `caixa/internet-banking-janeiro-2026.pdf` | `caixa` — Internet Banking (modelo novo) | `conversor_extrato_caixa_pdf_csv.py` | Título `Inte-r_neT::::BanK:ing....CAIXA`, “Extrato por período”, colunas Data Mov. / Nr. Doc. |
+| Arquivo | Layout na tela | Conversor | Como reconhecer |
+|---------|----------------|-----------|-----------------|
+| `caixa/internet-banking-janeiro-2026.pdf` | `caixa` — Internet Banking | `conversor_extrato_caixa_pdf_csv.py` | Retrato, “Extrato por período”, Data Mov. / Nr. Doc. |
 | `caixa/internet-banking-modelo.jpeg` | (miniatura do IB) | — | Mesmo layout do PDF acima |
-| `caixa/historico-conta-jan-a-maio-2025.pdf` | `caixa_federal` — Extrato Histórico (modelo antigo) | `conversor_extrato_caixa_federal_pdf_csv.py` | JasperReports/iText, título “Extrato Histórico da Conta”, colunas Data Mov. / Data e Hora / Nr.Doc. |
-| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | `caixa_data_efetiva` — Data efetiva (paisagem) | `conversor_extrato_caixa_data_efetiva_pdf_csv.py` → OFX via `conversor_extrato_pdf_ofx.py` | Paisagem A4, “Saldo anterior ao período solicitado”, colunas Data / Data Efetiva, valores `- R$` |
+| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | `caixa` (detecção automática) | mesmo script → parser paisagem | Paisagem A4, “Data Efetiva”, “Saldo anterior ao período solicitado” |
+| `caixa/historico-conta-jan-a-maio-2025.pdf` | `caixa_federal` — Extrato Histórico | `conversor_extrato_caixa_federal_pdf_csv.py` | JasperReports, “Extrato Histórico da Conta” |
 
-PDF→OFX (família Caixa): escolher **Caixa (PDF) - Data efetiva (paisagem)**.
+O layout paisagem **não** aparece como opção separada: ao escolher **Caixa Internet Banking**, o conversor detecta paisagem/marcas de texto e usa o parser adequado.
 
 ```bash
 docker compose exec app python3 /var/www/html/scripts/conversor_extrato_pdf_ofx.py \
-  caixa_data_efetiva \
+  caixa \
   /var/www/html/docs/extratos/caixa/data-efetiva-paisagem-janeiro-2025.pdf \
   /tmp/caixa-data-efetiva.ofx
 ```
