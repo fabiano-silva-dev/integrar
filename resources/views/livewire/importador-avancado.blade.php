@@ -99,10 +99,12 @@
                                     @endforeach
                                 </select>
 
-                                @if($layout_selecionado === 'caixa_federal' || $layout_selecionado === 'caixa')
+                                @if(in_array($layout_selecionado, ['caixa_federal', 'caixa', 'caixa_data_efetiva'], true))
                                     <p class="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                                         @if($layout_selecionado === 'caixa')
                                             Extrato do Caixa Internet Banking (modelo recente).
+                                        @elseif($layout_selecionado === 'caixa_data_efetiva')
+                                            Extrato da Caixa em paisagem, com colunas Data e Data Efetiva.
                                         @else
                                             Extrato no formato antigo da Caixa Econômica Federal.
                                         @endif

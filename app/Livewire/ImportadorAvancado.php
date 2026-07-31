@@ -236,6 +236,7 @@ class ImportadorAvancado extends Component
             'sicoob' => '.pdf',
             'caixa_federal' => '.pdf',
             'caixa' => '.pdf',
+            'caixa_data_efetiva' => '.pdf',
             'sicredi' => '.pdf',
             'banrisul' => '.pdf',
             'santander' => '.pdf',
@@ -262,6 +263,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'Extrato em PDF do Sicoob',
             'caixa_federal' => 'Extrato antigo da Caixa (PDF)',
             'caixa' => 'Extrato do Caixa Internet Banking (PDF)',
+            'caixa_data_efetiva' => 'Extrato da Caixa com Data / Data Efetiva, em paisagem (PDF)',
             'sicredi' => 'Extrato em PDF do Sicredi',
             'banrisul' => 'Extrato em PDF do Banrisul (conta corrente)',
             'santander' => 'Extrato em PDF do Santander',
@@ -463,6 +465,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'conversor_extrato_sicoob_pdf_csv.py',
             'caixa_federal' => 'conversor_extrato_caixa_federal_pdf_csv.py',
             'caixa' => 'conversor_extrato_caixa_pdf_csv.py',
+            'caixa_data_efetiva' => 'conversor_extrato_caixa_data_efetiva_pdf_csv.py',
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
@@ -497,7 +500,7 @@ class ImportadorAvancado extends Component
         ]);
         
         // Passar conta do banco para conversores que aceitam o 3º parâmetro
-        $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'banrisul', 'ofx'];
+        $scriptsComContaBanco = ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'caixa_data_efetiva', 'registros', 'sicredi', 'banrisul', 'ofx'];
         $layoutsPdfViaOfx = $this->layoutsPdfViaOfx();
 
         if (in_array($this->layout_selecionado, $layoutsPdfViaOfx, true)) {
@@ -555,6 +558,7 @@ class ImportadorAvancado extends Component
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'caixa' => 'Caixa Internet Banking (PDF)',
+            'caixa_data_efetiva' => 'Caixa (PDF) - Data efetiva (paisagem)',
             'ofx' => 'OFX — qualquer banco',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
@@ -1051,6 +1055,7 @@ class ImportadorAvancado extends Component
             'caixa' => [
                 'caixa_federal' => 'Caixa Econômica Federal (PDF) - Modelo antigo',
                 'caixa' => 'Caixa Internet Banking (PDF) - Modelo novo',
+                'caixa_data_efetiva' => 'Caixa (PDF) - Data efetiva (paisagem)',
             ],
             'sicredi' => [
                 'sicredi' => 'SICREDI (PDF)',

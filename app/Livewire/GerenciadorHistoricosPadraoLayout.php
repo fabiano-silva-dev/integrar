@@ -68,6 +68,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'caixa' => 'Caixa Internet Banking (PDF)',
+            'caixa_data_efetiva' => 'Caixa (PDF) - Data efetiva (paisagem)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
@@ -87,7 +88,7 @@ class GerenciadorHistoricosPadraoLayout extends Component
 
     private function layoutsComContaBancoNoScript(): array
     {
-        return ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'registros', 'sicredi', 'banrisul'];
+        return ['grafeno', 'sicoob', 'caixa_federal', 'caixa', 'caixa_data_efetiva', 'registros', 'sicredi', 'banrisul'];
     }
 
     private function validationLayoutsAvancado(): string
@@ -102,11 +103,12 @@ class GerenciadorHistoricosPadraoLayout extends Component
             'grafeno' => 'conversor_extrato_grafeno_pdf_csv.py',
             'sicoob' => 'conversor_extrato_sicoob_pdf_csv.py',
             'caixa_federal' => 'conversor_extrato_caixa_federal_pdf_csv.py',
+            'caixa' => 'conversor_extrato_caixa_pdf_csv.py',
+            'caixa_data_efetiva' => 'conversor_extrato_caixa_data_efetiva_pdf_csv.py',
             'ofx' => 'conversor_ofx_csv.py',
             'registros' => 'conversor_registros_csv.py',
             'sicredi' => 'conversor_extrato_sicredi_pdf_csv.py',
             'banrisul' => 'conversor_extrato_banrisul_pdf_csv.py',
-            'caixa' => 'conversor_extrato_caixa_pdf_csv.py',
             'santander' => 'conversor_extrato_pdf_csv_via_ofx.py',
             'itau' => 'conversor_extrato_pdf_csv_via_ofx.py',
             'bradesco' => 'conversor_extrato_pdf_csv_via_ofx.py',

@@ -23,6 +23,7 @@ class ConversaoPdfOfxService
             'caixa' => [
                 'caixa_federal' => 'Caixa Econômica Federal (PDF) - Modelo antigo',
                 'caixa' => 'Caixa Internet Banking (PDF) - Modelo novo',
+                'caixa_data_efetiva' => 'Caixa (PDF) - Data efetiva (paisagem)',
             ],
             'sicredi' => [
                 'sicredi' => 'SICREDI (PDF)',
