@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Converte extrato PDF da Caixa Internet Banking (retrato) para CSV.
+Motor: Caixa Internet Banking (retrato) + entrada CLI com despacho por padrão.
 
-Se o PDF for o layout paisagem (Data / Data Efetiva), detecta automaticamente
-e delega para conversor_extrato_caixa_data_efetiva_pdf_csv.
+A identificação do layout e a escolha do motor ficam em caixa_extrato_layout.
 """
 
 import csv
@@ -17,10 +16,6 @@ from PyPDF2 import PdfReader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extrato_util import eh_descricao_saldo
-from conversor_extrato_caixa_data_efetiva_pdf_csv import (  # noqa: E402
-    converter as converter_data_efetiva,
-    eh_layout_data_efetiva,
-)
 
 PADRAO_LINHA = re.compile(
     r'^(\d{2}/\d{2}/\d{4})\s+(\d+)\s+(.+?)\s+([\d\.,]+)\s+([CD])\s+[\d\.,]+\s+[CD]$'
@@ -121,12 +116,9 @@ def converter_internet_banking(pdf_path, csv_path, conta_banco='1.1.1.01'):
 
 
 def converter(pdf_path, csv_path, conta_banco='1.1.1.01'):
-    if eh_layout_data_efetiva(pdf_path):
-        print('Layout Caixa detectado: data efetiva (paisagem).')
-        return converter_data_efetiva(pdf_path, csv_path, conta_banco)
+    from caixa_extrato_layout import converter as despachar
 
-    print('Layout Caixa detectado: Internet Banking (retrato).')
-    return converter_internet_banking(pdf_path, csv_path, conta_banco)
+    return despachar(pdf_path, csv_path, conta_banco)
 
 
 def main():

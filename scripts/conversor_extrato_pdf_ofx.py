@@ -26,11 +26,11 @@ LAYOUTS = {
     },
     'caixa_federal': {
         'tipo': 'csv',
-        'script_csv': 'conversor_extrato_caixa_federal_pdf_csv.py',
+        'script_csv': 'caixa_extrato_layout.py',
     },
     'caixa': {
         'tipo': 'csv',
-        'script_csv': 'conversor_extrato_caixa_pdf_csv.py',
+        'script_csv': 'caixa_extrato_layout.py',
     },
     'santander': {
         'tipo': 'ofx_direto',

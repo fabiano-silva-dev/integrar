@@ -178,34 +178,6 @@ def formatar_valor_brl(valor):
     return f'{abs(valor):,.2f}'.replace('.', 'X').replace(',', '.').replace('X', ',')
 
 
-def eh_layout_data_efetiva(pdf_path_ou_reader):
-    """
-    Detecta o extrato paisagem com colunas Data / Data Efetiva.
-    Usa orientação da página e marcas de texto (não depende só do tamanho).
-    """
-    reader = (
-        pdf_path_ou_reader
-        if hasattr(pdf_path_ou_reader, 'pages')
-        else PdfReader(pdf_path_ou_reader)
-    )
-    if not reader.pages:
-        return False
-
-    pagina = reader.pages[0]
-    box = pagina.mediabox
-    largura = float(box.width)
-    altura = float(box.height)
-    paisagem = largura > altura
-
-    texto = (pagina.extract_text() or '').lower().replace('\xa0', ' ')
-    marcas = (
-        'data efetiva' in texto
-        or 'saldo anterior ao período solicitado' in texto
-        or 'saldo anterior ao periodo solicitado' in texto
-    )
-    return paisagem or marcas
-
-
 def converter(pdf_path, csv_path, conta_banco='1.1.1.01'):
     reader = PdfReader(pdf_path)
     lancamentos = extrair_lancamentos(coletar_linhas(reader))
