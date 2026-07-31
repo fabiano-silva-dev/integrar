@@ -7,6 +7,10 @@ import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extrato_util import eh_descricao_saldo
+from conversor_extrato_caixa_data_efetiva_pdf_csv import (  # noqa: E402
+    converter as converter_data_efetiva,
+    eh_layout_data_efetiva,
+)
 
 if len(sys.argv) < 3:
     print("Uso: python conversor_extrato_caixa_federal_pdf_csv.py <arquivo.pdf> <arquivo_saida.csv> [conta_banco]")
@@ -15,6 +19,13 @@ if len(sys.argv) < 3:
 pdf_path = sys.argv[1]
 csv_path = sys.argv[2]
 conta_banco = sys.argv[3] if len(sys.argv) > 3 else '1.1.1.01'  # Conta padrão se não fornecida
+
+if eh_layout_data_efetiva(pdf_path):
+    print('Layout Caixa detectado: data efetiva (paisagem).')
+    total = converter_data_efetiva(pdf_path, csv_path, conta_banco)
+    print(f'CSV padronizado gerado em: {csv_path}')
+    print(f'Total de lançamentos processados: {total}')
+    sys.exit(0)
 
 reader = PdfReader(pdf_path)
 

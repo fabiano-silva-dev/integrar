@@ -21,7 +21,6 @@ LAYOUTS_OFX = {
     'sicredi': {'bank_id': '748', 'org': 'Sicredi', 'fi_id': '748'},
     'caixa_federal': {'bank_id': '104', 'org': 'Caixa', 'fi_id': '104'},
     'caixa': {'bank_id': '104', 'org': 'Caixa', 'fi_id': '104'},
-    'caixa_data_efetiva': {'bank_id': '104', 'org': 'Caixa', 'fi_id': '104'},
 }
 
 
