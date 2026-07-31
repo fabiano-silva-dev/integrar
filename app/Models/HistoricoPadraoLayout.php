@@ -71,7 +71,6 @@ class HistoricoPadraoLayout extends Model
             'sicoob' => 'Sicoob (PDF)',
             'caixa_federal' => 'Caixa Econômica Federal (PDF)',
             'caixa' => 'Caixa Internet Banking (PDF)',
-            'caixa_data_efetiva' => 'Caixa (PDF) - Data efetiva (paisagem)',
             'ofx' => 'Formato OFX',
             'registros' => 'Connectere > Contas Financeiras > Diário (CSV)',
             'sicredi' => 'SICREDI (PDF)',
