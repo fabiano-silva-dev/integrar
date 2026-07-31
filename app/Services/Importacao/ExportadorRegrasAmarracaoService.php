@@ -34,8 +34,9 @@ class ExportadorRegrasAmarracaoService
         return RegraAmarracaoDescricao::query()
             ->where('empresa_id', $empresaId)
             ->when($layout !== null && $layout !== '', function (Builder $q) use ($layout) {
-                $q->where(function (Builder $q2) use ($layout) {
-                    $q2->where('layout_avancado', $layout)->orWhereNull('layout_avancado');
+                $layouts = RegraAmarracaoDescricao::layoutsEquivalentes($layout);
+                $q->where(function (Builder $q2) use ($layouts) {
+                    $q2->whereIn('layout_avancado', $layouts)->orWhereNull('layout_avancado');
                 });
             })
             ->orderBy('palavra_chave')
@@ -170,9 +171,10 @@ class ExportadorRegrasAmarracaoService
             &$removidas
         ) {
             if ($estrategia === 'substituir_layout') {
+                $layouts = RegraAmarracaoDescricao::layoutsEquivalentes($layout);
                 $removidas = RegraAmarracaoDescricao::where('empresa_id', $empresaDestinoId)
-                    ->where(function ($q) use ($layout) {
-                        $q->where('layout_avancado', $layout)->orWhereNull('layout_avancado');
+                    ->where(function ($q) use ($layouts) {
+                        $q->whereIn('layout_avancado', $layouts)->orWhereNull('layout_avancado');
                     })
                     ->delete();
                 $destinoMap = collect();

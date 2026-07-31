@@ -40,6 +40,24 @@ class RegraAmarracaoDescricao extends Model
     }
 
     /**
+     * Layouts que compartilham o mesmo conjunto de regras (ex.: Caixa unificada).
+     *
+     * @return list<string>
+     */
+    public static function layoutsEquivalentes(?string $layoutAvancado): array
+    {
+        if ($layoutAvancado === null || $layoutAvancado === '') {
+            return [];
+        }
+
+        if (in_array($layoutAvancado, ['caixa', 'caixa_federal'], true)) {
+            return ['caixa', 'caixa_federal'];
+        }
+
+        return [$layoutAvancado];
+    }
+
+    /**
      * Aplica regras de amarração por descrição para uma empresa e layout.
      * Regras mais específicas (palavra_chave mais longa) são tentadas primeiro.
      * Retorna o resultado da primeira regra que bater, ou null.
@@ -47,12 +65,17 @@ class RegraAmarracaoDescricao extends Model
     public static function aplicarRegrasParaEmpresaLayout(int $empresaId, ?string $layoutAvancado, string $descricao, ?float $valor = null): ?array
     {
         $debug = config('app.debug') || env('REGRAS_AMARRACAO_DEBUG', false);
+        $layouts = self::layoutsEquivalentes($layoutAvancado);
 
         $regras = self::where('empresa_id', $empresaId)
             ->where('ativo', true)
-            ->where(function ($q) use ($layoutAvancado) {
-                $q->where('layout_avancado', $layoutAvancado)
-                    ->orWhereNull('layout_avancado');
+            ->where(function ($q) use ($layouts) {
+                if ($layouts !== []) {
+                    $q->whereIn('layout_avancado', $layouts)
+                        ->orWhereNull('layout_avancado');
+                } else {
+                    $q->whereNull('layout_avancado');
+                }
             })
             ->orderByRaw("CASE WHEN parte_digitavel IS NOT NULL AND TRIM(parte_digitavel) != '' THEN 1 ELSE 0 END DESC")
             ->orderByRaw('LENGTH(palavra_chave) DESC')
