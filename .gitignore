@@ -30,3 +30,7 @@ Thumbs.db
 /backups
 *~
 ff
+
+# Amostras locais de extratos (binários / dados reais) — catálogo versionado
+/docs/extratos/**
+!/docs/extratos/README.md
