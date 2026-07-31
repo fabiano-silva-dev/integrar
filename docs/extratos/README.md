@@ -8,20 +8,25 @@ Binários ficam só na máquina local (`.gitignore`); este README é o catálogo
 
 ## Caixa — layouts
 
-| Arquivo | Layout na tela | Conversor | Como reconhecer |
-|---------|----------------|-----------|-----------------|
-| `caixa/internet-banking-janeiro-2026.pdf` | `caixa` — Internet Banking | `conversor_extrato_caixa_pdf_csv.py` | Retrato, “Extrato por período”, Data Mov. / Nr. Doc. |
-| `caixa/internet-banking-modelo.jpeg` | (miniatura do IB) | — | Mesmo layout do PDF acima |
-| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | `caixa` (detecção automática) | mesmo script → parser paisagem | Paisagem A4, “Data Efetiva”, “Saldo anterior ao período solicitado” |
-| `caixa/historico-conta-jan-a-maio-2025.pdf` | `caixa_federal` — Extrato Histórico | `conversor_extrato_caixa_federal_pdf_csv.py` | JasperReports, “Extrato Histórico da Conta” |
+Fluxo: `caixa_extrato_layout.py` **identifica o padrão** do PDF e **chama o motor** correspondente.
 
-O layout paisagem **não** aparece como opção separada: ao escolher **Caixa Internet Banking**, o conversor detecta paisagem/marcas de texto e usa o parser adequado.
+| Arquivo | Padrão detectado | Motor |
+|---------|------------------|-------|
+| `caixa/data-efetiva-paisagem-janeiro-2025.pdf` | data efetiva (paisagem) | `conversor_extrato_caixa_data_efetiva_pdf_csv.py` |
+| `caixa/internet-banking-janeiro-2026.pdf` | Internet Banking (retrato) | `conversor_extrato_caixa_pdf_csv.py` (`converter_internet_banking`) |
+| `caixa/historico-conta-jan-a-maio-2025.pdf` | Extrato Histórico | `conversor_extrato_caixa_federal_pdf_csv.py` (`converter_historico`) |
+
+Na tela bastam as opções **Internet Banking** ou **Modelo antigo**; ambos entram no mesmo identificador.
 
 ```bash
+docker compose exec app python3 /var/www/html/scripts/caixa_extrato_layout.py \
+  /var/www/html/docs/extratos/caixa/data-efetiva-paisagem-janeiro-2025.pdf \
+  /tmp/caixa.csv
+
 docker compose exec app python3 /var/www/html/scripts/conversor_extrato_pdf_ofx.py \
   caixa \
   /var/www/html/docs/extratos/caixa/data-efetiva-paisagem-janeiro-2025.pdf \
-  /tmp/caixa-data-efetiva.ofx
+  /tmp/caixa.ofx
 ```
 
 ## Demais bancos
