@@ -68,7 +68,8 @@ contains_required_production_guards() {
 
 includes_poppler_and_health_check() {
     grep -q 'poppler-utils' "$SCRIPT" &&
-        grep -q 'pdftotext (plano de contas PDF Domínio)' "$SCRIPT"
+        grep -q 'pdftotext (plano de contas PDF Domínio)' "$SCRIPT" &&
+        grep -q 'python3-pypdf2' "$SCRIPT"
 }
 
 test_case "exibe ajuda" help_works
