@@ -29,19 +29,21 @@ PADRAO_PAGAMENTO_LINHA = re.compile(
 )
 PADRAO_DATA = re.compile(r'^(\d{2}/\d{2}/\d{4})$')
 PADRAO_BENEFICIARIO = re.compile(r'^(.+?)\s*-\s*(\d{44,47})$')
-PADRAO_PIX_DATA_VALOR = re.compile(
-    r'^Efetivado\s+(?:para|de)?\s*(.*?)\s*-\s*(\d{2}/\d{2}/\d{4})\s*$',
+PADRAO_PIX_EFETIVADO = re.compile(
+    r'^Efetivado(?:\s+(para|de)\s+(.+?))?\s*-\s*(\d{2}/\d{2}/\d{4})'
+    r'(?:\s+R\$\s*([\d.]+,\d{2}))?\s*$',
     re.IGNORECASE,
 )
-PADRAO_PIX_DATA_VALOR_RECEBIDO = re.compile(
-    r'^Efetivado\s+-\s*(\d{2}/\d{2}/\d{4})\s+R\$\s*([\d.]+,\d{2})\s*$',
+PADRAO_PIX_SENTIDO_VALOR = re.compile(
+    r'^(Enviado|Recebido)(?:\s+(.*?))?\s*([\d.]+,\d{2})?\s*$',
     re.IGNORECASE,
 )
-PADRAO_PIX_VALOR_ENVIADO = re.compile(
-    r'^(?:Enviado|Recebido)\s+([\d.]+,\d{2})\s*$',
+PADRAO_PIX_INICIO = re.compile(
+    r'^Pix(?:\s+(de|para)\s+(.+?))?(?:\s+R\$)?\s*$',
     re.IGNORECASE,
 )
 PADRAO_PAGINA = re.compile(r'^https?://', re.IGNORECASE)
+TOLERANCIA_DIAS_PIX = 3
 
 
 def parsear_valor_brl(valor_str):
@@ -117,7 +119,14 @@ def parsear_pagamentos_titulos(linhas):
     return registros
 
 
+def _limpar_trecho_nome(texto):
+    texto = (texto or '').strip()
+    texto = re.sub(r'\s*R\$\s*$', '', texto, flags=re.IGNORECASE).strip()
+    return texto
+
+
 def parsear_pix(linhas):
+    """Parseia relatório Banrisul de PIX (vários layouts de quebra de linha)."""
     registros = []
     i = 0
     total = len(linhas)
@@ -130,78 +139,85 @@ def parsear_pix(linhas):
             continue
         if linha.upper().startswith('OPERAÇÃO') or linha.upper().startswith('BANCO DO ESTADO'):
             continue
-
-        if linha.upper().startswith('PIX DE '):
-            nome_partes = [linha[7:].strip()]
-            while i < total:
-                prox = linhas[i].strip()
-                if PADRAO_PIX_DATA_VALOR_RECEBIDO.match(prox):
-                    break
-                if prox.upper().startswith('PIX '):
-                    break
-                nome_partes.append(prox)
-                i += 1
-
-            if i >= total:
-                break
-
-            match_recebido = PADRAO_PIX_DATA_VALOR_RECEBIDO.match(linhas[i].strip())
-            if not match_recebido:
-                continue
-
-            data = match_recebido.group(1)
-            valor = parsear_valor_brl(match_recebido.group(2))
-            i += 1
-
-            if i < total and linhas[i].strip().upper().startswith('RECEBIDO '):
-                nome_partes.append(linhas[i].strip()[9:].strip())
-                i += 1
-
-            nome = ' '.join(part for part in nome_partes if part).strip()
-            registros.append({
-                'data': data,
-                'valor': valor,
-                'nome': nome,
-                'tipo': 'pix_recebido',
-            })
+        if linha.upper().startswith('CPF/CNPJ'):
             continue
 
-        if linha.upper().startswith('PIX R$'):
-            if i >= total:
-                break
+        match_inicio = PADRAO_PIX_INICIO.match(linha)
+        if not match_inicio:
+            continue
 
-            match_efetivado = PADRAO_PIX_DATA_VALOR.match(linhas[i].strip())
-            if not match_efetivado:
+        nome_partes = []
+        prefixo = (match_inicio.group(2) or '').strip()
+        if prefixo:
+            nome_partes.append(_limpar_trecho_nome(prefixo))
+
+        # Pode haver continuação do nome antes do "Efetivado"
+        while i < total:
+            prox = linhas[i].strip()
+            if not prox or PADRAO_PAGINA.match(prox):
+                i += 1
                 continue
-
-            nome = match_efetivado.group(1).strip()
-            data = match_efetivado.group(2)
+            if PADRAO_PIX_EFETIVADO.match(prox):
+                break
+            if PADRAO_PIX_INICIO.match(prox) or prox.upper().startswith('OPERAÇÃO'):
+                break
+            nome_partes.append(_limpar_trecho_nome(prox))
             i += 1
 
-            if i >= total:
-                break
+        if i >= total:
+            break
 
-            match_valor = PADRAO_PIX_VALOR_ENVIADO.match(linhas[i].strip())
-            if not match_valor:
-                continue
+        match_efet = PADRAO_PIX_EFETIVADO.match(linhas[i].strip())
+        if not match_efet:
+            continue
 
-            valor_str = match_valor.group(1)
-            valor = parsear_valor_brl(valor_str)
-            linha_valor = linhas[i].strip()
-            i += 1
+        sentido_hint = (match_efet.group(1) or '').lower()
+        nome_efet = _limpar_trecho_nome(match_efet.group(2) or '')
+        data = match_efet.group(3)
+        valor_str = match_efet.group(4)
+        i += 1
 
-            if linha_valor.upper().startswith('ENVIADO'):
-                valor = -valor
-                tipo = 'pix_enviado'
-            else:
-                tipo = 'pix_recebido'
+        if nome_efet:
+            nome_partes.append(nome_efet)
 
-            registros.append({
-                'data': data,
-                'valor': valor,
-                'nome': nome,
-                'tipo': tipo,
-            })
+        sentido = None
+        if sentido_hint == 'para':
+            sentido = 'enviado'
+        elif sentido_hint == 'de':
+            sentido = 'recebido'
+
+        # Linha Enviado/Recebido (valor e/ou continuação do nome)
+        if i < total:
+            match_sentido = PADRAO_PIX_SENTIDO_VALOR.match(linhas[i].strip())
+            if match_sentido:
+                sentido = match_sentido.group(1).lower()
+                nome_extra = _limpar_trecho_nome(match_sentido.group(2) or '')
+                valor_linha = match_sentido.group(3)
+                if nome_extra and not re.fullmatch(r'[\d.,]+', nome_extra):
+                    nome_partes.append(nome_extra)
+                if valor_linha:
+                    valor_str = valor_linha
+                i += 1
+
+        if not valor_str:
+            continue
+
+        valor = parsear_valor_brl(valor_str)
+        if sentido == 'enviado':
+            valor = -abs(valor)
+            tipo = 'pix_enviado'
+        else:
+            valor = abs(valor)
+            tipo = 'pix_recebido'
+
+        nome = ' '.join(part for part in nome_partes if part).strip()
+        nome = re.sub(r'\s+', ' ', nome)
+        registros.append({
+            'data': data,
+            'valor': valor,
+            'nome': nome,
+            'tipo': tipo,
+        })
 
     return registros
 
@@ -221,9 +237,83 @@ def consumir_registro(indice, chave):
     return fila.pop(0)
 
 
+def normalizar_nome(nome):
+    return re.sub(r'\s+', ' ', (nome or '').upper().strip())
+
+
+def nomes_compativeis(a, b):
+    na, nb = normalizar_nome(a), normalizar_nome(b)
+    if not na or not nb:
+        return True
+    if na in nb or nb in na:
+        return True
+    tokens_a = set(na.split())
+    tokens_b = set(nb.split())
+    if not tokens_a or not tokens_b:
+        return False
+    return (len(tokens_a & tokens_b) / min(len(tokens_a), len(tokens_b))) >= 0.5
+
+
+def consumir_pix(indice, data, valor, nome_extrato=''):
+    """Match PIX: data+valor exato; senão valor (±dias) com nome compatível."""
+    registro = consumir_registro(indice, chave_match(data, valor))
+    if registro:
+        return registro
+
+    valor_abs = round(abs(float(valor)), 2)
+    data_ref = datetime.strptime(data, '%d/%m/%Y')
+    candidatos = []
+
+    for chave, fila in indice.items():
+        if not fila:
+            continue
+        data_reg, valor_reg = chave
+        if valor_reg != valor_abs:
+            continue
+        try:
+            data_reg_dt = datetime.strptime(data_reg, '%d/%m/%Y')
+        except ValueError:
+            continue
+        delta = abs((data_ref - data_reg_dt).days)
+        if delta > TOLERANCIA_DIAS_PIX:
+            continue
+        for pos, item in enumerate(fila):
+            score_nome = 0 if nomes_compativeis(nome_extrato, item.get('nome', '')) else 10
+            candidatos.append((score_nome, delta, chave, pos, item))
+
+    if not candidatos:
+        return None
+
+    # Preferir nome compatível; sem nome no extrato, só aceitar se houver um único candidato.
+    com_nome = [c for c in candidatos if c[0] == 0]
+    if nome_extrato:
+        if not com_nome:
+            return None
+        com_nome.sort(key=lambda item: (item[1], item[2][0]))
+        _, _, chave, pos, _ = com_nome[0]
+        return indice[chave].pop(pos)
+
+    unicos_por_chave = {(c[2], c[3]): c for c in candidatos}
+    if len(unicos_por_chave) != 1:
+        return None
+    _, _, chave, pos, _ = next(iter(unicos_por_chave.values()))
+    return indice[chave].pop(pos)
+
+
 def eh_pagamento_titulo(descricao):
     descricao = descricao.upper()
-    return 'PAGAMENTO TITULO' in descricao or ('PAGTO' in descricao and 'TITULO' in descricao)
+    return (
+        'PAGAMENTO TITULO' in descricao
+        or 'PGTO BOLETO' in descricao
+        or 'PAGAMENTO BOLETO' in descricao
+        or 'PGTO TITULO' in descricao
+        or ('PAGTO' in descricao and 'TITULO' in descricao)
+        or ('PGTO' in descricao and 'TITULO' in descricao)
+    )
+
+
+def rotulo_pagamento(beneficiario):
+    return f'PAGAMENTO TITULO - {beneficiario}' if beneficiario else 'PAGAMENTO TITULO'
 
 
 def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
@@ -261,8 +351,8 @@ def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
                 {
                     **base,
                     'valor': round(-valor_nominal, 2),
-                    'historico': f'PAGAMENTO TITULO - {beneficiario}',
-                    'memo': f'PAGAMENTO TITULO - {beneficiario}',
+                    'historico': rotulo_pagamento(beneficiario),
+                    'memo': rotulo_pagamento(beneficiario),
                     'enriquecido': True,
                     'separado_encargos': True,
                 },
@@ -276,7 +366,7 @@ def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
                 },
             ]
 
-        historico = f'PAGAMENTO TITULO - {beneficiario}'
+        historico = rotulo_pagamento(beneficiario)
         return [{
             **base,
             'valor': valor,
@@ -286,9 +376,10 @@ def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
         }]
 
     if descricao_upper.startswith('PIX '):
-        registro = consumir_registro(pix_idx, chave_match(data, valor))
+        nome_extrato = (lancamento.get('nome') or '').strip()
+        registro = consumir_pix(pix_idx, data, valor, nome_extrato)
+        tipo = 'ENVIADO' if valor < 0 else 'RECEBIDO'
         if registro and registro.get('nome'):
-            tipo = 'ENVIADO' if valor < 0 else 'RECEBIDO'
             historico = f"PIX {tipo} - {registro['nome']}"
             return [{
                 **base,
@@ -297,15 +388,14 @@ def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
                 'memo': historico,
                 'enriquecido': True,
             }]
-        if lancamento.get('nome'):
-            tipo = 'ENVIADO' if valor < 0 else 'RECEBIDO'
-            historico = f"PIX {tipo} - {lancamento['nome']}"
+        if nome_extrato:
+            historico = f"PIX {tipo} - {nome_extrato}"
             return [{
                 **base,
                 'valor': valor,
                 'historico': historico,
                 'memo': historico,
-                'enriquecido': False,
+                'enriquecido': True,
             }]
 
     historico = montar_memo_banrisul(lancamento)
