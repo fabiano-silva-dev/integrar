@@ -246,6 +246,81 @@ class ConversaoPdfOfxService
         );
     }
 
+    /**
+     * Classifica um único PDF Banrisul pelo conteúdo.
+     *
+     * @return array{ok: bool, tipo?: string|null, erro?: string|null, scores?: array}
+     */
+    public function classificarUmArquivoBanrisul(string $caminho): array
+    {
+        $script = '/var/www/html/scripts/classificar_banrisul_pdfs.py';
+        if (!file_exists($script)) {
+            throw new \RuntimeException("Script Python não encontrado: {$script}");
+        }
+
+        $comando = sprintf(
+            'python3 %s "%s"',
+            $script,
+            str_replace('"', '\\"', $caminho)
+        );
+
+        Log::info('Classificando PDF Banrisul individual', ['comando' => $comando]);
+
+        $resultado = Process::run($comando);
+        $saida = trim($resultado->output() ?: $resultado->errorOutput() ?: '');
+        $dados = json_decode($saida, true);
+
+        if (!is_array($dados)) {
+            throw new \RuntimeException(
+                'Falha ao classificar o PDF Banrisul: ' . ($saida ?: 'resposta inválida.')
+            );
+        }
+
+        return $dados;
+    }
+
+    /**
+     * Classifica 3 PDFs Banrisul em extrato / pix / pagamentos pelo conteúdo.
+     *
+     * @param  array<int, string>  $caminhos
+     * @return array{ok: bool, arquivos?: array<string, array>, erro?: string}
+     */
+    public function classificarArquivosBanrisul(array $caminhos): array
+    {
+        if (count($caminhos) !== 3) {
+            return [
+                'ok' => false,
+                'erro' => 'Envie exatamente 3 PDFs: extrato, PIX e pagamentos de títulos.',
+            ];
+        }
+
+        $script = '/var/www/html/scripts/classificar_banrisul_pdfs.py';
+        if (!file_exists($script)) {
+            throw new \RuntimeException("Script Python não encontrado: {$script}");
+        }
+
+        $argsEscapados = array_map(
+            static fn (string $arg) => '"' . str_replace('"', '\\"', $arg) . '"',
+            array_values($caminhos)
+        );
+
+        $comando = sprintf('python3 %s %s', $script, implode(' ', $argsEscapados));
+
+        Log::info('Classificando PDFs Banrisul', ['comando' => $comando]);
+
+        $resultado = Process::run($comando);
+        $saida = trim($resultado->output() ?: $resultado->errorOutput() ?: '');
+        $dados = json_decode($saida, true);
+
+        if (!is_array($dados)) {
+            throw new \RuntimeException(
+                'Falha ao classificar os PDFs Banrisul: ' . ($saida ?: 'resposta inválida.')
+            );
+        }
+
+        return $dados;
+    }
+
     private function executarScript(string $script, array $argumentos, string $layout, ?string $caminhoPreview): array
     {
         $caminhoScript = '/var/www/html/scripts/' . $script;

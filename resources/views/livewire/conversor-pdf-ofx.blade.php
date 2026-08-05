@@ -90,54 +90,112 @@
                     </div>
 
                     @if(!empty($layout_selecionado))
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                1. Extrato em PDF
-                            </label>
-                            <x-zona-upload
-                                class="mt-1"
-                                input-id="arquivo-pdf-ofx"
-                                wire:model="arquivo"
-                                accept=".pdf"
-                                formato="PDF do extrato até 10 MB"
-                                :nome-arquivo="$arquivo ? $arquivo->getClientOriginalName() : null"
-                            />
-                            @error('arquivo')
-                                <span class="text-red-500 text-sm">{{ $message }}</span>
-                            @enderror
-                        </div>
-
                         @if($layoutRequerAuxiliares)
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    2. Relatório de PIX
+                                    Extrato + PIX + pagamentos
                                 </label>
-                                <x-zona-upload
-                                    class="mt-1"
-                                    input-id="arquivo-pix-ofx"
-                                    wire:model="arquivo_pix"
-                                    accept=".pdf"
-                                    formato="PDF do relatório de PIX até 10 MB"
-                                    :nome-arquivo="$arquivo_pix ? $arquivo_pix->getClientOriginalName() : null"
-                                />
-                                @error('arquivo_pix')
+
+                                @if(count($arquivos_banrisul) < 3)
+                                    <x-zona-upload
+                                        class="mt-1"
+                                        input-id="arquivos-banrisul-ofx"
+                                        wire:model="arquivos_banrisul_novos"
+                                        accept=".pdf"
+                                        formato="Adicione os PDFs um a um ou vários de uma vez (até 3)"
+                                        :multiple="true"
+                                        :nome-arquivo="null"
+                                    />
+                                @else
+                                    <div class="mt-1 flex items-center justify-center min-h-[4rem] px-4 border-2 border-dashed border-green-300 bg-green-50 rounded-lg text-sm text-green-800">
+                                        3 arquivos prontos
+                                    </div>
+                                @endif
+
+                                @error('arquivos_banrisul')
                                     <span class="text-red-500 text-sm">{{ $message }}</span>
                                 @enderror
-                            </div>
+                                @error('arquivos_banrisul.*')
+                                    <span class="text-red-500 text-sm">{{ $message }}</span>
+                                @enderror
 
+                                <div wire:loading wire:target="arquivos_banrisul_novos" class="mt-2 text-xs text-indigo-600">
+                                    Enviando arquivo...
+                                </div>
+
+                                @if(count($arquivos_banrisul) > 0)
+                                    <ul class="mt-3 divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                        @foreach($arquivos_banrisul as $indice => $arquivoItem)
+                                            @php
+                                                $nomeOriginal = $nomes_arquivos_banrisul[$indice] ?? $arquivoItem->getClientOriginalName();
+                                                $tipo = $tipos_arquivos_banrisul[$indice] ?? null;
+                                            @endphp
+                                            <li class="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                                                wire:key="banrisul-arquivo-{{ $indice }}-{{ $nomeOriginal }}">
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <p class="font-medium text-gray-900 truncate">
+                                                            {{ $nomeOriginal }}
+                                                        </p>
+                                                        @if($tipo === 'processando')
+                                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                                                <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                                                </svg>
+                                                                Identificando...
+                                                            </span>
+                                                        @elseif($tipo === 'extrato')
+                                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Extrato</span>
+                                                        @elseif($tipo === 'pix')
+                                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">PIX</span>
+                                                        @elseif($tipo === 'pagamentos')
+                                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Pagamentos</span>
+                                                        @elseif(is_string($tipo) && str_starts_with($tipo, 'duplicado:'))
+                                                            @php
+                                                                $tipoDuplicado = substr($tipo, strlen('duplicado:'));
+                                                                $rotuloDuplicado = $rotulosTiposBanrisul[$tipoDuplicado] ?? $tipoDuplicado;
+                                                            @endphp
+                                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                                                Já existe um arquivo com o mesmo padrão {{ $rotuloDuplicado }}
+                                                            </span>
+                                                        @elseif($tipo === null && $arquivoItem)
+                                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Tipo não reconhecido</span>
+                                                        @endif
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-0.5">
+                                                        {{ number_format(($arquivoItem->getSize() ?? 0) / 1024, 2, ',', '.') }} KB
+                                                    </p>
+                                                </div>
+                                                <button type="button"
+                                                        wire:click="removerArquivoBanrisul({{ $indice }})"
+                                                        class="shrink-0 text-red-500 hover:text-red-700 text-lg leading-none"
+                                                        title="Remover arquivo">
+                                                    ×
+                                                </button>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+
+                                @if($erro_classificacao_banrisul)
+                                    <p class="mt-3 text-sm text-red-600">{{ $erro_classificacao_banrisul }}</p>
+                                @endif
+                            </div>
+                        @else
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    3. Relatório de pagamentos de títulos
+                                    Arquivo PDF do extrato
                                 </label>
                                 <x-zona-upload
                                     class="mt-1"
-                                    input-id="arquivo-pagamentos-ofx"
-                                    wire:model="arquivo_pagamentos"
+                                    input-id="arquivo-pdf-ofx"
+                                    wire:model="arquivo"
                                     accept=".pdf"
-                                    formato="PDF do relatório de pagamentos até 10 MB"
-                                    :nome-arquivo="$arquivo_pagamentos ? $arquivo_pagamentos->getClientOriginalName() : null"
+                                    formato="PDF do extrato até 10 MB"
+                                    :nome-arquivo="$arquivo ? $arquivo->getClientOriginalName() : null"
                                 />
-                                @error('arquivo_pagamentos')
+                                @error('arquivo')
                                     <span class="text-red-500 text-sm">{{ $message }}</span>
                                 @enderror
                             </div>
@@ -147,8 +205,8 @@
                     <div class="flex gap-3">
                         <button type="submit"
                                 wire:loading.attr="disabled"
-                                wire:target="converter,arquivo,arquivo_pix,arquivo_pagamentos"
-                                @disabled($status === 'processando' || empty($layout_selecionado))
+                                wire:target="converter,arquivo,arquivos_banrisul_novos,classificarPendentesBanrisul"
+                                @disabled($status === 'processando' || empty($layout_selecionado) || ($layoutRequerAuxiliares && !$banrisulPronto))
                                 class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">
                             <span wire:loading.remove wire:target="converter">Converter para OFX</span>
                             <span wire:loading wire:target="converter">Convertendo...</span>

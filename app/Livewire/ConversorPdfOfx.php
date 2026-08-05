@@ -17,6 +17,20 @@ class ConversorPdfOfx extends Component
     public $arquivo;
     public $arquivo_pix;
     public $arquivo_pagamentos;
+
+    /** Novos arquivos do input (anexa aos já enviados). */
+    public $arquivos_banrisul_novos = [];
+
+    /** @var array<int, mixed> */
+    public $arquivos_banrisul = [];
+
+    /** @var array<int, string> nomes originais do cliente */
+    public $nomes_arquivos_banrisul = [];
+
+    /** @var array<int, string|null> extrato|pix|pagamentos|processando|null */
+    public $tipos_arquivos_banrisul = [];
+
+    public $erro_classificacao_banrisul = '';
     public $familia_layout = '';
     public $layout_selecionado = '';
     public $status = 'pendente';
@@ -42,13 +56,14 @@ class ConversorPdfOfx extends Component
         $layouts = implode(',', $this->servico->layoutsSuportados());
 
         $regras = [
-            'arquivo' => 'required|file|extensions:pdf|max:10240',
             'layout_selecionado' => 'required|in:' . $layouts,
         ];
 
-        if ($this->servico->layoutRequerArquivosAuxiliares($this->layout_selecionado)) {
-            $regras['arquivo_pix'] = 'required|file|extensions:pdf|max:10240';
-            $regras['arquivo_pagamentos'] = 'required|file|extensions:pdf|max:10240';
+        if ($this->layoutEhBanrisulEnriquecido()) {
+            $regras['arquivos_banrisul'] = 'required|array|size:3';
+            $regras['arquivos_banrisul.*'] = 'required|file|extensions:pdf|max:10240';
+        } else {
+            $regras['arquivo'] = 'required|file|extensions:pdf|max:10240';
         }
 
         return $regras;
@@ -58,12 +73,11 @@ class ConversorPdfOfx extends Component
         'arquivo.required' => 'O arquivo PDF do extrato é obrigatório.',
         'arquivo.extensions' => 'O extrato deve ser um PDF.',
         'arquivo.max' => 'O extrato não pode ser maior que 10 MB.',
-        'arquivo_pix.required' => 'O relatório de PIX é obrigatório para este layout.',
-        'arquivo_pix.extensions' => 'O relatório de PIX deve ser um PDF.',
-        'arquivo_pix.max' => 'O relatório de PIX não pode ser maior que 10 MB.',
-        'arquivo_pagamentos.required' => 'O relatório de pagamentos é obrigatório para este layout.',
-        'arquivo_pagamentos.extensions' => 'O relatório de pagamentos deve ser um PDF.',
-        'arquivo_pagamentos.max' => 'O relatório de pagamentos não pode ser maior que 10 MB.',
+        'arquivos_banrisul.required' => 'Envie os 3 PDFs: extrato, PIX e pagamentos.',
+        'arquivos_banrisul.size' => 'Envie exatamente 3 PDFs: extrato, PIX e pagamentos.',
+        'arquivos_banrisul.*.required' => 'Todos os arquivos devem ser PDFs válidos.',
+        'arquivos_banrisul.*.extensions' => 'Todos os arquivos devem ser PDF.',
+        'arquivos_banrisul.*.max' => 'Cada PDF pode ter no máximo 10 MB.',
         'layout_selecionado.required' => 'Selecione o layout do extrato.',
         'layout_selecionado.in' => 'O layout selecionado não é válido.',
     ];
@@ -87,16 +101,96 @@ class ConversorPdfOfx extends Component
             : 'Arquivo selecionado. Clique em converter.';
     }
 
-    public function updatedArquivoPix(): void
+    public function updatedArquivosBanrisulNovos(): void
     {
         $this->resetValidation();
-        $this->validateOnly('arquivo_pix');
+        $this->erro_classificacao_banrisul = '';
+
+        $novos = array_values(array_filter($this->arquivos_banrisul_novos ?? []));
+        $this->arquivos_banrisul_novos = [];
+
+        if ($novos === []) {
+            return;
+        }
+
+        $indicesParaClassificar = [];
+
+        foreach ($novos as $arquivo) {
+            if (count($this->arquivos_banrisul) >= 3) {
+                $this->erro_classificacao_banrisul = 'Já há 3 arquivos. Remova um para adicionar outro.';
+                break;
+            }
+
+            try {
+                $this->validateOnlyArquivoBanrisul($arquivo);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $this->erro_classificacao_banrisul = collect($e->errors())->flatten()->first()
+                    ?: 'Arquivo inválido.';
+                continue;
+            }
+
+            $indice = count($this->arquivos_banrisul);
+            $this->arquivos_banrisul[] = $arquivo;
+            $this->nomes_arquivos_banrisul[$indice] = $arquivo->getClientOriginalName();
+            $this->tipos_arquivos_banrisul[$indice] = 'processando';
+            $indicesParaClassificar[] = $indice;
+        }
+
+        $this->atualizarMensagemBanrisul();
+
+        if ($indicesParaClassificar !== []) {
+            $this->js(
+                'setTimeout(() => $wire.classificarPendentesBanrisul([' .
+                implode(',', $indicesParaClassificar) .
+                ']), 30)'
+            );
+        }
     }
 
-    public function updatedArquivoPagamentos(): void
+    public function classificarPendentesBanrisul(array $indices = []): void
     {
-        $this->resetValidation();
-        $this->validateOnly('arquivo_pagamentos');
+        if ($indices === []) {
+            foreach ($this->tipos_arquivos_banrisul as $indice => $tipo) {
+                if ($tipo === 'processando') {
+                    $indices[] = (int) $indice;
+                }
+            }
+        }
+
+        foreach ($indices as $indice) {
+            $indice = (int) $indice;
+            if (!isset($this->arquivos_banrisul[$indice])) {
+                continue;
+            }
+            if (($this->tipos_arquivos_banrisul[$indice] ?? null) !== 'processando') {
+                continue;
+            }
+
+            $this->classificarArquivoBanrisulIndice($indice);
+        }
+
+        $this->resolverConflitosTiposBanrisul();
+        $this->atualizarMensagemBanrisul();
+    }
+
+    public function removerArquivoBanrisul(int $indice): void
+    {
+        if (!isset($this->arquivos_banrisul[$indice])) {
+            return;
+        }
+
+        unset(
+            $this->arquivos_banrisul[$indice],
+            $this->nomes_arquivos_banrisul[$indice],
+            $this->tipos_arquivos_banrisul[$indice]
+        );
+
+        $this->arquivos_banrisul = array_values($this->arquivos_banrisul);
+        $this->nomes_arquivos_banrisul = array_values($this->nomes_arquivos_banrisul);
+        $this->tipos_arquivos_banrisul = array_values($this->tipos_arquivos_banrisul);
+        $this->erro_classificacao_banrisul = '';
+        $this->resolverConflitosTiposBanrisul();
+        $this->atualizarMensagemBanrisul();
     }
 
     public function updatedFamiliaLayout($familia): void
@@ -106,7 +200,7 @@ class ConversorPdfOfx extends Component
 
         if (count($opcoes) === 1) {
             $this->layout_selecionado = array_key_first($opcoes);
-            $this->mensagem_status = 'Instituição selecionada. Envie o PDF do extrato.';
+            $this->ajustarMensagemPorLayout();
             return;
         }
 
@@ -116,10 +210,17 @@ class ConversorPdfOfx extends Component
 
     public function updatedLayoutSelecionado(): void
     {
-        if (!$this->servico->layoutRequerArquivosAuxiliares($this->layout_selecionado)) {
+        if ($this->layoutEhBanrisulEnriquecido()) {
+            $this->arquivo = null;
+            $this->arquivo_pix = null;
+            $this->arquivo_pagamentos = null;
+        } else {
+            $this->limparEstadoBanrisul();
             $this->arquivo_pix = null;
             $this->arquivo_pagamentos = null;
         }
+
+        $this->ajustarMensagemPorLayout();
     }
 
     public function converter(): void
@@ -128,6 +229,12 @@ class ConversorPdfOfx extends Component
         ini_set('memory_limit', '512M');
 
         $this->validate();
+
+        if ($this->layoutEhBanrisulEnriquecido() && !$this->banrisulProntoParaConverter()) {
+            $this->status = 'erro';
+            $this->mensagem_status = 'Identifique extrato, PIX e pagamentos antes de converter.';
+            return;
+        }
 
         $conversao = null;
         $arquivosTemporarios = [];
@@ -138,20 +245,37 @@ class ConversorPdfOfx extends Component
             $this->mensagem_status = 'Salvando arquivos...';
             $this->resetarResultado();
 
-            $nomeOriginal = basename($this->arquivo->getClientOriginalName());
+            $ehEnriquecido = $this->layoutEhBanrisulEnriquecido();
+            $nomeOriginal = '';
+            $caminhoEntrada = '';
+            $caminhoPix = null;
+            $caminhoPagamentos = null;
+
+            if ($ehEnriquecido) {
+                $mapeados = $this->salvarArquivosBanrisulPorTipo($arquivosTemporarios);
+                $caminhoEntrada = $mapeados['extrato'];
+                $caminhoPix = $mapeados['pix'];
+                $caminhoPagamentos = $mapeados['pagamentos'];
+                $indiceExtrato = array_search('extrato', $this->tipos_arquivos_banrisul, true);
+                $nomeOriginal = $indiceExtrato !== false
+                    ? ($this->nomes_arquivos_banrisul[$indiceExtrato] ?? 'banrisul-extrato.pdf')
+                    : 'banrisul-extrato.pdf';
+            } else {
+                $nomeOriginal = basename($this->arquivo->getClientOriginalName());
+                $caminhoOriginal = $this->arquivo->store(OperadoraStorage::ensureDirectory('temp'));
+                $caminhoEntrada = Storage::path($caminhoOriginal);
+                $arquivosTemporarios[] = $caminhoOriginal;
+
+                if (!file_exists($caminhoEntrada)) {
+                    throw new \Exception('Arquivo não foi salvo corretamente.');
+                }
+            }
+
             $conversao = $this->servico->criarRegistro(
                 $this->layout_selecionado,
                 $nomeOriginal
             );
             $this->conversao_id = $conversao->id;
-
-            $caminhoOriginal = $this->arquivo->store(OperadoraStorage::ensureDirectory('temp'));
-            $caminhoEntrada = Storage::path($caminhoOriginal);
-            $arquivosTemporarios[] = $caminhoOriginal;
-
-            if (!file_exists($caminhoEntrada)) {
-                throw new \Exception('Arquivo não foi salvo corretamente.');
-            }
 
             $nomeOfx = preg_replace('/\.pdf$/i', '.ofx', $nomeOriginal);
             if (!preg_match('/\.ofx$/i', $nomeOfx)) {
@@ -172,10 +296,7 @@ class ConversorPdfOfx extends Component
             $this->progresso = 40;
             $this->mensagem_status = 'Convertendo PDF para OFX...';
 
-            if ($this->servico->layoutRequerArquivosAuxiliares($this->layout_selecionado)) {
-                $caminhoPix = $this->salvarArquivoAuxiliar($this->arquivo_pix, $arquivosTemporarios);
-                $caminhoPagamentos = $this->salvarArquivoAuxiliar($this->arquivo_pagamentos, $arquivosTemporarios);
-
+            if ($ehEnriquecido) {
                 $dados = $this->servico->executarEnriquecido(
                     $this->layout_selecionado,
                     $caminhoEntrada,
@@ -233,7 +354,9 @@ class ConversorPdfOfx extends Component
             Log::error('Erro na conversão PDF->OFX', [
                 'layout' => $this->layout_selecionado,
                 'mensagem' => $e->getMessage(),
-                'arquivo' => $this->arquivo ? $this->arquivo->getClientOriginalName() : 'N/A',
+                'arquivo' => $this->arquivo
+                    ? $this->arquivo->getClientOriginalName()
+                    : (count($this->arquivos_banrisul) ? 'lote Banrisul' : 'N/A'),
             ]);
         }
     }
@@ -262,6 +385,11 @@ class ConversorPdfOfx extends Component
             'arquivo',
             'arquivo_pix',
             'arquivo_pagamentos',
+            'arquivos_banrisul_novos',
+            'arquivos_banrisul',
+            'nomes_arquivos_banrisul',
+            'tipos_arquivos_banrisul',
+            'erro_classificacao_banrisul',
             'familia_layout',
             'layout_selecionado',
             'status',
@@ -282,17 +410,172 @@ class ConversorPdfOfx extends Component
         $this->mensagem_status = 'Selecione a instituição e envie o PDF do extrato.';
     }
 
-    private function salvarArquivoAuxiliar($arquivo, array &$arquivosTemporarios): string
+    private function layoutEhBanrisulEnriquecido(): bool
     {
-        $caminhoRelativo = $arquivo->store(OperadoraStorage::ensureDirectory('temp'));
-        $arquivosTemporarios[] = $caminhoRelativo;
-        $caminhoAbsoluto = Storage::path($caminhoRelativo);
+        return $this->layout_selecionado === 'banrisul_enriquecido';
+    }
 
-        if (!file_exists($caminhoAbsoluto)) {
-            throw new \Exception('Arquivo auxiliar não foi salvo corretamente.');
+    private function limparEstadoBanrisul(): void
+    {
+        $this->arquivos_banrisul_novos = [];
+        $this->arquivos_banrisul = [];
+        $this->nomes_arquivos_banrisul = [];
+        $this->tipos_arquivos_banrisul = [];
+        $this->erro_classificacao_banrisul = '';
+    }
+
+    private function ajustarMensagemPorLayout(): void
+    {
+        if ($this->layoutEhBanrisulEnriquecido()) {
+            $this->mensagem_status = 'Envie os 3 PDFs Banrisul (extrato, PIX e pagamentos).';
+            return;
         }
 
-        return $caminhoAbsoluto;
+        $this->mensagem_status = 'Instituição selecionada. Envie o PDF do extrato.';
+    }
+
+    private function validateOnlyArquivoBanrisul($arquivo): void
+    {
+        validator(
+            ['arquivo' => $arquivo],
+            ['arquivo' => 'required|file|extensions:pdf|max:10240'],
+            [
+                'arquivo.extensions' => 'O arquivo deve ser um PDF.',
+                'arquivo.max' => 'Cada PDF pode ter no máximo 10 MB.',
+            ]
+        )->validate();
+    }
+
+    private function classificarArquivoBanrisulIndice(int $indice): void
+    {
+        $arquivo = $this->arquivos_banrisul[$indice] ?? null;
+        if (!$arquivo) {
+            return;
+        }
+
+        $relativo = null;
+
+        try {
+            $relativo = $arquivo->store(OperadoraStorage::ensureDirectory('temp'));
+            $caminho = Storage::path($relativo);
+            $resultado = $this->servico->classificarUmArquivoBanrisul($caminho);
+
+            if (!($resultado['ok'] ?? false) || empty($resultado['tipo'])) {
+                $this->tipos_arquivos_banrisul[$indice] = null;
+                $this->erro_classificacao_banrisul = $resultado['erro']
+                    ?? 'Não foi possível identificar um dos PDFs.';
+                return;
+            }
+
+            $this->tipos_arquivos_banrisul[$indice] = $resultado['tipo'];
+        } catch (\Exception $e) {
+            $this->tipos_arquivos_banrisul[$indice] = null;
+            $this->erro_classificacao_banrisul = $e->getMessage();
+        } finally {
+            if ($relativo) {
+                Storage::delete($relativo);
+            }
+        }
+    }
+
+    private function resolverConflitosTiposBanrisul(): void
+    {
+        $tiposValidos = ['extrato', 'pix', 'pagamentos'];
+
+        // Reavalia conflitos a partir do tipo real (duplicado:X volta a X)
+        foreach ($this->tipos_arquivos_banrisul as $indice => $tipo) {
+            if (is_string($tipo) && str_starts_with($tipo, 'duplicado:')) {
+                $this->tipos_arquivos_banrisul[$indice] = substr($tipo, strlen('duplicado:'));
+            }
+        }
+
+        $porTipo = [];
+        foreach ($this->tipos_arquivos_banrisul as $indice => $tipo) {
+            if (!in_array($tipo, $tiposValidos, true)) {
+                continue;
+            }
+            $porTipo[$tipo][] = (int) $indice;
+        }
+
+        foreach ($porTipo as $tipo => $indices) {
+            if (count($indices) <= 1) {
+                continue;
+            }
+
+            // Mantém o primeiro; marca os demais como duplicados do mesmo padrão
+            foreach (array_slice($indices, 1) as $indiceDuplicado) {
+                $this->tipos_arquivos_banrisul[$indiceDuplicado] = 'duplicado:' . $tipo;
+            }
+        }
+    }
+
+    private function atualizarMensagemBanrisul(): void
+    {
+        $total = count($this->arquivos_banrisul);
+        if ($total === 0) {
+            $this->mensagem_status = 'Envie os 3 PDFs Banrisul (extrato, PIX e pagamentos).';
+            return;
+        }
+
+        if ($this->banrisulProntoParaConverter()) {
+            $this->mensagem_status = 'Arquivos prontos. Clique em converter.';
+            return;
+        }
+
+        if (in_array('processando', $this->tipos_arquivos_banrisul, true)) {
+            $this->mensagem_status = 'Identificando arquivos...';
+            return;
+        }
+
+        $faltam = 3 - $total;
+        if ($faltam > 0) {
+            $this->mensagem_status = $faltam === 1
+                ? 'Falta 1 PDF.'
+                : "Faltam {$faltam} PDFs.";
+            return;
+        }
+
+        $this->mensagem_status = 'Confira os tipos identificados antes de converter.';
+    }
+
+    private function banrisulProntoParaConverter(): bool
+    {
+        if (count($this->arquivos_banrisul) !== 3) {
+            return false;
+        }
+
+        $tipos = array_values($this->tipos_arquivos_banrisul);
+        sort($tipos);
+
+        return $tipos === ['extrato', 'pagamentos', 'pix'];
+    }
+
+    /**
+     * @param  array<int, string>  $arquivosTemporarios
+     * @return array{extrato: string, pix: string, pagamentos: string}
+     */
+    private function salvarArquivosBanrisulPorTipo(array &$arquivosTemporarios): array
+    {
+        $mapa = [];
+
+        foreach ($this->arquivos_banrisul as $indice => $arquivo) {
+            $tipo = $this->tipos_arquivos_banrisul[$indice] ?? null;
+            if (!in_array($tipo, ['extrato', 'pix', 'pagamentos'], true)) {
+                throw new \RuntimeException('Há arquivo sem tipo identificado. Remova e envie novamente.');
+            }
+
+            $relativo = $arquivo->store(OperadoraStorage::ensureDirectory('temp'));
+            $arquivosTemporarios[] = $relativo;
+            $mapa[$tipo] = Storage::path($relativo);
+        }
+
+        foreach (['extrato', 'pix', 'pagamentos'] as $tipo) {
+            if (empty($mapa[$tipo])) {
+                throw new \RuntimeException('Faltou identificar um dos arquivos necessários.');
+            }
+        }
+
+        return $mapa;
     }
 
     private function resetarResultado(): void
@@ -324,8 +607,14 @@ class ConversorPdfOfx extends Component
             'familiasLayout' => $this->servico->familiasLayout(),
             'layoutsDisponiveis' => $this->servico->layoutsPdfPorFamilia()[$this->familia_layout] ?? [],
             'miniaturasLayout' => $this->servico->miniaturasPorFamilia($this->familia_layout),
-            'layoutRequerAuxiliares' => $this->servico->layoutRequerArquivosAuxiliares($this->layout_selecionado),
+            'layoutRequerAuxiliares' => $this->layoutEhBanrisulEnriquecido(),
             'layoutExibeListagem' => $this->servico->layoutExibeListagemLancamentos($this->layout_selecionado),
+            'banrisulPronto' => $this->banrisulProntoParaConverter(),
+            'rotulosTiposBanrisul' => [
+                'extrato' => 'Extrato',
+                'pix' => 'Relatório de PIX',
+                'pagamentos' => 'Relatório de pagamentos',
+            ],
         ]);
     }
 }
