@@ -223,8 +223,8 @@ class ConversaoPdfOfxService
     public function executarEnriquecido(
         string $layout,
         string $caminhoExtrato,
-        string $caminhoPix,
-        string $caminhoPagamentos,
+        ?string $caminhoPix,
+        ?string $caminhoPagamentos,
         string $caminhoOfx,
         ?string $caminhoPreview = null
     ): array {
@@ -232,15 +232,28 @@ class ConversaoPdfOfxService
             throw new \InvalidArgumentException("Layout não suporta arquivos auxiliares: {$layout}");
         }
 
+        if ($caminhoExtrato === '') {
+            throw new \InvalidArgumentException('O PDF do extrato é obrigatório.');
+        }
+
+        if (!$caminhoPix && !$caminhoPagamentos) {
+            throw new \InvalidArgumentException('Informe ao menos o PIX ou os pagamentos além do extrato.');
+        }
+
+        $argumentos = [
+            $caminhoExtrato,
+            $caminhoPix ?: '-',
+            $caminhoPagamentos ?: '-',
+            $caminhoOfx,
+        ];
+
+        if ($caminhoPreview) {
+            $argumentos[] = $caminhoPreview;
+        }
+
         return $this->executarScript(
             'conversor_extrato_banrisul_enriquecido_pdf_ofx.py',
-            array_filter([
-                $caminhoExtrato,
-                $caminhoPix,
-                $caminhoPagamentos,
-                $caminhoOfx,
-                $caminhoPreview,
-            ]),
+            $argumentos,
             $layout,
             $caminhoPreview
         );

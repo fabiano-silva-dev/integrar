@@ -408,6 +408,10 @@ def processar_lancamento(lancamento, pagamentos_idx, pix_idx):
     }]
 
 
+def caminho_auxiliar_valido(caminho):
+    return bool(caminho) and caminho != '-' and os.path.exists(caminho)
+
+
 def converter_banrisul_enriquecido(caminho_extrato, caminho_pix, caminho_pagamentos, caminho_ofx, caminho_preview=None):
     linhas_extrato = extrair_texto_pdf(caminho_extrato)
     if not linhas_extrato:
@@ -420,8 +424,22 @@ def converter_banrisul_enriquecido(caminho_extrato, caminho_pix, caminho_pagamen
     if not lancamentos:
         raise ValueError('Nenhum lançamento válido encontrado no extrato')
 
-    pagamentos = parsear_pagamentos_titulos(extrair_texto_pdf(caminho_pagamentos))
-    pix_registros = parsear_pix(extrair_texto_pdf(caminho_pix))
+    pagamentos = []
+    if caminho_auxiliar_valido(caminho_pagamentos):
+        pagamentos = parsear_pagamentos_titulos(extrair_texto_pdf(caminho_pagamentos))
+
+    pix_registros = []
+    if caminho_auxiliar_valido(caminho_pix):
+        pix_registros = parsear_pix(extrair_texto_pdf(caminho_pix))
+
+    if not pagamentos and not pix_registros and (
+        caminho_auxiliar_valido(caminho_pagamentos) or caminho_auxiliar_valido(caminho_pix)
+    ):
+        # Arquivos auxiliares informados, mas sem registros — segue só com extrato enriquecido pelo NOME quando houver.
+        pass
+
+    if not caminho_auxiliar_valido(caminho_pagamentos) and not caminho_auxiliar_valido(caminho_pix):
+        raise ValueError('Informe ao menos o relatório de PIX ou o de pagamentos além do extrato')
 
     pagamentos_idx = indexar_auxiliares(pagamentos)
     pix_idx = indexar_auxiliares(pix_registros)
@@ -507,7 +525,7 @@ def main():
     if len(sys.argv) < 5:
         print(
             'Uso: python conversor_extrato_banrisul_enriquecido_pdf_ofx.py '
-            '<extrato.pdf> <pix.pdf> <pagamentos.pdf> <saida.ofx> [preview.json]'
+            '<extrato.pdf> <pix.pdf|-> <pagamentos.pdf|-> <saida.ofx> [preview.json]'
         )
         sys.exit(1)
 
@@ -517,14 +535,21 @@ def main():
     caminho_ofx = sys.argv[4]
     caminho_preview = sys.argv[5] if len(sys.argv) > 5 else None
 
+    if not os.path.exists(caminho_extrato):
+        print(f"Erro: arquivo extrato '{caminho_extrato}' não existe.")
+        sys.exit(1)
+
     for rotulo, caminho in [
-        ('extrato', caminho_extrato),
         ('pix', caminho_pix),
         ('pagamentos', caminho_pagamentos),
     ]:
-        if not os.path.exists(caminho):
+        if caminho != '-' and not os.path.exists(caminho):
             print(f"Erro: arquivo {rotulo} '{caminho}' não existe.")
             sys.exit(1)
+
+    if caminho_pix == '-' and caminho_pagamentos == '-':
+        print('Erro: informe ao menos o PIX ou os pagamentos além do extrato.')
+        sys.exit(1)
 
     try:
         resultado = converter_banrisul_enriquecido(

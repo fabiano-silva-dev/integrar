@@ -60,7 +60,7 @@ class ConversorPdfOfx extends Component
         ];
 
         if ($this->layoutEhBanrisulEnriquecido()) {
-            $regras['arquivos_banrisul'] = 'required|array|size:3';
+            $regras['arquivos_banrisul'] = 'required|array|min:2|max:3';
             $regras['arquivos_banrisul.*'] = 'required|file|extensions:pdf|max:10240';
         } else {
             $regras['arquivo'] = 'required|file|extensions:pdf|max:10240';
@@ -73,8 +73,9 @@ class ConversorPdfOfx extends Component
         'arquivo.required' => 'O arquivo PDF do extrato é obrigatório.',
         'arquivo.extensions' => 'O extrato deve ser um PDF.',
         'arquivo.max' => 'O extrato não pode ser maior que 10 MB.',
-        'arquivos_banrisul.required' => 'Envie os 3 PDFs: extrato, PIX e pagamentos.',
-        'arquivos_banrisul.size' => 'Envie exatamente 3 PDFs: extrato, PIX e pagamentos.',
+        'arquivos_banrisul.required' => 'Envie o extrato e ao menos o PIX ou os pagamentos.',
+        'arquivos_banrisul.min' => 'Envie no mínimo 2 PDFs: extrato e PIX ou pagamentos.',
+        'arquivos_banrisul.max' => 'Envie no máximo 3 PDFs: extrato, PIX e pagamentos.',
         'arquivos_banrisul.*.required' => 'Todos os arquivos devem ser PDFs válidos.',
         'arquivos_banrisul.*.extensions' => 'Todos os arquivos devem ser PDF.',
         'arquivos_banrisul.*.max' => 'Cada PDF pode ter no máximo 10 MB.',
@@ -232,7 +233,7 @@ class ConversorPdfOfx extends Component
 
         if ($this->layoutEhBanrisulEnriquecido() && !$this->banrisulProntoParaConverter()) {
             $this->status = 'erro';
-            $this->mensagem_status = 'Identifique extrato, PIX e pagamentos antes de converter.';
+            $this->mensagem_status = 'Envie o extrato e ao menos o PIX ou os pagamentos, com os tipos identificados.';
             return;
         }
 
@@ -427,7 +428,7 @@ class ConversorPdfOfx extends Component
     private function ajustarMensagemPorLayout(): void
     {
         if ($this->layoutEhBanrisulEnriquecido()) {
-            $this->mensagem_status = 'Envie os 3 PDFs Banrisul (extrato, PIX e pagamentos).';
+            $this->mensagem_status = 'Envie o extrato e ao menos o PIX ou os pagamentos.';
             return;
         }
 
@@ -513,7 +514,7 @@ class ConversorPdfOfx extends Component
     {
         $total = count($this->arquivos_banrisul);
         if ($total === 0) {
-            $this->mensagem_status = 'Envie os 3 PDFs Banrisul (extrato, PIX e pagamentos).';
+            $this->mensagem_status = 'Envie o extrato e ao menos o PIX ou os pagamentos.';
             return;
         }
 
@@ -527,36 +528,69 @@ class ConversorPdfOfx extends Component
             return;
         }
 
-        $faltam = 3 - $total;
-        if ($faltam > 0) {
-            $this->mensagem_status = $faltam === 1
-                ? 'Falta 1 PDF.'
-                : "Faltam {$faltam} PDFs.";
+        $tipos = $this->tiposValidosBanrisul();
+        if (!in_array('extrato', $tipos, true)) {
+            $this->mensagem_status = 'É necessário o PDF do extrato.';
+            return;
+        }
+
+        if (!in_array('pix', $tipos, true) && !in_array('pagamentos', $tipos, true)) {
+            $this->mensagem_status = 'Envie também o PIX ou os pagamentos.';
+            return;
+        }
+
+        if ($total < 2) {
+            $this->mensagem_status = 'Falta pelo menos mais 1 PDF (PIX ou pagamentos).';
             return;
         }
 
         $this->mensagem_status = 'Confira os tipos identificados antes de converter.';
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private function tiposValidosBanrisul(): array
+    {
+        return array_values(array_filter(
+            $this->tipos_arquivos_banrisul,
+            static fn ($tipo) => in_array($tipo, ['extrato', 'pix', 'pagamentos'], true)
+        ));
+    }
+
     private function banrisulProntoParaConverter(): bool
     {
-        if (count($this->arquivos_banrisul) !== 3) {
+        if (count($this->arquivos_banrisul) < 2 || count($this->arquivos_banrisul) > 3) {
             return false;
         }
 
-        $tipos = array_values($this->tipos_arquivos_banrisul);
-        sort($tipos);
+        if (in_array('processando', $this->tipos_arquivos_banrisul, true)) {
+            return false;
+        }
 
-        return $tipos === ['extrato', 'pagamentos', 'pix'];
+        foreach ($this->tipos_arquivos_banrisul as $tipo) {
+            if ($tipo === null || (is_string($tipo) && str_starts_with($tipo, 'duplicado:'))) {
+                return false;
+            }
+        }
+
+        $tipos = $this->tiposValidosBanrisul();
+
+        return in_array('extrato', $tipos, true)
+            && (in_array('pix', $tipos, true) || in_array('pagamentos', $tipos, true));
     }
 
     /**
      * @param  array<int, string>  $arquivosTemporarios
-     * @return array{extrato: string, pix: string, pagamentos: string}
+     * @return array{extrato: string, pix: ?string, pagamentos: ?string}
      */
     private function salvarArquivosBanrisulPorTipo(array &$arquivosTemporarios): array
     {
-        $mapa = [];
+        $mapa = [
+            'extrato' => null,
+            'pix' => null,
+            'pagamentos' => null,
+        ];
 
         foreach ($this->arquivos_banrisul as $indice => $arquivo) {
             $tipo = $this->tipos_arquivos_banrisul[$indice] ?? null;
@@ -569,10 +603,12 @@ class ConversorPdfOfx extends Component
             $mapa[$tipo] = Storage::path($relativo);
         }
 
-        foreach (['extrato', 'pix', 'pagamentos'] as $tipo) {
-            if (empty($mapa[$tipo])) {
-                throw new \RuntimeException('Faltou identificar um dos arquivos necessários.');
-            }
+        if (empty($mapa['extrato'])) {
+            throw new \RuntimeException('É necessário o PDF do extrato.');
+        }
+
+        if (empty($mapa['pix']) && empty($mapa['pagamentos'])) {
+            throw new \RuntimeException('Envie também o PIX ou os pagamentos.');
         }
 
         return $mapa;

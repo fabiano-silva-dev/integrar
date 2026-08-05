@@ -49,7 +49,7 @@
                                                 <div class="p-2 bg-white text-center border-t border-gray-100">
                                                     <p class="text-xs font-medium text-gray-900 leading-snug">{{ $nome }}</p>
                                                     @if($valor === 'banrisul_enriquecido')
-                                                        <p class="text-xs text-gray-500 mt-1">Extrato + PIX + pagamentos</p>
+                                                        <p class="text-xs text-gray-500 mt-1">Extrato + PIX e/ou pagamentos</p>
                                                     @endif
                                                 </div>
                                             </div>
@@ -72,7 +72,7 @@
                                                 <div>
                                                     <p class="text-sm font-medium text-gray-900">{{ $nome }}</p>
                                                     @if($valor === 'banrisul_enriquecido')
-                                                        <p class="text-xs text-gray-500 mt-1">Extrato + relatório de PIX + relatório de pagamentos de títulos</p>
+                                                        <p class="text-xs text-gray-500 mt-1">Extrato + PIX e/ou pagamentos de títulos</p>
                                                     @endif
                                                 </div>
                                             </div>
@@ -93,7 +93,7 @@
                         @if($layoutRequerAuxiliares)
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    Extrato + PIX + pagamentos
+                                    Extrato + PIX e/ou pagamentos
                                 </label>
 
                                 @if(count($arquivos_banrisul) < 3)
@@ -102,14 +102,20 @@
                                         input-id="arquivos-banrisul-ofx"
                                         wire:model="arquivos_banrisul_novos"
                                         accept=".pdf"
-                                        formato="Adicione os PDFs um a um ou vários de uma vez (até 3)"
+                                        formato="Mínimo 2 PDFs (extrato + PIX ou pagamentos), até 3"
                                         :multiple="true"
                                         :nome-arquivo="null"
                                     />
                                 @else
                                     <div class="mt-1 flex items-center justify-center min-h-[4rem] px-4 border-2 border-dashed border-green-300 bg-green-50 rounded-lg text-sm text-green-800">
-                                        3 arquivos prontos
+                                        3 arquivos enviados
                                     </div>
+                                @endif
+
+                                @if($banrisulPronto && count($arquivos_banrisul) < 3)
+                                    <p class="mt-2 text-xs text-green-700">
+                                        Pronto para converter. Você ainda pode adicionar o terceiro arquivo, se tiver.
+                                    </p>
                                 @endif
 
                                 @error('arquivos_banrisul')
