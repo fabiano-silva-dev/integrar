@@ -10,8 +10,20 @@ Use `--docker` apenas em desenvolvimento com containers.
 
 ```bash
 # Na raiz do projeto, após git pull:
+./verificar-usuarios-ativos.sh          # checa quem está logado/trabalhando
 ./atualizar-producao.sh
 ```
+
+Antes de atualizar em produção, preferir:
+
+```bash
+./verificar-usuarios-ativos.sh --atualizar
+# ou esperar ficar livre:
+./verificar-usuarios-ativos.sh --aguardar --atualizar
+```
+
+O verificador consulta sessões autenticadas recentes e jobs em execução.
+Exit `0` = livre; `1` = há atividade.
 
 Executa:
 
@@ -91,6 +103,12 @@ Teste do script: `tests/scripts/test_instalar_deps_automacao_fiscal.sh`
 | `otimizar_mysql_*.sh` | Tuning de performance |
 | `monitorar_mysql_performance.sh` | Monitoramento |
 
+## Segurança / pré-deploy
+
+| Script | Descrição |
+|--------|-----------|
+| `verificar-usuarios-ativos.sh` | Lista sessões autenticadas recentes e jobs em execução antes do `atualizar-producao.sh` |
+
 ## Segurança
 
 | Script | Descrição |
@@ -113,6 +131,7 @@ Teste do script: `tests/scripts/test_instalar_deps_automacao_fiscal.sh`
 | Arquivo | Motivo |
 |---------|--------|
 | `atualizar-producao.sh` | Atalho para uso diário |
+| `verificar-usuarios-ativos.sh` | Atalho — checa sessões/jobs antes do deploy |
 | `instalar-nativo-producao.sh` | Atalho para instalação |
 | `instalar-deps-automacao-fiscal.sh` | Atalho — deps do runner (Node/Playwright) |
 | `wait-for-it.sh` | Montado no `docker-compose.yml` |
