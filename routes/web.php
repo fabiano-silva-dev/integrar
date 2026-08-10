@@ -22,6 +22,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/conversao/historico', App\Livewire\ListaConversoesExtrato::class)->name('conversoes-extrato');
     Route::redirect('/conversao/pdf-ofx-sicoob', '/conversao/pdf-ofx');
     Route::get('/tabela', App\Livewire\TabelaLancamentos::class)->name('tabela');
+    Route::get('/lancamentos/ajustes-massa', App\Livewire\AjustesLancamentosMassa::class)->name('lancamentos.ajustes-massa');
     Route::get('/empresas', App\Livewire\GerenciadorEmpresas::class)->name('empresas');
     Route::get('/empresas/importar', App\Livewire\AutomacaoFiscal\ImportadorEmpresas::class)->name('empresas.importar');
     Route::get('/configuracoes/automacao-fiscal/{aba?}', App\Livewire\AutomacaoFiscal\ConfiguracoesAutomacaoFiscal::class)

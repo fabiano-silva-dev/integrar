@@ -109,6 +109,13 @@ trait MenuTrait
                         'url' => route('tabela'),
                         'active' => request()->routeIs('tabela*'),
                     ],
+                    [
+                        'name' => 'Ajustes de lançamentos em massa',
+                        'icon' => 'sliders',
+                        'url' => route('lancamentos.ajustes-massa'),
+                        'active' => request()->routeIs('lancamentos.ajustes-massa*'),
+                        'title' => 'Altera conta, histórico ou terceiro em lote conforme filtros',
+                    ],
                 ],
             ],
             [
