@@ -67,7 +67,7 @@ trait MenuTrait
                         'icon' => 'sliders',
                         'url' => route('importador-personalizado'),
                         'active' => request()->routeIs('importador-personalizado*'),
-                        'title' => 'Importação personalizada de CSV, XLS ou XLSX',
+                        'title' => 'Importação personalizada de CSV, XLS, XLSX ou PDF',
                     ],
                     [
                         'name' => 'Importações anteriores',

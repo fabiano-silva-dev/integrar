@@ -33,6 +33,14 @@ python conversor_laravel.py entrada.xlsx saida.csv
 - ✅ Detecção automática de tipos
 - ✅ Conversão automática de datas
 
+### 3. `extrator_tabela_pdf.py` — Tabelas de PDF digital
+**Uso:** Importação personalizada (PDF → CSV)
+```bash
+python3 extrator_tabela_pdf.py entrada.pdf saida.csv [--indice 0] [--ignorar-totais 1]
+```
+
+Detecta tabelas em PDF com texto (sem OCR): bordas/retângulos, alinhamento de colunas ou stream. Retorna JSON no stdout.
+
 ## 📦 Instalação das Dependências
 
 ```bash

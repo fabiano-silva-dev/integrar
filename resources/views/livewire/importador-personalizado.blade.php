@@ -152,11 +152,11 @@
                                 <label for="arquivo" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
                                     Selecionar Arquivo
                                 </label>
-                                <input wire:model="arquivo" type="file" id="arquivo" class="hidden" accept=".csv,.xls,.xlsx">
+                                <input wire:model="arquivo" type="file" id="arquivo" class="hidden" accept=".csv,.xls,.xlsx,.pdf">
                             @endif
                         </div>
                         <p class="mt-2 text-sm text-gray-600">
-                            CSV, XLS ou XLSX (máx. 10MB)
+                            CSV, XLS, XLSX ou PDF (máx. 10MB)
                         </p>
                         @error('arquivo') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                     </div>
@@ -190,6 +190,65 @@
                                 </div>
                             </div>
                         </div>
+                        @if($tipoArquivo === 'pdf' && !empty($pdfAnalise['tabelas'] ?? []))
+                            @php $tabelaPdf = $this->tabelaPdfSelecionada(); @endphp
+                            @if($tabelaPdf)
+                            <div class="mt-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-gray-900">Tabela identificada</h3>
+                                    <p class="mt-1 text-sm text-gray-600">
+                                        {{ $tabelaPdf['linhas_dados'] }} linhas · {{ count($tabelaPdf['cabecalho'] ?? []) }} colunas
+                                        @if(!empty($tabelaPdf['paginas']))
+                                            · páginas {{ implode(', ', $tabelaPdf['paginas']) }}
+                                        @endif
+                                    </p>
+                                </div>
+
+                                @if(count($pdfAnalise['tabelas']) > 1)
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Qual tabela usar</label>
+                                        <select wire:model.live="pdfTabelaEscolhida" class="w-full border-gray-300 rounded-md shadow-sm">
+                                            @foreach($pdfAnalise['tabelas'] as $tabelaOpcao)
+                                                <option value="{{ $tabelaOpcao['indice'] }}">
+                                                    Tabela {{ $tabelaOpcao['indice'] + 1 }} — {{ $tabelaOpcao['linhas_dados'] }} linhas — {{ implode(', ', array_slice($tabelaOpcao['cabecalho'] ?? [], 0, 4)) }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+
+                                <label class="inline-flex items-center text-sm text-gray-700">
+                                    <input type="checkbox" wire:model.live="pdfIgnorarTotais" class="rounded border-gray-300 text-blue-600">
+                                    <span class="ml-2">Ignorar linhas de total</span>
+                                </label>
+
+                                <div class="overflow-x-auto border border-gray-200 rounded-md">
+                                    <table class="min-w-full text-sm">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                @foreach(($tabelaPdf['cabecalho'] ?? []) as $coluna)
+                                                    <th class="px-3 py-2 text-left font-medium text-gray-700 whitespace-nowrap">{{ $coluna }}</th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach(($tabelaPdf['amostra'] ?? []) as $linha)
+                                                <tr class="border-t border-gray-100">
+                                                    @foreach($linha as $celula)
+                                                        <td class="px-3 py-2 text-gray-800 whitespace-nowrap">{{ $celula }}</td>
+                                                    @endforeach
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <button type="button" wire:click="confirmarTabelaPdf" class="w-full h-14 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium">
+                                    Continuar para mapeamento
+                                </button>
+                            </div>
+                            @endif
+                        @endif
                         @endif
                     @endif
                 </div>

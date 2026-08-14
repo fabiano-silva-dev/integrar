@@ -16,13 +16,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Services\ConversorExcelService;
+use App\Services\ExtratorTabelaPdfService;
 use App\Services\OperadoraStorage;
 
 class ImportadorPersonalizado extends Component
 {
     use WithFileUploads;
 
-    #[Rule('required|file|extensions:csv,xls,xlsx|max:10240')]
+    #[Rule('required|file|extensions:csv,xls,xlsx,pdf|max:10240')]
     public $arquivo;
 
     public $colunasArquivo = [];
@@ -67,6 +68,10 @@ class ImportadorPersonalizado extends Component
     public $totalLinhas = 0;
     public $linhasProcessadas = 0;
     public $processando = false; // Controla o estado de processamento
+
+    public $pdfAnalise = null;
+    public $pdfTabelaEscolhida = 0;
+    public $pdfIgnorarTotais = true;
 
     protected $listeners = ['atualizarPrevia'];
 
@@ -481,6 +486,8 @@ class ImportadorPersonalizado extends Component
             $this->colunasArquivo = [];
             $this->mapeamentoColunas = [];
             $this->dadosPrevia = [];
+            $this->pdfAnalise = null;
+            $this->pdfTabelaEscolhida = 0;
 
             $extensao = strtolower($this->arquivo->getClientOriginalExtension());
             $this->tipoArquivo = $extensao;
@@ -488,6 +495,11 @@ class ImportadorPersonalizado extends Component
             // Sugerir nome do layout baseado no nome do arquivo
             $nomeArquivo = pathinfo($this->arquivo->getClientOriginalName(), PATHINFO_FILENAME);
             $this->nomeLayout = $nomeArquivo;
+
+            if ($extensao === 'pdf') {
+                $this->analisarPdf();
+                return;
+            }
 
             // Detectar delimitador para CSV
             if ($extensao === 'csv') {
@@ -509,6 +521,110 @@ class ImportadorPersonalizado extends Component
         } finally {
             $this->processando = false; // Desativar indicador de processamento
         }
+    }
+
+    public function analisarPdf(): void
+    {
+        $this->processando = true;
+        try {
+            $extrator = new ExtratorTabelaPdfService();
+            $resultado = $extrator->analisar(
+                $this->arquivo->getRealPath(),
+                (bool) $this->pdfIgnorarTotais
+            );
+
+            if (!($resultado['sucesso'] ?? false)) {
+                $this->pdfAnalise = null;
+                session()->flash('error', $resultado['erro'] ?? 'Não foi possível identificar uma tabela neste PDF.');
+                return;
+            }
+
+            if (file_exists($resultado['arquivo_csv'] ?? '')) {
+                unlink($resultado['arquivo_csv']);
+            }
+
+            unset($resultado['arquivo_csv']);
+            $this->pdfAnalise = $resultado;
+            $this->pdfTabelaEscolhida = (int) ($resultado['tabela_escolhida'] ?? 0);
+            $this->delimitador = ',';
+            $this->temCabecalho = true;
+            $this->linhaCabecalho = 1;
+            $this->step = 1;
+        } finally {
+            $this->processando = false;
+        }
+    }
+
+    public function updatedPdfIgnorarTotais(): void
+    {
+        if ($this->tipoArquivo === 'pdf' && $this->arquivo) {
+            $this->analisarPdf();
+        }
+    }
+
+    public function updatedPdfTabelaEscolhida($value): void
+    {
+        $this->pdfTabelaEscolhida = (int) $value;
+    }
+
+    public function confirmarTabelaPdf(): void
+    {
+        if ($this->tipoArquivo !== 'pdf' || empty($this->pdfAnalise['tabelas'])) {
+            session()->flash('error', 'Analise o PDF antes de continuar.');
+            return;
+        }
+
+        $this->aplicarCabecalhoPdf();
+    }
+
+    private function aplicarCabecalhoPdf(): void
+    {
+        $resultado = $this->extrairPdfParaCsv();
+        if (!($resultado['sucesso'] ?? false)) {
+            session()->flash('error', $resultado['erro'] ?? 'Não foi possível extrair a tabela do PDF.');
+            return;
+        }
+
+        $handle = fopen($resultado['arquivo_csv'], 'r');
+        $cabecalho = $this->lerLinhaCabecalhoCsv($handle);
+        fclose($handle);
+
+        if ($this->temCabecalho && $cabecalho) {
+            $this->colunasArquivo = array_map('trim', $cabecalho);
+        } else {
+            $this->colunasArquivo = array_map(function ($i) {
+                return 'Coluna ' . ($i + 1);
+            }, range(0, count($cabecalho) - 1));
+        }
+
+        $this->carregarPreviaAutomaticaCsvConvertido($resultado['arquivo_csv']);
+
+        if (file_exists($resultado['arquivo_csv'])) {
+            unlink($resultado['arquivo_csv']);
+        }
+
+        $this->step = 2;
+    }
+
+    private function extrairPdfParaCsv(): array
+    {
+        $extrator = new ExtratorTabelaPdfService();
+
+        return $extrator->extrair(
+            $this->arquivo->getRealPath(),
+            (int) $this->pdfTabelaEscolhida,
+            (bool) $this->pdfIgnorarTotais
+        );
+    }
+
+    public function tabelaPdfSelecionada(): ?array
+    {
+        $tabelas = $this->pdfAnalise['tabelas'] ?? [];
+        if ($tabelas === []) {
+            return null;
+        }
+
+        return $tabelas[$this->pdfTabelaEscolhida] ?? $tabelas[0] ?? null;
     }
 
     public function detectarDelimitador()
@@ -554,9 +670,11 @@ class ImportadorPersonalizado extends Component
 
     public function lerCabecalho()
     {
-        $extensao = $this->tipoArquivo;
-        
-        // Usar o conversor Python para ambos CSV e Excel para garantir consistência
+        if ($this->tipoArquivo === 'pdf') {
+            $this->aplicarCabecalhoPdf();
+            return;
+        }
+
         $this->lerCabecalhoComConversor();
     }
     
@@ -838,6 +956,8 @@ class ImportadorPersonalizado extends Component
         $this->delimitador = $layout->delimitador ?? ',';
         $this->temCabecalho = $layout->tem_cabecalho;
         $this->linhaCabecalho = $layout->configuracoes['linha_cabecalho'] ?? ($layout->configuracoes['linhas_pular_cabecalho'] ?? 0) + 1;
+        $this->pdfTabelaEscolhida = (int) ($layout->configuracoes['pdf_indice_tabela'] ?? 0);
+        $this->pdfIgnorarTotais = (bool) ($layout->configuracoes['pdf_ignorar_totais'] ?? true);
 
         // Carregar mapeamento de colunas
         $this->mapeamentoColunas = $layout->getMapeamentoColunas();
@@ -992,6 +1112,8 @@ class ImportadorPersonalizado extends Component
         
         if ($extensao === 'csv') {
             $this->gerarPreviaCsv();
+        } elseif ($extensao === 'pdf') {
+            $this->gerarPreviaPdf();
         } else {
             $this->gerarPreviaExcel();
         }
@@ -1019,6 +1141,21 @@ class ImportadorPersonalizado extends Component
         }
 
         fclose($handle);
+    }
+
+    public function gerarPreviaPdf()
+    {
+        $resultado = $this->extrairPdfParaCsv();
+        if (!($resultado['sucesso'] ?? false)) {
+            session()->flash('error', $resultado['erro'] ?? 'Não foi possível extrair a tabela do PDF.');
+            return;
+        }
+
+        $this->gerarPreviaCsvConvertido($resultado['arquivo_csv']);
+
+        if (file_exists($resultado['arquivo_csv'])) {
+            unlink($resultado['arquivo_csv']);
+        }
     }
 
     public function gerarPreviaExcel()
@@ -1394,6 +1531,12 @@ class ImportadorPersonalizado extends Component
             'linha_cabecalho' => (int) $this->linhaCabecalho,
         ]);
 
+        if ($this->tipoArquivo === 'pdf') {
+            $configuracoes['pdf_estrategia'] = $this->pdfAnalise['estrategia'] ?? ($this->pdfAnalise['resumo']['estrategia'] ?? null);
+            $configuracoes['pdf_indice_tabela'] = (int) $this->pdfTabelaEscolhida;
+            $configuracoes['pdf_ignorar_totais'] = (bool) $this->pdfIgnorarTotais;
+        }
+
         if ($layoutExistente) {
             // Se existe, usar o layout existente e atualizar as colunas
             $layout = $layoutExistente;
@@ -1439,6 +1582,8 @@ class ImportadorPersonalizado extends Component
         
         if ($extensao === 'csv') {
             $linhasProcessadas = $this->processarCsvCompleto($importacao);
+        } elseif ($extensao === 'pdf') {
+            $linhasProcessadas = $this->processarPdfCompleto($importacao);
         } else {
             $linhasProcessadas = $this->processarExcelCompleto($importacao);
         }
@@ -1472,6 +1617,22 @@ class ImportadorPersonalizado extends Component
         }
 
         fclose($handle);
+        return $linhasProcessadas;
+    }
+
+    public function processarPdfCompleto($importacao)
+    {
+        $resultado = $this->extrairPdfParaCsv();
+        if (!($resultado['sucesso'] ?? false)) {
+            throw new \Exception($resultado['erro'] ?? 'Não foi possível extrair a tabela do PDF.');
+        }
+
+        $linhasProcessadas = $this->processarCsvConvertido($resultado['arquivo_csv'], $importacao);
+
+        if (file_exists($resultado['arquivo_csv'])) {
+            unlink($resultado['arquivo_csv']);
+        }
+
         return $linhasProcessadas;
     }
 
