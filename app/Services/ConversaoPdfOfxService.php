@@ -52,6 +52,9 @@ class ConversaoPdfOfxService
             'infinitepay' => [
                 'infinitepay' => 'InfinitePay (PDF)',
             ],
+            'dominio_conta_digital' => [
+                'dominio_conta_digital' => 'Domínio Conta Digital',
+            ],
         ];
     }
 
@@ -62,7 +65,7 @@ class ConversaoPdfOfxService
 
     public function layoutsComListagemLancamentos(): array
     {
-        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2', 'nubank', 'infinitepay'];
+        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2', 'nubank', 'infinitepay', 'dominio_conta_digital'];
     }
 
     public function layoutRequerArquivosAuxiliares(string $layout): bool
@@ -90,6 +93,7 @@ class ConversaoPdfOfxService
             'banrisul' => 'Banrisul',
             'nubank' => 'Nubank',
             'infinitepay' => 'InfinitePay',
+            'dominio_conta_digital' => 'Domínio Conta Digital',
         ];
     }
 

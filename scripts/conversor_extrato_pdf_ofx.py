@@ -68,6 +68,10 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_infinitepay_pdf_ofx.py',
     },
+    'dominio_conta_digital': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_dominio_pdf_ofx.py',
+    },
 }
 
 
