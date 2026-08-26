@@ -218,7 +218,7 @@
                                                 <button type="button"
                                                         wire:click="abrirSeletor({{ $empresa->id }})"
                                                         wire:loading.attr="disabled"
-                                                        wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura"
+                                                        wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
                                                         class="text-indigo-600 font-semibold disabled:opacity-50 disabled:pointer-events-none">
                                                     Escolher pasta
                                                 </button>
@@ -226,9 +226,16 @@
                                                     <button type="button"
                                                             wire:click="criarEstrutura({{ $empresa->id }})"
                                                             wire:loading.attr="disabled"
-                                                            wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura"
+                                                            wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
                                                             class="text-gray-700 disabled:opacity-50 disabled:pointer-events-none">
                                                         Criar pastas do ano
+                                                    </button>
+                                                    <button type="button"
+                                                            wire:click="liberarLinks({{ $empresa->id }})"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
+                                                            class="text-gray-700 disabled:opacity-50 disabled:pointer-events-none">
+                                                        Liberar links
                                                     </button>
                                                 @endif
                                             </td>
@@ -323,7 +330,7 @@
     @endif
 
     <div wire:loading
-         wire:target="abrirSeletor,confirmarNomePasta,entrarPasta,voltarPasta,confirmarPasta,criarEVincular,criarEstrutura"
+         wire:target="abrirSeletor,confirmarNomePasta,entrarPasta,voltarPasta,confirmarPasta,criarEVincular,criarEstrutura,liberarLinks"
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
             <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>

@@ -291,7 +291,36 @@ class ContaGoogleDrive extends Component
 
         try {
             $drive->garantirEstruturaAno($conta, $empresa, (int) now()->format('Y'));
-            session()->flash('message', 'Estrutura do ano '.now()->format('Y').' criada no Drive.');
+            $drive->liberarLinksDaEmpresa($conta, $empresa);
+            session()->flash('message', 'Estrutura do ano '.now()->format('Y').' criada. Pastas e arquivos desta empresa abrem pelo link.');
+        } catch (\Throwable $exception) {
+            $this->erro = $exception->getMessage();
+        }
+    }
+
+    public function liberarLinks(int $empresaId, GoogleDriveService $drive): void
+    {
+        $this->garantirAcessoDocumentos();
+        $this->erro = null;
+
+        $empresa = Empresa::query()->find($empresaId);
+        $conta = ContaGoogle::daOperadora();
+
+        if ($empresa === null || $conta === null || ! $conta->conectada()) {
+            $this->erro = 'Conecte a conta Google e defina a pasta raiz.';
+
+            return;
+        }
+
+        if (! $this->empresaComGrupoMonitorado((int) $empresa->id)) {
+            $this->erro = 'Só empresas com grupo monitorado podem ter pasta no Drive.';
+
+            return;
+        }
+
+        try {
+            $drive->liberarLinksDaEmpresa($conta, $empresa);
+            session()->flash('message', 'Links das pastas e arquivos de '.$empresa->nome.' liberados para abertura.');
         } catch (\Throwable $exception) {
             $this->erro = $exception->getMessage();
         }

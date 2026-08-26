@@ -6,6 +6,7 @@ use App\Enums\Documentos\StatusContaGoogle;
 use App\Enums\Documentos\TipoDocumentoRecebido;
 use App\Models\Documentos\ContaGoogle;
 use App\Models\Documentos\ConfiguracaoGoogle;
+use App\Models\Documentos\DocumentoRecebido;
 use App\Models\Documentos\EmpresaPastaDrive;
 use App\Models\Empresa;
 use App\Services\OperadoraContext;
@@ -17,6 +18,10 @@ use Illuminate\Support\Facades\Log;
 
 class GoogleDriveService
 {
+    public function __construct(
+        private readonly AcessoLinkDrive $acessoLink,
+    ) {}
+
     public function configurado(?int $operadoraId = null): bool
     {
         if (! class_exists(GoogleClient::class)) {
@@ -236,6 +241,8 @@ class GoogleDriveService
             $this->webViewLinkPasta($conta, $folderId),
         );
 
+        $this->tornarAcessivelPorLink($conta, $folderId);
+
         try {
             $this->garantirEstruturaAno($conta, $empresa, (int) now()->format('Y'));
         } catch (\Throwable $exception) {
@@ -270,6 +277,7 @@ class GoogleDriveService
                 'supportsAllDrives' => true,
             ]);
             $id = (string) $criada->getId();
+            $this->tornarAcessivelPorLink($conta, $id, $drive);
         }
 
         return $this->definirPastaRaiz($empresa, $conta, $id, $nome);
@@ -340,6 +348,8 @@ class GoogleDriveService
             'supportsAllDrives' => true,
         ]);
 
+        $this->tornarAcessivelPorLink($conta, (string) $criado->getId(), $drive);
+
         $link = $criado->getWebViewLink() ?: EmpresaPastaDrive::urlArquivo((string) $criado->getId());
 
         return [
@@ -402,6 +412,8 @@ class GoogleDriveService
             $id = (string) $criada->getId();
             $link = $criada->getWebViewLink();
         }
+
+        $this->tornarAcessivelPorLink($conta, $id, $drive);
 
         return $this->persistirPasta(
             $empresa,
@@ -478,6 +490,43 @@ class GoogleDriveService
                 'google_folder_nome' => $nome,
                 'google_web_link' => $link,
             ],
+        );
+    }
+
+    /**
+     * Libera pastas e arquivos já enviados desta empresa (quem tem o link consegue abrir).
+     */
+    public function liberarLinksDaEmpresa(ContaGoogle $conta, Empresa $empresa): void
+    {
+        $drive = new Drive($this->clienteDaConta($conta));
+
+        $pastas = EmpresaPastaDrive::withoutGlobalScope('operadora')
+            ->where('empresa_id', $empresa->id)
+            ->pluck('google_folder_id');
+
+        foreach ($pastas as $folderId) {
+            $this->tornarAcessivelPorLink($conta, (string) $folderId, $drive);
+        }
+
+        $arquivos = DocumentoRecebido::withoutGlobalScope('operadora')
+            ->where('empresa_id', $empresa->id)
+            ->whereNotNull('drive_file_id')
+            ->where('drive_file_id', '!=', '')
+            ->pluck('drive_file_id');
+
+        foreach ($arquivos as $fileId) {
+            $this->tornarAcessivelPorLink($conta, (string) $fileId, $drive);
+        }
+    }
+
+    private function tornarAcessivelPorLink(ContaGoogle $conta, string $fileId, ?Drive $drive = null): void
+    {
+        $drive ??= new Drive($this->clienteDaConta($conta));
+
+        $this->acessoLink->garantir(
+            $drive,
+            $fileId,
+            $this->acessoLink->dominioWorkspace($conta->google_email),
         );
     }
 
