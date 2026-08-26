@@ -274,6 +274,14 @@ O script roda composer, build de assets (requer Node.js 20+ no servidor),
 migrations, limpeza de cache e reload dos serviços. Ver opções em
 `script-manutencao/README.md`.
 
+Na **primeira vez** que o módulo Documentos (WhatsApp, Drive e IA) for ao ar
+neste servidor:
+
+```bash
+sudo ./preparar-documentos-producao.sh --yes
+./atualizar-producao.sh
+```
+
 ## 🔧 Comandos Úteis
 
 ### Acessar o container da aplicação

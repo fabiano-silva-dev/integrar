@@ -267,7 +267,7 @@ reload_services() {
         run_as_root systemctl reload php8.3-fpm || warn "Falha ao recarregar php8.3-fpm"
     fi
 
-    for unit in integrar-queue integrar-schedule; do
+    for unit in integrar-queue integrar-queue-automacoes integrar-schedule; do
         if run_as_root systemctl list-unit-files "${unit}.service" 2>/dev/null | grep -q "${unit}.service"; then
             if run_as_root systemctl is-active --quiet "$unit" 2>/dev/null; then
                 log "Reiniciando $unit..."

@@ -70,6 +70,22 @@ Variáveis extras no `.env` (ver `.env.example`): `NFE_FAZENDA_ENTRY_URL`, `NFE_
 
 Teste do script: `tests/scripts/test_instalar_deps_automacao_fiscal.sh`
 
+## Módulo Documentos (WhatsApp, Drive, IA)
+
+Instalador **idempotente** de requisitos de produção nativa (não substitui o `git pull` + `./atualizar-producao.sh`).
+
+```bash
+sudo ./preparar-documentos-producao.sh --yes
+# ou
+sudo ./script-manutencao/preparar-documentos-producao.sh --dry-run --yes
+```
+
+Instala `poppler-utils` (`pdftotext`), confere extensões PHP, sobe a **Evolution em Docker** (porta só em `127.0.0.1`, igual ao EfiConnect), inclui chaves no `.env` se faltarem (sem gravar secrets), garante a unit `integrar-queue-automacoes` com a fila `documentos` (timeout 900s) e testa alcance das APIs.
+
+Depois: `./atualizar-producao.sh` e configurar WhatsApp, Drive e IA na tela.
+
+Teste do script: `tests/scripts/test_preparar_documentos_producao.sh`
+
 ## Backup e restauração
 
 | Script | Descrição |
@@ -134,4 +150,5 @@ Teste do script: `tests/scripts/test_instalar_deps_automacao_fiscal.sh`
 | `verificar-usuarios-ativos.sh` | Atalho — checa sessões/jobs antes do deploy |
 | `instalar-nativo-producao.sh` | Atalho para instalação |
 | `instalar-deps-automacao-fiscal.sh` | Atalho — deps do runner (Node/Playwright) |
+| `preparar-documentos-producao.sh` | Atalho — requisitos do módulo Documentos (pdftotext, fila, .env) |
 | `wait-for-it.sh` | Montado no `docker-compose.yml` |

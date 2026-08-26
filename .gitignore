@@ -31,6 +31,12 @@ Thumbs.db
 *~
 ff
 
+# Evolution API (chave real só no servidor / máquina local)
+/docker/evolution.env
+
+# Bytecode Python gerado pelos conversores
+scripts/**/__pycache__/
+
 # Amostras locais de extratos (binários / dados reais) — catálogo versionado
 /docs/extratos/**
 !/docs/extratos/README.md

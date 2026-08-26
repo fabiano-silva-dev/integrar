@@ -317,7 +317,7 @@ Group=www-data
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=-/etc/integrar/automacao-fiscal.env
 Environment=PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH
-ExecStart=$php_bin $PROJECT_DIR/artisan queue:work database --queue=automacoes,default --sleep=3 --tries=3 --timeout=900 --max-time=3600
+ExecStart=$php_bin $PROJECT_DIR/artisan queue:work database --queue=automacoes,documentos,default --sleep=3 --tries=3 --timeout=900 --max-time=3600
 Restart=always
 RestartSec=5
 TimeoutStopSec=960
