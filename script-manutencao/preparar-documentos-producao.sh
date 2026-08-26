@@ -44,7 +44,8 @@ Prepara o servidor nativo (Apache + PHP-FPM) para receber e arquivar documentos:
 
   - poppler-utils (pdftotext — PDF com texto, antes da IA)
   - extensões PHP usadas nas APIs (curl, xml, mbstring, zip)
-  - Evolution API em Docker (perfil evolution), porta só em 127.0.0.1 — igual ao EfiConnect
+  - Evolution API em Docker isolado (docker-compose.evolution.yml), porta só em 127.0.0.1
+    Não sobe app, MySQL nem phpMyAdmin — a aplicação nativa (Apache/PHP/MySQL) não é tocada
   - chaves no .env (só se ainda não existirem; não grava secrets)
   - unit systemd ${QUEUE_UNIT} escutando a fila documentos (timeout 900s)
   - pastas de storage do módulo
@@ -277,11 +278,20 @@ unit_execstart() {
 
 write_queue_unit() {
     local unit_path="/etc/systemd/system/${QUEUE_UNIT}.service"
-    local php_bin
+    local php_bin queue_user queue_group existing="/etc/systemd/system/integrar-queue.service"
     php_bin="$(command -v php || echo /usr/bin/php)"
+    queue_user="$APP_USER"
+    queue_group="$APP_GROUP"
+    if [[ -f "$existing" ]]; then
+        queue_user="$(grep -m1 '^User=' "$existing" | cut -d= -f2- || true)"
+        queue_group="$(grep -m1 '^Group=' "$existing" | cut -d= -f2- || true)"
+        [[ -n "$queue_user" ]] || queue_user="$APP_USER"
+        [[ -n "$queue_group" ]] || queue_group="$queue_user"
+        info "Nova unit $QUEUE_UNIT usará o mesmo usuário do worker atual ($queue_user)"
+    fi
 
     if $DRY_RUN; then
-        printf '[dry-run] escrever %s (fila automacoes,documentos,default timeout 900)\n' "$unit_path"
+        printf '[dry-run] escrever %s (fila automacoes,documentos,default timeout 900 user=%s)\n' "$unit_path" "$queue_user"
         return 0
     fi
 
@@ -292,8 +302,8 @@ After=network.target mysql.service
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=$queue_user
+Group=$queue_group
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=-/etc/integrar/automacao-fiscal.env
 ExecStart=$php_bin $PROJECT_DIR/artisan queue:work database --queue=automacoes,documentos,default --sleep=3 --tries=3 --timeout=900 --max-time=3600
@@ -344,7 +354,8 @@ prepare_systemd() {
 
     local unit_path="/etc/systemd/system/${QUEUE_UNIT}.service"
 
-    info "Configurando worker da fila documentos ($QUEUE_UNIT)..."
+    info "Configurando worker extra da fila documentos ($QUEUE_UNIT)..."
+    info "Não altera integrar-queue.service nem integrar-scheduler.service."
     run mkdir -p /etc/integrar
 
     if [[ -f "$unit_path" ]]; then
@@ -369,9 +380,31 @@ prepare_systemd() {
     success "Worker $QUEUE_UNIT ativo com fila documentos"
 }
 
+COMPOSE_CMD=()
+EVOLUTION_COMPOSE_PROJECT="integrar-evolution"
+
+evolution_compose_file() {
+    printf '%s/docker-compose.evolution.yml' "$PROJECT_DIR"
+}
+
+compose_disponivel() {
+    local out
+    out="$(docker compose version 2>/dev/null || true)"
+    if grep -qi compose <<<"$out"; then
+        COMPOSE_CMD=(docker compose)
+        return 0
+    fi
+    if command -v docker-compose >/dev/null 2>&1; then
+        COMPOSE_CMD=(docker-compose)
+        return 0
+    fi
+    COMPOSE_CMD=()
+    return 1
+}
+
 ensure_docker() {
     if command -v docker >/dev/null 2>&1; then
-        success "Docker já instalado"
+        success "Docker já instalado (o motor não será reinstalado nem atualizado)"
         return 0
     fi
 
@@ -383,6 +416,90 @@ ensure_docker() {
     run_shell "curl -fsSL https://get.docker.com | sh"
     run usermod -aG docker "$APP_USER" || true
     command -v docker >/dev/null 2>&1 || die "Docker não disponível após a instalação."
+}
+
+ensure_compose() {
+    if compose_disponivel; then
+        success "Compose: ${COMPOSE_CMD[*]} (sem --profile, arquivo isolado da Evolution)"
+        return 0
+    fi
+
+    info "Instalando só o pacote Compose — não mexo no motor Docker nem em containers existentes."
+    if $DRY_RUN; then
+        COMPOSE_CMD=(docker-compose)
+        printf '[dry-run] apt-get install -y docker-compose\n'
+        return 0
+    fi
+
+    apt-get install -y docker-compose || true
+    compose_disponivel || die "Compose ausente. Instale sem atualizar o Docker: sudo apt-get install docker-compose"
+    success "Compose: ${COMPOSE_CMD[*]}"
+}
+
+assert_evolution_compose_seguro() {
+    local file
+    file="$(evolution_compose_file)"
+    [[ -f "$file" ]] || die "Falta $file — recusado subir o docker-compose.yml da aplicação."
+
+    grep -q 'integrar-evolution-api' "$file" || die "$file não define integrar-evolution-api"
+
+    if grep -qE 'container_name:[[:space:]]*(integrar-app|integrar-db|integrar-phpmyadmin)' "$file"; then
+        die "$file mistura a stack da aplicação. Abortado para não afetar a produção nativa."
+    fi
+    if grep -qE 'image:[[:space:]]*mysql:' "$file"; then
+        die "$file contém MySQL. Abortado."
+    fi
+    if grep -qiE 'image:[[:space:]].*phpmyadmin|container_name:[[:space:]]*integrar-phpmyadmin' "$file"; then
+        die "$file contém phpMyAdmin. Abortado."
+    fi
+    if grep -qE '^[[:space:]]+profiles:' "$file"; then
+        die "$file usa profiles (Compose antigo falha com --profile). Use o arquivo isolado."
+    fi
+}
+
+avisar_containers_intocados() {
+    local nomes
+    nomes="$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^(integrar-app|integrar-db|integrar-phpmyadmin)$' || true)"
+    if [[ -n "$nomes" ]]; then
+        warn "Containers da stack Laravel/MySQL existem e NÃO serão alterados: ${nomes//$'\n'/ }"
+    fi
+}
+
+porta_evolution_ok() {
+    local port="$1"
+    local ocupada=1
+
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | grep -qE ":${port}[[:space:]]" && ocupada=0
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -ltn 2>/dev/null | grep -qE ":${port}[[:space:]]" && ocupada=0
+    else
+        return 0
+    fi
+
+    if (( ocupada == 1 )); then
+        return 0
+    fi
+
+    if docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -q "integrar-evolution-api"; then
+        success "Porta ${port} já é da Evolution — só confirmo o container"
+        return 0
+    fi
+
+    die "Porta ${port} já está em uso. Não vou ocupá-la. Ajuste EVOLUTION_PORT no .env para uma porta livre só em 127.0.0.1."
+}
+
+run_evolution_compose() {
+    [[ ${#COMPOSE_CMD[@]} -gt 0 ]] || die "Compose não detectado"
+    (
+        cd "$PROJECT_DIR"
+        env -u COMPOSE_FILE -u COMPOSE_PROFILES -u COMPOSE_PROJECT_NAME \
+            EVOLUTION_PORT="${EVOLUTION_PORT_RUNTIME:?}" \
+            "${COMPOSE_CMD[@]}" \
+            -p "$EVOLUTION_COMPOSE_PROJECT" \
+            -f docker-compose.evolution.yml \
+            "$@"
+    )
 }
 
 ensure_evolution_env() {
@@ -416,7 +533,8 @@ ensure_evolution_env() {
     else
         printf '\nSERVER_URL=http://127.0.0.1:%s\n' "$port" >>"$evo_env"
     fi
-    chmod 600 "$evo_env" || true
+    chmod 640 "$evo_env" || true
+    chown "$APP_USER:$APP_GROUP" "$evo_env" || true
 }
 
 sync_evolution_apikey() {
@@ -448,21 +566,27 @@ install_evolution() {
     local port
     port="$(env_get EVOLUTION_PORT)"
     [[ -n "$port" ]] || port="$EVOLUTION_PORT_DEFAULT"
+    EVOLUTION_PORT_RUNTIME="$port"
+    export EVOLUTION_PORT_RUNTIME
 
-    info "Subindo Evolution API (Docker, perfil evolution, 127.0.0.1:${port})..."
+    info "Subindo SÓ a Evolution (docker-compose.evolution.yml). Apache, MySQL nativo, PHP-FPM e workers atuais não são tocados."
     ensure_docker
+    ensure_compose
+    assert_evolution_compose_seguro
     ensure_evolution_env
+    avisar_containers_intocados
+    porta_evolution_ok "$port"
 
     if $DRY_RUN; then
-        printf '[dry-run] docker compose --profile evolution up -d (EVOLUTION_PORT=%s)\n' "$port"
+        printf '[dry-run] %s -p %s -f docker-compose.evolution.yml up -d (porta 127.0.0.1:%s)\n' \
+            "${COMPOSE_CMD[*]}" "$EVOLUTION_COMPOSE_PROJECT" "$port"
         success "Evolution (dry-run)"
         return 0
     fi
 
-    (
-        cd "$PROJECT_DIR"
-        EVOLUTION_PORT="$port" docker compose --profile evolution up -d
-    ) || die "Falha ao subir o perfil evolution. Confira docker compose ps."
+    if ! run_evolution_compose up -d; then
+        die "Falha ao subir a Evolution isolada. A stack nativa não foi alterada. Confira: ${COMPOSE_CMD[*]} -p ${EVOLUTION_COMPOSE_PROJECT} -f docker-compose.evolution.yml ps"
+    fi
 
     sync_evolution_apikey
     success "Evolution no ar em http://127.0.0.1:${port} (não exponha essa porta no UFW)"
@@ -543,7 +667,7 @@ Próximos passos:
        EVOLUTION_URL_BASE=http://127.0.0.1:${port}
        EVOLUTION_API_KEY=<mesmo AUTHENTICATION_API_KEY de docker/evolution.env>
        EVOLUTION_WEBHOOK_URL=${webhook:-https://SEU_DOMINIO/webhooks/evolution}
-       docker compose --profile evolution ps
+       docker-compose -p integrar-evolution -f docker-compose.evolution.yml ps
   3. No Google Cloud, cadastre o redirect:
        ${app_url%/}/oauth/google/callback
   4. Status da fila:

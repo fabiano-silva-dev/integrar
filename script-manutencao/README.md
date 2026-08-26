@@ -80,7 +80,7 @@ sudo ./preparar-documentos-producao.sh --yes
 sudo ./script-manutencao/preparar-documentos-producao.sh --dry-run --yes
 ```
 
-Instala `poppler-utils` (`pdftotext`), confere extensões PHP, sobe a **Evolution em Docker** (porta só em `127.0.0.1`, igual ao EfiConnect), inclui chaves no `.env` se faltarem (sem gravar secrets), garante a unit `integrar-queue-automacoes` com a fila `documentos` (timeout 900s) e testa alcance das APIs.
+Instala `poppler-utils` (`pdftotext`), confere extensões PHP, sobe a **Evolution em Docker isolado** (`docker-compose.evolution.yml`, porta só em `127.0.0.1` — não sobe app/MySQL/phpMyAdmin), inclui chaves no `.env` se faltarem (sem gravar secrets), garante a unit extra `integrar-queue-automacoes` com a fila `documentos` (timeout 900s) **sem alterar** o worker/scheduler atuais, e testa alcance das APIs.
 
 Depois: `./atualizar-producao.sh` e configurar WhatsApp, Drive e IA na tela.
 
