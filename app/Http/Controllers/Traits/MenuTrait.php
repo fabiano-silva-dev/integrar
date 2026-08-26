@@ -176,6 +176,20 @@ trait MenuTrait
                 ],
             ],
             [
+                'id' => 'documentos',
+                'name' => 'Documentos',
+                'icon' => 'folder',
+                'items' => [
+                    [
+                        'name' => 'Arquivos',
+                        'icon' => 'folder',
+                        'url' => route('documentos'),
+                        'active' => request()->routeIs('documentos'),
+                        'title' => 'Arquivos das empresas no Google Drive',
+                    ],
+                ],
+            ],
+            [
                 'id' => 'exportacao',
                 'name' => 'Exportação',
                 'icon' => 'export',
@@ -211,7 +225,20 @@ trait MenuTrait
                         'name' => 'Configurações',
                         'url' => route('configuracoes.automacao-fiscal'),
                         'icon' => 'cog',
-                        'active' => request()->routeIs('configuracoes.*'),
+                        'active' => request()->routeIs('configuracoes.automacao-fiscal*'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
+                    [
+                        'name' => 'WhatsApp e Drive',
+                        'url' => route('documentos.whatsapp'),
+                        'icon' => 'folder',
+                        'active' => request()->routeIs('documentos.whatsapp')
+                            || request()->routeIs('documentos.grupos')
+                            || request()->routeIs('documentos.drive')
+                            || request()->routeIs('documentos.ia')
+                            || request()->routeIs('documentos.recebidos')
+                            || request()->routeIs('oauth.google.*'),
+                        'title' => 'Configurar recebimento de documentos',
                         'roles' => ['admin', 'gerente'],
                     ],
                     [

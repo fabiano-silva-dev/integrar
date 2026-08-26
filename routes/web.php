@@ -97,6 +97,23 @@ Route::middleware(['auth'])->group(function () {
     // Históricos padrão por layout (apenas admin)
     Route::get('/historicos-padrao-layout', App\Livewire\GerenciadorHistoricosPadraoLayout::class)->name('historicos-padrao-layout');
 
+    Route::get('/documentos', App\Livewire\Documentos\ExploradorDocumentos::class)->name('documentos');
+
+    Route::middleware('role:admin,gerente')->group(function () {
+        Route::redirect('/documentos/whatsapp', '/configuracoes/documentos/whatsapp');
+        Route::redirect('/documentos/grupos', '/configuracoes/documentos/grupos');
+        Route::redirect('/documentos/drive', '/configuracoes/documentos/drive');
+        Route::redirect('/documentos/ia', '/configuracoes/documentos/ia');
+        Route::redirect('/documentos/recebidos', '/configuracoes/documentos/recebidos');
+        Route::get('/configuracoes/documentos/whatsapp', App\Livewire\Documentos\ConexaoWhatsapp::class)->name('documentos.whatsapp');
+        Route::get('/configuracoes/documentos/grupos', App\Livewire\Documentos\GruposWhatsapp::class)->name('documentos.grupos');
+        Route::get('/configuracoes/documentos/drive', App\Livewire\Documentos\ContaGoogleDrive::class)->name('documentos.drive');
+        Route::get('/configuracoes/documentos/ia', App\Livewire\Documentos\ConfiguracaoIaDocumentos::class)->name('documentos.ia');
+        Route::get('/configuracoes/documentos/recebidos', App\Livewire\Documentos\DocumentosRecebidos::class)->name('documentos.recebidos');
+        Route::get('/oauth/google/redirect', [App\Http\Controllers\OAuth\GoogleOAuthController::class, 'redirect'])->name('oauth.google.redirect');
+        Route::get('/oauth/google/callback', [App\Http\Controllers\OAuth\GoogleOAuthController::class, 'callback'])->name('oauth.google.callback');
+    });
+
     // Trocar empresa no seletor global (recarrega a página para vigorar nos campos)
     Route::get('/trocar-empresa/{id}', function (string $id) {
         $empresa = \App\Models\Empresa::find($id);
@@ -158,6 +175,9 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+Route::post('/webhooks/evolution', App\Http\Controllers\Webhooks\WebhookEvolutionController::class)
+    ->name('webhooks.evolution');
 
 // Fallback: redirecionar rotas inexistentes para home (apenas em produção)
 if (app()->environment('production')) {

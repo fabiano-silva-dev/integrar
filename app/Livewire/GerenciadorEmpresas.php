@@ -10,9 +10,12 @@ use App\Models\EmpresaIntegracao;
 use App\Models\PortalIntegracao;
 use App\Rules\CnpjValido;
 use App\Models\EmpresaIntegracaoRecurso;
+use App\Models\Documentos\EmpresaPastaDrive;
+use App\Models\Documentos\GrupoWhatsapp;
 use App\Services\AutomacaoFiscal\AutomacaoExecucaoService;
 use App\Services\AutomacaoFiscal\CadastroEmpresaPorCertificadoService;
 use App\Services\AutomacaoFiscal\EmpresaIntegracaoService;
+use App\Services\AutomacaoFiscal\FilaAutomacoesStatus;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -293,6 +296,13 @@ class GerenciadorEmpresas extends Component
             return;
         }
 
+        $mensagemFila = app(FilaAutomacoesStatus::class)->mensagemBloqueioDesenvolvimento();
+        if ($mensagemFila !== null) {
+            session()->flash('error', $mensagemFila);
+
+            return;
+        }
+
         $vinculo = EmpresaIntegracaoRecurso::query()
             ->whereHas('empresaIntegracao', fn ($q) => $q->where('empresa_id', $this->empresa_id))
             ->where('portal_recurso_id', $portalRecursoId)
@@ -503,6 +513,8 @@ class GerenciadorEmpresas extends Component
             ->get();
 
         $execucoes = collect();
+        $gruposWhatsapp = collect();
+        $pastaDriveRaiz = null;
         if ($this->modo_edicao && $this->empresa_id) {
             $execucoes = AutomacaoExecucao::query()
                 ->with(['portalRecurso.portal'])
@@ -510,6 +522,11 @@ class GerenciadorEmpresas extends Component
                 ->orderByDesc('id')
                 ->limit(20)
                 ->get();
+            $gruposWhatsapp = GrupoWhatsapp::query()
+                ->where('empresa_id', $this->empresa_id)
+                ->orderBy('nome')
+                ->get();
+            $pastaDriveRaiz = EmpresaPastaDrive::raizDaEmpresa((int) $this->empresa_id);
         }
 
         return view('livewire.gerenciador-empresas', [
@@ -518,6 +535,8 @@ class GerenciadorEmpresas extends Component
             'agendas' => $agendas,
             'certificados' => $certificados,
             'execucoes' => $execucoes,
+            'gruposWhatsapp' => $gruposWhatsapp,
+            'pastaDriveRaiz' => $pastaDriveRaiz,
             'precisaSelecionarEscritorio' => OperadoraContext::superAdminPrecisaSelecionarEscritorio(),
         ]);
     }

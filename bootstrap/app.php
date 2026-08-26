@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/evolution',
+        ]);
+
         $middleware->web(append: [
             \App\Http\Middleware\SetOperadoraContext::class,
         ]);

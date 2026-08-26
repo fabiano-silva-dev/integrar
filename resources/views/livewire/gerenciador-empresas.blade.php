@@ -72,6 +72,7 @@
                             'certificados' => 'Certificados',
                             'agendamentos' => 'Agendamentos',
                             'historico' => 'Histórico de execuções',
+                            'documentos' => 'Documentos',
                         ] as $key => $label)
                             <button type="button" wire:click="setAba('{{ $key }}')"
                                     class="px-3 py-2 text-sm rounded-lg {{ $aba === $key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">
@@ -305,6 +306,37 @@
                                     </tbody>
                                 </table>
                             </div>
+                        @elseif ($aba === 'documentos')
+                            <p class="text-sm text-gray-600 mb-4">
+                                Pasta no Google Drive e grupos WhatsApp desta empresa.
+                                Configure em
+                                <a href="{{ route('documentos.drive') }}" class="text-indigo-600 underline">Configurações → Google Drive</a>
+                                e
+                                <a href="{{ route('documentos.grupos') }}" class="text-indigo-600 underline">Configurações → Grupos</a>.
+                            </p>
+                            <div class="mb-4 border rounded-lg p-4">
+                                <h3 class="text-sm font-semibold text-gray-900 mb-1">Pasta raiz no Drive</h3>
+                                @if ($pastaDriveRaiz)
+                                    <a href="{{ $pastaDriveRaiz->urlDrive() }}" target="_blank" class="text-indigo-600 text-sm">
+                                        {{ $pastaDriveRaiz->google_folder_nome ?: $pastaDriveRaiz->google_folder_id }}
+                                    </a>
+                                @else
+                                    <p class="text-sm text-gray-500">Não definida.</p>
+                                @endif
+                            </div>
+                            <h3 class="text-sm font-semibold text-gray-900 mb-2">Grupos WhatsApp</h3>
+                            <ul class="divide-y divide-gray-200 border rounded-lg">
+                                @forelse ($gruposWhatsapp as $grupo)
+                                    <li class="px-4 py-3 text-sm flex justify-between gap-3">
+                                        <span>{{ $grupo->nome ?: $grupo->jid }}</span>
+                                        <span class="text-xs {{ $grupo->monitorar ? 'text-green-700' : 'text-gray-500' }}">
+                                            {{ $grupo->monitorar ? 'Monitorando' : 'Parado' }}
+                                        </span>
+                                    </li>
+                                @empty
+                                    <li class="px-4 py-3 text-sm text-gray-500">Nenhum grupo vinculado a esta empresa.</li>
+                                @endforelse
+                            </ul>
                         @endif
                     </div>
                 </div>

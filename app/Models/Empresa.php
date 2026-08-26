@@ -23,6 +23,7 @@ class Empresa extends Model
         'municipio',
         'codigo_sistema',
         'codigo_conta_banco',
+        'pasta_drive_nome',
         'ativo',
         'empresa_operadora_id',
     ];
@@ -54,5 +55,15 @@ class Empresa extends Model
     public function certificadosDigitais(): HasMany
     {
         return $this->hasMany(CertificadoDigital::class);
+    }
+
+    public function gruposWhatsapp(): HasMany
+    {
+        return $this->hasMany(\App\Models\Documentos\GrupoWhatsapp::class);
+    }
+
+    public function pastasDrive(): HasMany
+    {
+        return $this->hasMany(\App\Models\Documentos\EmpresaPastaDrive::class);
     }
 }

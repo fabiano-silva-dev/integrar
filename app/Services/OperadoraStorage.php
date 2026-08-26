@@ -72,6 +72,16 @@ class OperadoraStorage
         return Storage::path(self::ensureDirectory('automacao-fiscal/importacoes-empresas', $operadoraId));
     }
 
+    public static function documentosInboxDirectory(?int $operadoraId = null): string
+    {
+        return Storage::path(self::ensureDirectory('documentos/inbox', $operadoraId));
+    }
+
+    public static function documentosArquivadosDirectory(?int $operadoraId = null): string
+    {
+        return Storage::path(self::ensureDirectory('documentos/arquivados', $operadoraId));
+    }
+
     public static function absolutePath(string $subdir, string $filename, ?int $operadoraId = null): string
     {
         return Storage::path(self::diskPath($subdir, $operadoraId) . '/' . basename($filename));
