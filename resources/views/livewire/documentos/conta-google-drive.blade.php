@@ -3,7 +3,7 @@
         <div class="bg-white shadow-xl rounded-xl overflow-hidden">
             <div class="p-6 border-b border-gray-200">
                 <h1 class="text-2xl font-bold text-gray-900">Configurações — Documentos</h1>
-                <p class="text-sm text-gray-600 mt-1">Autorize o Drive do escritório e indique a pasta de cada empresa.</p>
+                <p class="text-sm text-gray-600 mt-1">Autorize o Drive do escritório e crie a pasta de cada empresa.</p>
             </div>
             <div class="p-6">
                 <x-documentos-nav ativo="drive" />
@@ -182,7 +182,7 @@
 
                         <h2 class="text-xl font-semibold text-gray-900 mb-1">3. Pasta de cada empresa</h2>
                         <p class="text-sm text-gray-500 mb-4">
-                            Só as empresas com grupo monitorado. Escolha a pasta raiz no Drive; o sistema cria as pastas do ano e do tipo de documento.
+                            Empresas com grupo monitorado. Crie a pasta no Drive.
                         </p>
 
                         <div class="flex justify-end mb-3">
@@ -196,8 +196,8 @@
                                 <thead class="bg-gray-50 text-gray-600">
                                     <tr>
                                         <th class="text-left px-3 py-2">Empresa</th>
-                                        <th class="text-left px-3 py-2">Pasta raiz</th>
-                                        <th class="text-left px-3 py-2">Ações</th>
+                                        <th class="text-left px-3 py-2">Pasta no Drive</th>
+                                        <th class="text-left px-3 py-2"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -211,31 +211,15 @@
                                                         {{ $raiz->google_folder_nome ?: $raiz->google_folder_id }}
                                                     </a>
                                                 @else
-                                                    <span class="text-gray-400">Escolha a pasta</span>
+                                                    <span class="text-gray-400">Ainda sem pasta</span>
                                                 @endif
                                             </td>
-                                            <td class="px-3 py-2 space-x-2">
-                                                <button type="button"
-                                                        wire:click="abrirSeletor({{ $empresa->id }})"
-                                                        wire:loading.attr="disabled"
-                                                        wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
-                                                        class="text-indigo-600 font-semibold disabled:opacity-50 disabled:pointer-events-none">
-                                                    Escolher pasta
-                                                </button>
-                                                @if ($raiz)
+                                            <td class="px-3 py-2 text-right">
+                                                @if (! $raiz)
                                                     <button type="button"
-                                                            wire:click="criarEstrutura({{ $empresa->id }})"
-                                                            wire:loading.attr="disabled"
-                                                            wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
-                                                            class="text-gray-700 disabled:opacity-50 disabled:pointer-events-none">
-                                                        Criar pastas do ano
-                                                    </button>
-                                                    <button type="button"
-                                                            wire:click="liberarLinks({{ $empresa->id }})"
-                                                            wire:loading.attr="disabled"
-                                                            wire:target="abrirSeletor,entrarPasta,voltarPasta,confirmarPasta,criarEstrutura,liberarLinks"
-                                                            class="text-gray-700 disabled:opacity-50 disabled:pointer-events-none">
-                                                        Liberar links
+                                                            wire:click="abrirCriacaoPasta({{ $empresa->id }})"
+                                                            class="h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">
+                                                        Criar pasta
                                                     </button>
                                                 @endif
                                             </td>
@@ -254,75 +238,58 @@
 
     @if ($seletorAberto)
         <div class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden">
-                <div class="p-4 border-b flex justify-between items-center">
-                    <div>
-                        <h2 class="font-semibold text-gray-900">
-                            {{ $seletorPasso === 'nome' ? 'Nome da pasta' : 'Onde criar a pasta' }}
-                        </h2>
-                        <p class="text-xs text-gray-500">{{ $empresaSeletorNome }}{{ $seletorPasso === 'local' ? ' · '.$pastaPaiNome : '' }}</p>
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden">
+                <div class="p-4 border-b">
+                    <h2 class="font-semibold text-gray-900">
+                        {{ $seletorPasso === 'nome' ? 'Criar pasta no Drive' : 'Confirmar' }}
+                    </h2>
+                    <p class="text-xs text-gray-500">{{ $empresaSeletorNome }} · passo {{ $seletorPasso === 'nome' ? '1' : '2' }} de 2</p>
+                </div>
+                <div class="px-4 pt-4">
+                    <div class="flex gap-2">
+                        <div @class(['h-2 flex-1 rounded-full', 'bg-indigo-600' => true])></div>
+                        <div @class(['h-2 flex-1 rounded-full', 'bg-indigo-600' => $seletorPasso === 'confirmar', 'bg-gray-200' => $seletorPasso !== 'confirmar'])></div>
                     </div>
-                    <button type="button" wire:click="fecharSeletor" class="text-gray-500"
-                            wire:loading.attr="disabled"
-                            wire:target="abrirSeletor,confirmarNomePasta,entrarPasta,voltarPasta,confirmarPasta,criarEVincular">Fechar</button>
                 </div>
 
                 @if ($seletorPasso === 'nome')
                     <form wire:submit.prevent="confirmarNomePasta" class="p-4 space-y-4">
-                        <p class="text-sm text-gray-600">
-                            Código do sistema + razão social, sem Ltda/Cia Ltda. Você pode ajustar antes de vincular.
-                        </p>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Nome da pasta no Drive</label>
+                            <label class="block text-sm font-medium text-gray-700">Nome da pasta</label>
                             <input type="text" wire:model="pastaNome"
                                    class="mt-1 w-full border-gray-300 rounded-md"
                                    maxlength="255">
                             @error('pastaNome') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
                         </div>
                         <button type="submit"
-                                class="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                                wire:loading.attr="disabled" wire:target="confirmarNomePasta">
-                            Continuar e escolher o local
+                                class="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
+                            Continuar
+                        </button>
+                        <button type="button" wire:click="fecharSeletor"
+                                class="w-full h-12 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold">
+                            Agora não
                         </button>
                     </form>
                 @else
-                    <div class="p-4 border-b bg-gray-50">
+                    <div class="p-4 space-y-4">
                         <p class="text-sm text-gray-700">
-                            Vai criar: <span class="font-semibold">{{ $pastaNome }}</span>
+                            A pasta <span class="font-semibold text-gray-900">{{ $pastaNome }}</span>
+                            será criada no Drive da conta do escritório.
                         </p>
-                        <button type="button" wire:click="voltarParaNomePasta" class="mt-1 text-xs text-indigo-600">Alterar nome</button>
-                    </div>
-                    <div class="p-4 space-y-2 overflow-y-auto max-h-[45vh]">
-                        @if ($pastaPaiId || count($breadcrumb))
-                            <button type="button" wire:click="voltarPasta" class="text-sm text-indigo-600">Voltar</button>
-                        @endif
-                        @forelse ($pastas as $pasta)
-                            <div class="flex items-center justify-between gap-2 border rounded-lg px-3 py-2">
-                                <button type="button" wire:click="entrarPasta('{{ $pasta['id'] }}', @js($pasta['nome']))"
-                                        wire:loading.attr="disabled"
-                                        wire:target="entrarPasta,voltarPasta,confirmarPasta,criarEVincular"
-                                        class="text-left font-medium text-gray-800 disabled:opacity-50">
-                                    {{ $pasta['nome'] }}
-                                </button>
-                                <button type="button" wire:click="confirmarPasta('{{ $pasta['id'] }}', @js($pasta['nome']))"
-                                        wire:loading.attr="disabled"
-                                        wire:target="entrarPasta,voltarPasta,confirmarPasta,criarEVincular"
-                                        class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 disabled:opacity-50">
-                                    Usar existente
-                                </button>
-                            </div>
-                        @empty
-                            <p class="text-sm text-gray-500">Nenhuma pasta aqui.</p>
-                        @endforelse
-                    </div>
-                    <div class="p-4 border-t">
                         <button type="button" wire:click="criarEVincular"
                                 wire:loading.attr="disabled"
-                                wire:target="entrarPasta,voltarPasta,confirmarPasta,criarEVincular"
+                                wire:target="criarEVincular"
                                 class="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50">
-                            Criar e vincular aqui
+                            <span wire:loading.remove wire:target="criarEVincular">Criar pasta</span>
+                            <span wire:loading wire:target="criarEVincular">Criando...</span>
                         </button>
-                        <p class="mt-2 text-xs text-center text-gray-500">A pasta será criada dentro de {{ $pastaPaiNome }}.</p>
+                        <button type="button" wire:click="fecharSeletor"
+                                class="w-full h-12 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold">
+                            Agora não
+                        </button>
+                        <button type="button" wire:click="voltarParaNomePasta" class="w-full text-sm text-gray-600">
+                            Alterar nome
+                        </button>
                     </div>
                 @endif
             </div>
@@ -330,11 +297,11 @@
     @endif
 
     <div wire:loading
-         wire:target="abrirSeletor,confirmarNomePasta,entrarPasta,voltarPasta,confirmarPasta,criarEVincular,criarEstrutura,liberarLinks"
+         wire:target="criarEVincular"
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
             <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>
-            <p class="font-semibold text-gray-900">Consultando o Google Drive</p>
+            <p class="font-semibold text-gray-900">Criando a pasta no Drive</p>
             <p class="mt-1 text-sm text-gray-500">Aguarde, isso pode levar alguns segundos.</p>
         </div>
     </div>

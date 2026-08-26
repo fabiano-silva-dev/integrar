@@ -281,6 +281,129 @@ class TenantIsolationDocumentosTest extends TestCase
             ->assertDontSee('Empresa Sem Monitoramento');
     }
 
+    public function test_criar_pasta_pede_confirmacao_sem_escolher_local(): void
+    {
+        $operadora = EmpresasOperadora::factory()->create();
+        $user = User::factory()->admin()->create(['empresa_operadora_id' => $operadora->id]);
+        $empresa = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Posto Sem Pasta',
+            'nome_fantasia' => 'Posto Sem Pasta',
+            'codigo_sistema' => '502',
+            'razao_social' => 'POSTO SEM PASTA LTDA',
+        ]);
+
+        $conexao = ConexaoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'status' => StatusConexaoWhatsapp::Conectado,
+            'nome_instancia' => 'integrar-op-'.$operadora->id,
+        ]);
+        GrupoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'conexao_whatsapp_id' => $conexao->id,
+            'empresa_id' => $empresa->id,
+            'jid' => 'grupo-pasta@g.us',
+            'nome' => 'Grupo pasta',
+            'monitorar' => true,
+        ]);
+        \App\Models\Documentos\ContaGoogle::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'google_email' => 'drive@escritorio.test',
+            'access_token' => 'token',
+            'refresh_token' => 'refresh',
+            'status' => \App\Enums\Documentos\StatusContaGoogle::Conectado,
+        ]);
+        config([
+            'documentos.google.client_id' => '111111111111-abc.apps.googleusercontent.com',
+            'documentos.google.client_secret' => 'secret-teste',
+        ]);
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ContaGoogleDrive::class)
+            ->assertSee('Criar pasta')
+            ->assertSee('Ainda sem pasta')
+            ->assertDontSee('Escolher pasta')
+            ->assertDontSee('Usar existente')
+            ->call('abrirCriacaoPasta', $empresa->id)
+            ->assertSet('seletorAberto', true)
+            ->assertSet('seletorPasso', 'nome')
+            ->assertSee('Criar pasta no Drive')
+            ->assertSee('Continuar')
+            ->assertSee('Agora não')
+            ->assertDontSee('Continuar e escolher o local')
+            ->call('confirmarNomePasta')
+            ->assertSet('seletorPasso', 'confirmar')
+            ->assertSee('será criada no Drive')
+            ->assertSee('Criar pasta')
+            ->assertDontSee('Usar existente')
+            ->call('fecharSeletor')
+            ->assertSet('seletorAberto', false);
+    }
+
+    public function test_duas_empresas_no_mesmo_grupo_aparecem_no_drive(): void
+    {
+        $operadora = EmpresasOperadora::factory()->create();
+        $user = User::factory()->admin()->create(['empresa_operadora_id' => $operadora->id]);
+        $matriz = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Matriz Compartilhada',
+            'nome_fantasia' => 'Matriz Compartilhada',
+        ]);
+        $filial = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Filial Compartilhada',
+            'nome_fantasia' => 'Filial Compartilhada',
+        ]);
+        $fora = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Empresa Fora Do Grupo',
+            'nome_fantasia' => 'Empresa Fora Do Grupo',
+        ]);
+
+        $conexao = ConexaoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'status' => StatusConexaoWhatsapp::Conectado,
+            'nome_instancia' => 'integrar-op-'.$operadora->id,
+        ]);
+        $grupo = GrupoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'conexao_whatsapp_id' => $conexao->id,
+            'jid' => 'grupo-duas-empresas@g.us',
+            'nome' => 'Grupo duas empresas',
+            'monitorar' => false,
+        ]);
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\GruposWhatsapp::class)
+            ->call('adicionarEmpresa', $grupo->id, $matriz->id)
+            ->call('adicionarEmpresa', $grupo->id, $filial->id)
+            ->call('alternarMonitorar', $grupo->id)
+            ->assertHasNoErrors();
+
+        $grupo->refresh();
+        $this->assertEqualsCanonicalizing([$matriz->id, $filial->id], $grupo->idsEmpresas());
+        $this->assertTrue($grupo->monitorar);
+
+        config([
+            'documentos.google.client_id' => '111111111111-abc.apps.googleusercontent.com',
+            'documentos.google.client_secret' => 'secret-teste',
+        ]);
+        \App\Models\Documentos\ContaGoogle::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'google_email' => 'drive@escritorio.test',
+            'access_token' => 'token',
+            'refresh_token' => 'refresh',
+            'status' => \App\Enums\Documentos\StatusContaGoogle::Conectado,
+        ]);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ContaGoogleDrive::class)
+            ->assertSee('Matriz Compartilhada')
+            ->assertSee('Filial Compartilhada')
+            ->assertDontSee('Empresa Fora Do Grupo');
+    }
+
     public function test_explorador_lista_so_empresas_com_pasta_no_drive(): void
     {
         $operadora = EmpresasOperadora::factory()->create(['cnpj' => '98.733.333/0001-93']);

@@ -61,32 +61,51 @@ class GruposWhatsapp extends Component
         }
     }
 
-    public function alterarEmpresa(int $grupoId, $empresaId): void
+    public function adicionarEmpresa(int $grupoId, $empresaId): void
     {
         $this->garantirAcessoDocumentos();
+        $this->erro = null;
 
-        $grupo = GrupoWhatsapp::query()->findOrFail($grupoId);
         $empresaId = $empresaId === '' || $empresaId === null ? null : (int) $empresaId;
 
-        if ($empresaId !== null && Empresa::query()->find($empresaId) === null) {
+        if ($empresaId === null) {
+            return;
+        }
+
+        $grupo = GrupoWhatsapp::query()->findOrFail($grupoId);
+
+        if (Empresa::query()->find($empresaId) === null) {
             $this->erro = 'A empresa selecionada não pertence ao seu escritório.';
 
             return;
         }
 
-        $grupo->update([
-            'empresa_id' => $empresaId,
-            'monitorar' => $empresaId !== null ? $grupo->monitorar : false,
-        ]);
+        $ids = $grupo->idsEmpresas();
+        $ids[] = $empresaId;
+        $grupo->sincronizarEmpresas($ids);
+    }
+
+    public function removerEmpresa(int $grupoId, int $empresaId): void
+    {
+        $this->garantirAcessoDocumentos();
+        $this->erro = null;
+
+        $grupo = GrupoWhatsapp::query()->findOrFail($grupoId);
+        $ids = array_values(array_filter(
+            $grupo->idsEmpresas(),
+            fn (int $id) => $id !== $empresaId
+        ));
+        $grupo->sincronizarEmpresas($ids);
     }
 
     public function alternarMonitorar(int $grupoId): void
     {
         $this->garantirAcessoDocumentos();
+        $this->erro = null;
 
-        $grupo = GrupoWhatsapp::query()->findOrFail($grupoId);
+        $grupo = GrupoWhatsapp::query()->with('empresas')->findOrFail($grupoId);
 
-        if ($grupo->empresa_id === null && ! $grupo->monitorar) {
+        if ($grupo->idsEmpresas() === [] && ! $grupo->monitorar) {
             $this->erro = 'Vincule uma empresa antes de monitorar o grupo.';
 
             return;
@@ -102,7 +121,7 @@ class GruposWhatsapp extends Component
 
         if (! $this->precisaSelecionarEscritorio() && OperadoraContext::id()) {
             $grupos = GrupoWhatsapp::query()
-                ->with('empresa')
+                ->with(['empresa', 'empresas'])
                 ->when($this->busca !== '', function ($query) {
                     $query->where(function ($q) {
                         $q->where('nome', 'like', '%'.$this->busca.'%')

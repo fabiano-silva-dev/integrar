@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToOperadora;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Empresa extends Model
@@ -60,6 +61,16 @@ class Empresa extends Model
     public function gruposWhatsapp(): HasMany
     {
         return $this->hasMany(\App\Models\Documentos\GrupoWhatsapp::class);
+    }
+
+    public function gruposWhatsappVinculados(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            \App\Models\Documentos\GrupoWhatsapp::class,
+            'grupo_whatsapp_empresas',
+            'empresa_id',
+            'grupo_whatsapp_id'
+        )->withTimestamps();
     }
 
     public function pastasDrive(): HasMany

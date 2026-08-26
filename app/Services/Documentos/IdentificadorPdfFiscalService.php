@@ -18,43 +18,38 @@ class IdentificadorPdfFiscalService
         $data = $chave !== null ? $this->dataDaChave($chave) : $this->primeiraData($texto);
 
         if ($this->pareceNfse($normalizado)) {
-            return $this->resultado(TipoDocumentoRecebido::Nfse, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Nfse, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
                 'sinal' => 'nfse',
-                'chave_acesso' => $chave,
-            ]);
+            ]));
         }
 
         if ($modelo === '65' || $this->pareceNfce($normalizado)) {
-            return $this->resultado(TipoDocumentoRecebido::Cupom, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Cupom, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
                 'modelo' => $modelo ?? '65',
-                'chave_acesso' => $chave,
-            ]);
+            ]));
         }
 
         if ($modelo === '57' || $this->pareceCte($normalizado)) {
-            return $this->resultado(TipoDocumentoRecebido::Cte, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Cte, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
                 'modelo' => $modelo ?? '57',
-                'chave_acesso' => $chave,
-            ]);
+            ]));
         }
 
         if ($modelo === '58' || $this->pareceMdfe($normalizado)) {
-            return $this->resultado(TipoDocumentoRecebido::Mdfe, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Mdfe, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
                 'modelo' => $modelo ?? '58',
-                'chave_acesso' => $chave,
-            ]);
+            ]));
         }
 
         if ($modelo === '55' || $this->pareceNfe($normalizado)) {
-            return $this->resultado(TipoDocumentoRecebido::Nfe, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Nfe, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
                 'modelo' => $modelo ?? '55',
-                'chave_acesso' => $chave,
-            ]);
+            ]));
         }
 
         return null;
@@ -123,6 +118,21 @@ class IdentificadorPdfFiscalService
         } catch (\Exception) {
             return null;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @return array<string, mixed>
+     */
+    private function metadadosFiscais(?string $chave, array $base): array
+    {
+        $base['chave_acesso'] = $chave;
+
+        if (is_string($chave) && strlen($chave) === 44) {
+            $base['cnpj_emitente'] = substr($chave, 6, 14);
+        }
+
+        return $base;
     }
 
     private function primeiraData(string $texto): ?DateTimeImmutable

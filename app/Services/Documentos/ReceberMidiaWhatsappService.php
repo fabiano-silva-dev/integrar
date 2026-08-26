@@ -157,9 +157,15 @@ class ReceberMidiaWhatsappService
         $nomeOriginal = $this->nomeArquivo($midia['nome_arquivo'] ?? $metadados['nome_arquivo'] ?? null, $midia['mime']);
         $hash = hash('sha256', $binario);
 
+        $idsEmpresas = $grupo->idsEmpresas();
         $duplicado = DocumentoRecebido::withoutGlobalScope('operadora')
-            ->where('empresa_id', $grupo->empresa_id)
             ->where('hash_sha256', $hash)
+            ->where(function ($query) use ($grupo, $idsEmpresas) {
+                $query->where('grupo_whatsapp_id', $grupo->id);
+                if ($idsEmpresas !== []) {
+                    $query->orWhereIn('empresa_id', $idsEmpresas);
+                }
+            })
             ->first();
 
         $operadoraId = (int) $conexao->empresa_operadora_id;
@@ -168,7 +174,7 @@ class ReceberMidiaWhatsappService
 
         $documento = DocumentoRecebido::withoutGlobalScope('operadora')->create([
             'empresa_operadora_id' => $operadoraId,
-            'empresa_id' => $grupo->empresa_id,
+            'empresa_id' => count($idsEmpresas) === 1 ? $idsEmpresas[0] : null,
             'conexao_whatsapp_id' => $conexao->id,
             'grupo_whatsapp_id' => $grupo->id,
             'mensagem_whatsapp_id' => $mensagemId,
@@ -184,6 +190,7 @@ class ReceberMidiaWhatsappService
                 'caption' => $metadados['caption'],
                 'remote_jid' => $remoteJid,
                 'timestamp' => $dados['messageTimestamp'] ?? null,
+                'empresa_ids_grupo' => $idsEmpresas,
             ],
         ]);
 

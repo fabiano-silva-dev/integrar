@@ -104,43 +104,63 @@ class ClassificadorDocumentoService
         $data = $this->extrairDataXml($texto) ?? $fallbackData;
         $modelo = $this->extrairModelo($texto);
 
+        $cnpjs = $this->extrairCnpjsXml($conteudo);
+
         if ($this->pareceNfse($texto, $xml)) {
-            return $this->resultado(TipoDocumentoRecebido::Nfse, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Nfse, $data, array_merge([
                 'origem' => 'xml_nfse',
-            ], conclusivo: true);
+            ], $cnpjs), conclusivo: true);
         }
 
         if ($modelo === '65') {
-            return $this->resultado(TipoDocumentoRecebido::Cupom, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Cupom, $data, array_merge([
                 'origem' => 'xml_nfce',
                 'modelo' => '65',
-            ], conclusivo: true);
+            ], $cnpjs), conclusivo: true);
         }
 
         if ($modelo === '57' || str_contains($texto, '<infcte') || str_contains($texto, '<cteproc') || str_contains($texto, '<cte ')) {
-            return $this->resultado(TipoDocumentoRecebido::Cte, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Cte, $data, array_merge([
                 'origem' => 'xml_cte',
                 'modelo' => $modelo ?? '57',
-            ], conclusivo: true);
+            ], $cnpjs), conclusivo: true);
         }
 
         if ($modelo === '58' || str_contains($texto, '<infmdfe') || str_contains($texto, '<mdfeproc') || str_contains($texto, '<mdfe ')) {
-            return $this->resultado(TipoDocumentoRecebido::Mdfe, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Mdfe, $data, array_merge([
                 'origem' => 'xml_mdfe',
                 'modelo' => $modelo ?? '58',
-            ], conclusivo: true);
+            ], $cnpjs), conclusivo: true);
         }
 
         if ($modelo === '55' || str_contains($texto, '<nfe') || str_contains($texto, '<nfeproc') || str_contains($texto, '<infnfe')) {
-            return $this->resultado(TipoDocumentoRecebido::Nfe, $data, [
+            return $this->resultado(TipoDocumentoRecebido::Nfe, $data, array_merge([
                 'origem' => 'xml_nfe',
                 'modelo' => $modelo ?? '55',
-            ], conclusivo: true);
+            ], $cnpjs), conclusivo: true);
         }
 
-        return $this->resultado(TipoDocumentoRecebido::Xmls, $data, [
+        return $this->resultado(TipoDocumentoRecebido::Xmls, $data, array_merge([
             'origem' => 'xml',
-        ], conclusivo: true);
+        ], $cnpjs), conclusivo: true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function extrairCnpjsXml(string $conteudo): array
+    {
+        $meta = [];
+
+        if (preg_match('/<emit\b[^>]*>.*?<(?:cnpj)>\s*(\d{14})\s*<\/(?:cnpj)>/is', $conteudo, $m)) {
+            $meta['cnpj_emitente'] = $m[1];
+        }
+
+        if (preg_match('/<dest\b[^>]*>.*?<(?:cnpj)>\s*(\d{14})\s*<\/(?:cnpj)>/is', $conteudo, $m)) {
+            $meta['cnpj_destinatario'] = $m[1];
+        }
+
+        return $meta;
     }
 
     private function pareceNfse(string $texto, \SimpleXMLElement $xml): bool

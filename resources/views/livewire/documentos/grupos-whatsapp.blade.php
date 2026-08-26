@@ -3,7 +3,7 @@
         <div class="bg-white shadow-xl rounded-xl overflow-hidden">
             <div class="p-6 border-b border-gray-200">
                 <h1 class="text-2xl font-bold text-gray-900">Configurações — Documentos</h1>
-                <p class="text-sm text-gray-600 mt-1">Vincule cada grupo a uma empresa e ative o monitoramento.</p>
+                <p class="text-sm text-gray-600 mt-1">Vincule uma ou mais empresas a cada grupo e ative o monitoramento. Cada empresa recebe a própria pasta no Drive.</p>
             </div>
             <div class="p-6">
                 <x-documentos-nav ativo="grupos" />
@@ -34,25 +34,51 @@
                             <thead class="bg-gray-50 text-gray-600">
                                 <tr>
                                     <th class="text-left px-3 py-2">Grupo</th>
-                                    <th class="text-left px-3 py-2">Empresa</th>
+                                    <th class="text-left px-3 py-2">Empresas</th>
                                     <th class="text-left px-3 py-2">Monitorar</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse ($grupos as $grupo)
-                                    <tr class="border-t">
+                                    @php
+                                        $idsVinculadas = $grupo->idsEmpresas();
+                                    @endphp
+                                    <tr class="border-t" wire:key="grupo-{{ $grupo->id }}">
                                         <td class="px-3 py-2">
                                             <div class="font-medium text-gray-900">{{ $grupo->nome ?: 'Sem nome' }}</div>
                                             <div class="text-xs text-gray-400">{{ $grupo->jid }}</div>
                                         </td>
-                                        <td class="px-3 py-2">
-                                            <select wire:change="alterarEmpresa({{ $grupo->id }}, $event.target.value)"
-                                                    class="border-gray-300 rounded-md text-sm">
-                                                <option value="">Não vinculada</option>
+                                        <td class="px-3 py-2 min-w-[240px]">
+                                            <div class="flex flex-wrap gap-1 mb-2">
+                                                @forelse ($grupo->empresas as $vinculada)
+                                                    <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 text-xs font-medium px-2 py-1 rounded-full">
+                                                        {{ $vinculada->nome_fantasia ?: $vinculada->nome ?: $vinculada->razao_social }}
+                                                        <button type="button"
+                                                                wire:click="removerEmpresa({{ $grupo->id }}, {{ $vinculada->id }})"
+                                                                class="text-indigo-500 hover:text-indigo-800 leading-none"
+                                                                aria-label="Remover {{ $vinculada->nome }}">×</button>
+                                                    </span>
+                                                @empty
+                                                    @if ($grupo->empresa)
+                                                        <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 text-xs font-medium px-2 py-1 rounded-full">
+                                                            {{ $grupo->empresa->nome_fantasia ?: $grupo->empresa->nome }}
+                                                            <button type="button"
+                                                                    wire:click="removerEmpresa({{ $grupo->id }}, {{ $grupo->empresa->id }})"
+                                                                    class="text-indigo-500 hover:text-indigo-800 leading-none">×</button>
+                                                        </span>
+                                                    @endif
+                                                @endforelse
+                                            </div>
+                                            <select wire:change="adicionarEmpresa({{ $grupo->id }}, $event.target.value)"
+                                                    wire:key="add-empresa-{{ $grupo->id }}-{{ implode('-', $idsVinculadas) }}"
+                                                    class="border-gray-300 rounded-md text-sm w-full">
+                                                <option value="">Adicionar empresa</option>
                                                 @foreach ($empresas as $empresa)
-                                                    <option value="{{ $empresa->id }}" @selected($grupo->empresa_id === $empresa->id)>
-                                                        {{ $empresa->nome_fantasia ?: $empresa->nome ?: $empresa->razao_social }}
-                                                    </option>
+                                                    @if (! in_array((int) $empresa->id, $idsVinculadas, true))
+                                                        <option value="{{ $empresa->id }}">
+                                                            {{ $empresa->nome_fantasia ?: $empresa->nome ?: $empresa->razao_social }}
+                                                        </option>
+                                                    @endif
                                                 @endforeach
                                             </select>
                                         </td>

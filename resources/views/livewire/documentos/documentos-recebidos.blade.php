@@ -53,7 +53,25 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-2">
-                                            <div>{{ $doc->empresa?->nome_fantasia ?: $doc->empresa?->nome ?: '—' }}</div>
+                                            @php
+                                                $idsGrupo = $doc->grupo?->idsEmpresas() ?? [];
+                                                $opcoesEmpresa = $idsGrupo === []
+                                                    ? $empresas
+                                                    : $empresas->whereIn('id', $idsGrupo);
+                                            @endphp
+                                            @if ($doc->status?->value === 'enviado_drive')
+                                                <div>{{ $doc->empresa?->nome_fantasia ?: $doc->empresa?->nome ?: '—' }}</div>
+                                            @else
+                                                <select wire:change="alterarEmpresa({{ $doc->id }}, $event.target.value)"
+                                                        class="border-gray-300 rounded-md text-xs w-full max-w-[220px]">
+                                                    <option value="">Indicar empresa</option>
+                                                    @foreach ($opcoesEmpresa as $empresa)
+                                                        <option value="{{ $empresa->id }}" @selected($doc->empresa_id === $empresa->id)>
+                                                            {{ $empresa->nome_fantasia ?: $empresa->nome }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            @endif
                                             <div class="text-xs text-gray-400">{{ $doc->grupo?->nome }}</div>
                                         </td>
                                         <td class="px-3 py-2">

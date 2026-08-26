@@ -45,6 +45,40 @@ class DocumentosRecebidos extends Component
         $this->resetPage();
     }
 
+    public function alterarEmpresa(int $documentoId, $empresaId): void
+    {
+        $this->garantirAcessoDocumentos();
+
+        $documento = DocumentoRecebido::query()->with('grupo.empresas')->findOrFail($documentoId);
+
+        if ($documento->status === StatusDocumentoRecebido::EnviadoDrive) {
+            return;
+        }
+
+        $empresaId = $empresaId === '' || $empresaId === null ? null : (int) $empresaId;
+
+        if ($empresaId === null) {
+            return;
+        }
+
+        $idsPermitidas = $documento->grupo?->idsEmpresas() ?? [];
+
+        if ($idsPermitidas !== [] && ! in_array($empresaId, $idsPermitidas, true)) {
+            return;
+        }
+
+        if (Empresa::query()->find($empresaId) === null) {
+            return;
+        }
+
+        $documento->update([
+            'empresa_id' => $empresaId,
+            'erro_mensagem' => null,
+        ]);
+
+        ArquivarDocumentoRecebidoJob::dispatch($documento->id);
+    }
+
     public function alterarTipo(int $documentoId, string $tipo): void
     {
         $this->garantirAcessoDocumentos();
@@ -80,7 +114,7 @@ class DocumentosRecebidos extends Component
 
         if (! $this->precisaSelecionarEscritorio() && OperadoraContext::id()) {
             $documentos = DocumentoRecebido::query()
-                ->with(['empresa', 'grupo'])
+                ->with(['empresa', 'grupo.empresas'])
                 ->when($this->busca !== '', function ($query) {
                     $query->where('nome_original', 'like', '%'.$this->busca.'%');
                 })

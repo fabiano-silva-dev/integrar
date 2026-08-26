@@ -41,6 +41,30 @@ XML;
         $this->assertSame('2026-03-15', $resultado['data']);
     }
 
+    public function test_xml_nfe_extrai_cnpj_emitente_e_destinatario(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc>
+  <NFe>
+    <infNFe>
+      <ide>
+        <mod>55</mod>
+        <dhEmi>2026-03-15T10:00:00-03:00</dhEmi>
+      </ide>
+      <emit><CNPJ>11222333000181</CNPJ></emit>
+      <dest><CNPJ>99888777000166</CNPJ></dest>
+    </infNFe>
+  </NFe>
+</nfeProc>
+XML;
+
+        $resultado = $this->classificador->classificar('nfe.xml', 'application/xml', $xml);
+
+        $this->assertSame('11222333000181', $resultado['metadados']['cnpj_emitente'] ?? null);
+        $this->assertSame('99888777000166', $resultado['metadados']['cnpj_destinatario'] ?? null);
+    }
+
     public function test_xml_nfce_modelo_65_vai_para_cupom(): void
     {
         $xml = <<<'XML'
@@ -166,6 +190,7 @@ XML;
 
         $this->assertTrue($resultado['conclusivo']);
         $this->assertSame(TipoDocumentoRecebido::Nfe, $resultado['tipo']);
+        $this->assertSame('12345678000199', $resultado['metadados']['cnpj_emitente'] ?? null);
     }
 
     public function test_texto_banrisul_vai_para_extratos(): void

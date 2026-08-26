@@ -18,6 +18,7 @@ class ArquivarDocumentoService
         private readonly LlamaParseAdaptador $llamaParse,
         private readonly AnalisadorDocumentoIaService $analisadorIa,
         private readonly MapeadorTipoDocumentoIa $mapeadorIa,
+        private readonly ResolverEmpresaDocumentoService $resolverEmpresa,
     ) {}
 
     public function arquivar(DocumentoRecebido $documento, bool $forcar = false): DocumentoRecebido
@@ -123,11 +124,26 @@ class ArquivarDocumentoService
         ]);
 
         $documento = $documento->fresh() ?? $documento;
+        $grupo = $documento->grupo()->withoutGlobalScope('operadora')->first();
 
         if ($documento->empresa_id === null) {
+            $candidatas = $this->resolverEmpresa->candidatasDoGrupo($grupo);
+            $resolvida = $this->resolverEmpresa->resolver($documento, $conteudo, $candidatas);
+
+            if ($resolvida !== null) {
+                $documento->update(['empresa_id' => $resolvida->id]);
+                $documento = $documento->fresh() ?? $documento;
+            }
+        }
+
+        if ($documento->empresa_id === null) {
+            $grupoTemEmpresas = $grupo !== null && $grupo->idsEmpresas() !== [];
+
             $documento->update([
                 'status' => StatusDocumentoRecebido::Pendente,
-                'erro_mensagem' => 'Vincule o grupo a uma empresa para arquivar.',
+                'erro_mensagem' => $grupoTemEmpresas
+                    ? 'Indique a empresa deste documento.'
+                    : 'Vincule o grupo a uma empresa para arquivar.',
             ]);
 
             return $documento->fresh() ?? $documento;

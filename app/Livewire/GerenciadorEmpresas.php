@@ -523,7 +523,10 @@ class GerenciadorEmpresas extends Component
                 ->limit(20)
                 ->get();
             $gruposWhatsapp = GrupoWhatsapp::query()
-                ->where('empresa_id', $this->empresa_id)
+                ->where(function ($query) {
+                    $query->where('empresa_id', $this->empresa_id)
+                        ->orWhereHas('empresas', fn ($inner) => $inner->where('empresas.id', $this->empresa_id));
+                })
                 ->orderBy('nome')
                 ->get();
             $pastaDriveRaiz = EmpresaPastaDrive::raizDaEmpresa((int) $this->empresa_id);

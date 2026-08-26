@@ -23,13 +23,6 @@ class ContaGoogleDrive extends Component
 
     public ?int $empresaSeletorId = null;
 
-    public ?string $pastaPaiId = null;
-
-    public string $pastaPaiNome = 'Drive';
-
-    /** @var list<array{id: string, nome: string}> */
-    public array $breadcrumb = [];
-
     public bool $seletorAberto = false;
 
     public string $seletorPasso = 'nome';
@@ -100,7 +93,7 @@ class ContaGoogleDrive extends Component
         $this->googleClientSecret = '';
     }
 
-    public function abrirSeletor(int $empresaId): void
+    public function abrirCriacaoPasta(int $empresaId): void
     {
         $this->garantirAcessoDocumentos();
         $this->erro = null;
@@ -118,9 +111,6 @@ class ContaGoogleDrive extends Component
         }
 
         $this->empresaSeletorId = $empresaId;
-        $this->pastaPaiId = null;
-        $this->pastaPaiNome = 'Drive';
-        $this->breadcrumb = [];
         $this->pastaNome = app(NomePastaDriveEmpresa::class)->sugerir($empresa);
         $this->empresaSeletorNome = (string) ($empresa->nome_fantasia ?: $empresa->nome ?: $empresa->razao_social);
         $this->seletorPasso = 'nome';
@@ -146,16 +136,13 @@ class ContaGoogleDrive extends Component
             return;
         }
 
-        $empresa->update(['pasta_drive_nome' => trim($this->pastaNome)]);
-        $this->seletorPasso = 'local';
+        $this->pastaNome = trim($this->pastaNome);
+        $this->seletorPasso = 'confirmar';
     }
 
     public function voltarParaNomePasta(): void
     {
         $this->seletorPasso = 'nome';
-        $this->pastaPaiId = null;
-        $this->pastaPaiNome = 'Drive';
-        $this->breadcrumb = [];
     }
 
     public function fecharSeletor(): void
@@ -165,66 +152,6 @@ class ContaGoogleDrive extends Component
         $this->pastaNome = '';
         $this->empresaSeletorNome = '';
         $this->empresaSeletorId = null;
-        $this->pastaPaiId = null;
-        $this->breadcrumb = [];
-    }
-
-    public function entrarPasta(string $folderId, string $nome): void
-    {
-        $this->breadcrumb[] = [
-            'id' => $this->pastaPaiId ?? '',
-            'nome' => $this->pastaPaiNome,
-        ];
-        $this->pastaPaiId = $folderId;
-        $this->pastaPaiNome = $nome;
-    }
-
-    public function voltarPasta(): void
-    {
-        $anterior = array_pop($this->breadcrumb);
-
-        if ($anterior === null) {
-            $this->pastaPaiId = null;
-            $this->pastaPaiNome = 'Drive';
-
-            return;
-        }
-
-        $this->pastaPaiId = $anterior['id'] !== '' ? $anterior['id'] : null;
-        $this->pastaPaiNome = $anterior['nome'];
-    }
-
-    public function confirmarPasta(string $folderId, string $nome, GoogleDriveService $drive): void
-    {
-        $this->garantirAcessoDocumentos();
-
-        if ($this->empresaSeletorId === null) {
-            return;
-        }
-
-        $empresa = Empresa::query()->find($this->empresaSeletorId);
-        $conta = ContaGoogle::daOperadora();
-
-        if ($empresa === null || $conta === null || ! $conta->conectada()) {
-            $this->erro = 'Conecte a conta Google antes de escolher a pasta.';
-
-            return;
-        }
-
-        if (! $this->empresaComGrupoMonitorado((int) $empresa->id)) {
-            $this->erro = 'Só empresas com grupo monitorado podem ter pasta no Drive.';
-
-            return;
-        }
-
-        try {
-            $drive->definirPastaRaiz($empresa, $conta, $folderId, $nome);
-            $empresa->update(['pasta_drive_nome' => $nome]);
-            $this->fecharSeletor();
-            session()->flash('message', 'Pasta raiz definida para '.$empresa->nome.'.');
-        } catch (\Throwable $exception) {
-            $this->erro = $exception->getMessage();
-        }
     }
 
     public function criarEVincular(GoogleDriveService $drive): void
@@ -238,7 +165,7 @@ class ContaGoogleDrive extends Component
             'pastaNome' => 'nome da pasta',
         ]);
 
-        if ($this->empresaSeletorId === null) {
+        if ($this->empresaSeletorId === null || $this->seletorPasso !== 'confirmar') {
             return;
         }
 
@@ -246,7 +173,7 @@ class ContaGoogleDrive extends Component
         $conta = ContaGoogle::daOperadora();
 
         if ($empresa === null || $conta === null || ! $conta->conectada()) {
-            $this->erro = 'Conecte a conta Google antes de escolher a pasta.';
+            $this->erro = 'Conecte a conta Google do escritório.';
 
             return;
         }
@@ -261,66 +188,9 @@ class ContaGoogleDrive extends Component
 
         try {
             $empresa->update(['pasta_drive_nome' => $nome]);
-            $drive->criarEDefinirPastaRaiz($empresa, $conta, (string) ($this->pastaPaiId ?: 'root'), $nome);
+            $drive->criarEDefinirPastaRaiz($empresa, $conta, 'root', $nome);
             $this->fecharSeletor();
-            session()->flash('message', 'Pasta criada e vinculada: '.$nome);
-        } catch (\Throwable $exception) {
-            $this->erro = $exception->getMessage();
-        }
-    }
-
-    public function criarEstrutura(int $empresaId, GoogleDriveService $drive): void
-    {
-        $this->garantirAcessoDocumentos();
-        $this->erro = null;
-
-        $empresa = Empresa::query()->find($empresaId);
-        $conta = ContaGoogle::daOperadora();
-
-        if ($empresa === null || $conta === null || ! $conta->conectada()) {
-            $this->erro = 'Conecte a conta Google e defina a pasta raiz.';
-
-            return;
-        }
-
-        if (! $this->empresaComGrupoMonitorado((int) $empresa->id)) {
-            $this->erro = 'Só empresas com grupo monitorado podem ter pasta no Drive.';
-
-            return;
-        }
-
-        try {
-            $drive->garantirEstruturaAno($conta, $empresa, (int) now()->format('Y'));
-            $drive->liberarLinksDaEmpresa($conta, $empresa);
-            session()->flash('message', 'Estrutura do ano '.now()->format('Y').' criada. Pastas e arquivos desta empresa abrem pelo link.');
-        } catch (\Throwable $exception) {
-            $this->erro = $exception->getMessage();
-        }
-    }
-
-    public function liberarLinks(int $empresaId, GoogleDriveService $drive): void
-    {
-        $this->garantirAcessoDocumentos();
-        $this->erro = null;
-
-        $empresa = Empresa::query()->find($empresaId);
-        $conta = ContaGoogle::daOperadora();
-
-        if ($empresa === null || $conta === null || ! $conta->conectada()) {
-            $this->erro = 'Conecte a conta Google e defina a pasta raiz.';
-
-            return;
-        }
-
-        if (! $this->empresaComGrupoMonitorado((int) $empresa->id)) {
-            $this->erro = 'Só empresas com grupo monitorado podem ter pasta no Drive.';
-
-            return;
-        }
-
-        try {
-            $drive->liberarLinksDaEmpresa($conta, $empresa);
-            session()->flash('message', 'Links das pastas e arquivos de '.$empresa->nome.' liberados para abertura.');
+            session()->flash('message', 'Pasta criada no Drive: '.$nome);
         } catch (\Throwable $exception) {
             $this->erro = $exception->getMessage();
         }
@@ -365,7 +235,6 @@ class ContaGoogleDrive extends Component
     {
         $conta = null;
         $empresas = collect();
-        $pastas = [];
         $raizes = collect();
 
         if (! $this->precisaSelecionarEscritorio() && OperadoraContext::id()) {
@@ -376,14 +245,6 @@ class ContaGoogleDrive extends Component
                 ->whereIn('empresa_id', $empresas->pluck('id'))
                 ->get()
                 ->keyBy('empresa_id');
-
-            if ($this->seletorAberto && $this->seletorPasso === 'local' && $conta?->conectada()) {
-                try {
-                    $pastas = $drive->listarPastas($conta, $this->pastaPaiId);
-                } catch (\Throwable $exception) {
-                    $this->erro = $exception->getMessage();
-                }
-            }
         }
 
         $googleConfigurado = $drive->configurado();
@@ -398,7 +259,6 @@ class ContaGoogleDrive extends Component
             'conta' => $conta,
             'empresas' => $empresas,
             'raizes' => $raizes,
-            'pastas' => $pastas,
             'contaConectada' => $contaConectada,
             'passo' => $passo,
         ]);
@@ -407,8 +267,11 @@ class ContaGoogleDrive extends Component
     private function empresaComGrupoMonitorado(int $empresaId): bool
     {
         return GrupoWhatsapp::query()
-            ->where('empresa_id', $empresaId)
             ->where('monitorar', true)
+            ->where(function ($query) use ($empresaId) {
+                $query->where('empresa_id', $empresaId)
+                    ->orWhereHas('empresas', fn ($inner) => $inner->where('empresas.id', $empresaId));
+            })
             ->exists();
     }
 
@@ -416,9 +279,12 @@ class ContaGoogleDrive extends Component
     {
         $ids = GrupoWhatsapp::query()
             ->where('monitorar', true)
-            ->whereNotNull('empresa_id')
-            ->distinct()
-            ->pluck('empresa_id');
+            ->with('empresas')
+            ->get()
+            ->flatMap(fn (GrupoWhatsapp $grupo) => $grupo->idsEmpresas())
+            ->unique()
+            ->filter()
+            ->values();
 
         return Empresa::query()
             ->where('ativo', true)
