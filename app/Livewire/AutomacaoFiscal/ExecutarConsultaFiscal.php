@@ -12,6 +12,7 @@ use App\Services\AutomacaoFiscal\AutomacaoArtefatoService;
 use App\Services\AutomacaoFiscal\AutomacaoExecucaoService;
 use App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter;
 use App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser;
+use App\Services\AutomacaoFiscal\FilaAutomacoesStatus;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -362,6 +363,10 @@ class ExecutarConsultaFiscal extends Component
 
     public function testarAcesso(AutomacaoExecucaoService $service): void
     {
+        if ($this->filaAutomacoesParada()) {
+            return;
+        }
+
         if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
             session()->flash('error', 'Selecione um escritório no menu superior.');
 
@@ -389,6 +394,10 @@ class ExecutarConsultaFiscal extends Component
 
     public function executar(AutomacaoExecucaoService $service): void
     {
+        if ($this->filaAutomacoesParada()) {
+            return;
+        }
+
         if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
             session()->flash('error', 'Selecione um escritório no menu superior.');
 
@@ -430,6 +439,18 @@ class ExecutarConsultaFiscal extends Component
         } catch (\Throwable $e) {
             session()->flash('error', $e->getMessage());
         }
+    }
+
+    private function filaAutomacoesParada(): bool
+    {
+        $mensagem = app(FilaAutomacoesStatus::class)->mensagemBloqueioDesenvolvimento();
+        if ($mensagem === null) {
+            return false;
+        }
+
+        session()->flash('error', $mensagem);
+
+        return true;
     }
 
     /**
@@ -1080,6 +1101,7 @@ class ExecutarConsultaFiscal extends Component
         $ultimoScreenshot = $screenshots->last();
 
         return view('livewire.automacao-fiscal.executar-consulta-fiscal', [
+            'avisoFila' => app(FilaAutomacoesStatus::class)->avisoDesenvolvimento(),
             'precisaSelecionarEscritorio' => $precisaSelecionar,
             'empresas' => $empresas,
             'integracoes' => $integracoes,

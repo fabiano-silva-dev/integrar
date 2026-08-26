@@ -7,6 +7,7 @@ use App\Models\CertificadoDigital;
 use App\Services\AutomacaoFiscal\AnaliseFiscalService;
 use App\Services\AutomacaoFiscal\ConsultaAvulsa\ConsultaAvulsaCatalogo;
 use App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter;
+use App\Services\AutomacaoFiscal\FilaAutomacoesStatus;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadProgresso;
 use App\Services\OperadoraContext;
 use Carbon\Carbon;
@@ -61,6 +62,13 @@ class ExecutarConsultaAvulsa extends Component
     {
         $user = Auth::user();
         abort_unless($user && $user->isSuperAdmin(), 403);
+
+        $mensagemFila = app(FilaAutomacoesStatus::class)->mensagemBloqueioDesenvolvimento();
+        if ($mensagemFila !== null) {
+            session()->flash('error', $mensagemFila);
+
+            return;
+        }
 
         if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
             session()->flash('error', 'Selecione um escritório no menu superior.');
@@ -164,6 +172,7 @@ class ExecutarConsultaAvulsa extends Component
         }
 
         return view('livewire.automacao-fiscal.executar-consulta-avulsa', [
+            'avisoFila' => app(FilaAutomacoesStatus::class)->avisoDesenvolvimento(),
             'tipos' => $tipos,
             'meta' => $meta,
             'certificados' => $certificados,

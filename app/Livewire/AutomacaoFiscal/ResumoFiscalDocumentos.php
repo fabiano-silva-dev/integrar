@@ -10,6 +10,7 @@ use App\Services\AutomacaoFiscal\AnaliseFiscalService;
 use App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter;
 use App\Services\AutomacaoFiscal\ExtratoNfeEcacRsParser;
 use App\Services\AutomacaoFiscal\ExtratoNfseParser;
+use App\Services\AutomacaoFiscal\FilaAutomacoesStatus;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadProgresso;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadService;
 use App\Services\OperadoraContext;
@@ -108,6 +109,13 @@ class ResumoFiscalDocumentos extends Component
 
     public function baixarXml(int $documentoId): void
     {
+        $mensagemFila = app(FilaAutomacoesStatus::class)->mensagemBloqueioDesenvolvimento();
+        if ($mensagemFila !== null) {
+            session()->flash('error', $mensagemFila);
+
+            return;
+        }
+
         if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
             session()->flash('error', 'Selecione um escritório no menu superior.');
 
@@ -251,6 +259,7 @@ class ResumoFiscalDocumentos extends Component
         }
 
         return view('livewire.automacao-fiscal.resumo-fiscal-documentos', [
+            'avisoFila' => app(FilaAutomacoesStatus::class)->avisoDesenvolvimento(),
             'empresas' => $empresas,
             'portais' => $portais,
             'analises' => $analises,

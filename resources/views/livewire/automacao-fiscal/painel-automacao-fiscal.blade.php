@@ -22,6 +22,8 @@
             </div>
         </div>
 
+        <x-aviso-fila-automacoes />
+
         @if ($precisaSelecionarEscritorio)
             <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded">
                 Selecione um escritório no menu superior.

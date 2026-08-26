@@ -1,6 +1,6 @@
 <div
     class="p-4 sm:p-6 lg:p-8"
-    @if ($xmlModalAberto && $xmlStatus === 'running') wire:poll.1500ms="atualizarProgressoXml" @endif
+    @if (($xmlModalAberto && $xmlStatus === 'running') || $avisoFila) wire:poll.2s="atualizarProgressoXml" @endif
 >
     <div class="w-full max-w-[1600px] mx-auto space-y-5">
         <div class="flex flex-wrap items-end justify-between gap-3">
@@ -28,6 +28,8 @@
         @if (session()->has('error'))
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{{ session('error') }}</div>
         @endif
+
+        <x-aviso-fila-automacoes :aviso="$avisoFila" />
 
         @if ($precisaSelecionarEscritorio)
             <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded">

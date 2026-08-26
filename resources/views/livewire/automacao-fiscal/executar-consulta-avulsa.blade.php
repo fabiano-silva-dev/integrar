@@ -1,6 +1,6 @@
 <div
     class="p-4 sm:p-6 lg:p-8"
-        @if($emAndamento || $status === 'running') wire:poll.1500ms="atualizarProgresso" @endif
+        @if($emAndamento || $status === 'running' || $avisoFila) wire:poll.2s="atualizarProgresso" @endif
 >
     <div class="max-w-[1600px] mx-auto space-y-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
@@ -40,6 +40,8 @@
         @if (session()->has('error'))
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl text-sm">{{ session('error') }}</div>
         @endif
+
+        <x-aviso-fila-automacoes :aviso="$avisoFila" />
 
         @if ($precisaSelecionarEscritorio)
             <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded-xl">
@@ -100,7 +102,7 @@
                             type="button"
                             wire:click="executar"
                             wire:loading.attr="disabled"
-                            @disabled($emAndamento || $status === 'running')
+                            @disabled($emAndamento || $status === 'running' || $avisoFila)
                             class="h-12 px-6 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60"
                         >
                             <span wire:loading.remove wire:target="executar">Executar</span>

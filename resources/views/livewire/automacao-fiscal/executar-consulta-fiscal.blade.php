@@ -1,6 +1,6 @@
 <div
     class="p-4 sm:p-6 lg:p-8"
-    @if($emAndamento) wire:poll.1500ms @endif
+    @if($emAndamento || $avisoFila) wire:poll.2s @endif
     x-data
     @scroll-progresso-execucao.window="$nextTick(() => document.getElementById('painel-progresso-execucao')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))"
 >
@@ -34,6 +34,8 @@
         @if (session()->has('error'))
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl text-sm">{{ session('error') }}</div>
         @endif
+
+        <x-aviso-fila-automacoes :aviso="$avisoFila" />
 
         @if ($precisaSelecionarEscritorio)
             <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded-xl">
@@ -379,13 +381,13 @@
                                 </label>
                                 <button type="button" wire:click="executar" wire:loading.attr="disabled"
                                     class="h-11 px-5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 sm:min-w-[200px]"
-                                    @disabled(!$portal_recurso_id)>
+                                    @disabled(!$portal_recurso_id || $avisoFila)>
                                     Executar agora
                                 </button>
                             @elseif ($tipo_consulta === 'validar_acesso')
                                 <button type="button" wire:click="testarAcesso" wire:loading.attr="disabled"
                                     class="h-11 flex-1 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60"
-                                    @disabled(!$empresa_integracao_id)>
+                                    @disabled(!$empresa_integracao_id || $avisoFila)>
                                     Validar acesso
                                 </button>
                             @else
