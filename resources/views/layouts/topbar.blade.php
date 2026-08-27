@@ -1,5 +1,5 @@
 {{-- Cabeçalho: marca + seletores + avatar --}}
-<header class="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-4 sm:px-6">
+<header class="flex h-16 shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-4 sm:px-6">
     <button type="button"
        @click="toggleSidebar()"
        class="flex shrink-0 items-center min-w-0 rounded-lg p-1 hover:bg-gray-100 lg:hidden"

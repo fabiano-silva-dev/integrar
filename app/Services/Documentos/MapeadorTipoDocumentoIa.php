@@ -27,7 +27,11 @@ class MapeadorTipoDocumentoIa
                 'tipo_ia' => $saida['tipo_documento'] ?? null,
                 'categoria_arquivo' => $saida['categoria_arquivo'] ?? null,
                 'numero_documento' => $saida['numero_documento'] ?? null,
+                'empresa_id' => isset($saida['empresa_id']) && is_numeric($saida['empresa_id'])
+                    ? (int) $saida['empresa_id']
+                    : null,
                 'empresa_cnpj' => $saida['empresa_cnpj'] ?? null,
+                'empresa_razao_social' => $saida['empresa_razao_social'] ?? $saida['empresa_nome'] ?? null,
                 'terceiro_cnpj' => $saida['terceiro_cnpj'] ?? null,
                 'nome_funcionario' => $saida['nome_funcionario'] ?? null,
             ],
@@ -43,6 +47,7 @@ class MapeadorTipoDocumentoIa
             str_contains($texto, 'nfs') || str_contains($texto, 'servico') => TipoDocumentoRecebido::Nfse,
             str_contains($texto, 'cte') || str_contains($texto, 'ct-e') || str_contains($texto, 'conhecimento de transporte') || str_contains($texto, 'dacte') => TipoDocumentoRecebido::Cte,
             str_contains($texto, 'mdfe') || str_contains($texto, 'mdf-e') || str_contains($texto, 'manifesto') || str_contains($texto, 'damdfe') => TipoDocumentoRecebido::Mdfe,
+            str_contains($texto, 'fatura') || str_contains($texto, 'nf3e') || str_contains($texto, 'danf3e') || str_contains($texto, 'nf3-e') || str_contains($texto, 'energia eletrica') || str_contains($texto, 'conta de luz') || str_contains($texto, 'conta de agua') => TipoDocumentoRecebido::Faturas,
             str_contains($texto, 'nfe') || str_contains($texto, 'danfe') || str_contains($texto, 'nota fiscal') => TipoDocumentoRecebido::Nfe,
             str_contains($texto, 'xml') => TipoDocumentoRecebido::Xmls,
             str_contains($texto, 'extrato') || str_contains($texto, 'ofx') => TipoDocumentoRecebido::Extratos,

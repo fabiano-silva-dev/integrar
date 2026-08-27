@@ -8,8 +8,10 @@ use App\Models\Documentos\DocumentoRecebido;
 use App\Models\Documentos\EmpresaPastaDrive;
 use App\Models\Empresa;
 use App\Services\Documentos\CompactarDocumentosDriveService;
+use App\Services\Documentos\MoverDocumentoDriveService;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 
 class ExploradorDocumentos extends Component
@@ -28,6 +30,25 @@ class ExploradorDocumentos extends Component
     public array $selecionados = [];
 
     public ?string $erro = null;
+
+    public bool $modalMoverAberto = false;
+
+    /** @var list<int> */
+    public array $idsMover = [];
+
+    public ?int $moverEmpresaId = null;
+
+    public ?int $moverAno = null;
+
+    public string $moverTipo = '';
+
+    /** @var list<int> */
+    public array $moverEmpresaIdsPermitidas = [];
+
+    public bool $confirmandoExclusao = false;
+
+    /** @var list<int> */
+    public array $idsExcluir = [];
 
     protected $queryString = [
         'empresaId' => ['except' => null, 'as' => 'empresa'],
@@ -164,6 +185,166 @@ class ExploradorDocumentos extends Component
         return $this->baixarChaves($compactar, [$chave]);
     }
 
+    public function abrirMoverItem(string $chave): void
+    {
+        $this->abrirMoverChaves([$chave]);
+    }
+
+    public function abrirMoverSelecionados(): void
+    {
+        $this->abrirMoverChaves($this->selecionados);
+    }
+
+    public function fecharMover(): void
+    {
+        $this->modalMoverAberto = false;
+        $this->idsMover = [];
+        $this->moverEmpresaId = null;
+        $this->moverAno = null;
+        $this->moverTipo = '';
+        $this->moverEmpresaIdsPermitidas = [];
+    }
+
+    public function moverAbrirEmpresa(int $empresaId): void
+    {
+        if ($this->moverEmpresaIdsPermitidas !== [] && ! in_array($empresaId, $this->moverEmpresaIdsPermitidas, true)) {
+            return;
+        }
+
+        $this->moverEmpresaId = $empresaId;
+        $this->moverAno = null;
+        $this->moverTipo = '';
+    }
+
+    public function moverAbrirAno(int $ano): void
+    {
+        $this->moverAno = $ano;
+        $this->moverTipo = '';
+    }
+
+    public function moverAbrirTipo(string $tipo): void
+    {
+        if (TipoDocumentoRecebido::tryFrom($tipo) === null) {
+            return;
+        }
+
+        $this->moverTipo = $tipo;
+    }
+
+    public function moverIrPara(string $nivel): void
+    {
+        if ($nivel === 'empresas') {
+            $this->moverEmpresaId = null;
+            $this->moverAno = null;
+            $this->moverTipo = '';
+
+            return;
+        }
+
+        if ($nivel === 'empresa') {
+            $this->moverAno = null;
+            $this->moverTipo = '';
+
+            return;
+        }
+
+        if ($nivel === 'ano') {
+            $this->moverTipo = '';
+        }
+    }
+
+    public function confirmarMover(MoverDocumentoDriveService $mover): void
+    {
+        $this->erro = null;
+        $this->garantirEmpresaDoEscritorio();
+
+        if ($this->precisaSelecionarEscritorio()) {
+            return;
+        }
+
+        if ($this->moverEmpresaId === null || $this->moverAno === null || $this->moverTipo === '') {
+            $this->erro = 'Escolha a pasta de destino.';
+
+            return;
+        }
+
+        if ($this->destinoMoverIgualOrigem()) {
+            return;
+        }
+
+        $tipo = TipoDocumentoRecebido::tryFrom($this->moverTipo);
+
+        if ($tipo === null) {
+            $this->erro = 'Pasta de destino inválida.';
+
+            return;
+        }
+
+        try {
+            foreach ($this->idsMover as $id) {
+                $documento = DocumentoRecebido::query()
+                    ->where('status', StatusDocumentoRecebido::EnviadoDrive)
+                    ->find($id);
+
+                if ($documento === null) {
+                    continue;
+                }
+
+                $mover->mover($documento, (int) $this->moverEmpresaId, $tipo, (int) $this->moverAno);
+            }
+
+            $this->fecharMover();
+            $this->selecionados = [];
+        } catch (\Throwable $exception) {
+            $this->erro = $exception->getMessage();
+        }
+    }
+
+    public function pedirExcluirItem(string $chave): void
+    {
+        $this->pedirExcluirChaves([$chave]);
+    }
+
+    public function pedirExcluirSelecionados(): void
+    {
+        $this->pedirExcluirChaves($this->selecionados);
+    }
+
+    public function cancelarExclusao(): void
+    {
+        $this->confirmandoExclusao = false;
+        $this->idsExcluir = [];
+    }
+
+    public function confirmarExclusao(MoverDocumentoDriveService $mover): void
+    {
+        $this->erro = null;
+        $this->garantirEmpresaDoEscritorio();
+
+        if ($this->precisaSelecionarEscritorio()) {
+            return;
+        }
+
+        try {
+            foreach ($this->idsExcluir as $id) {
+                $documento = DocumentoRecebido::query()
+                    ->where('status', StatusDocumentoRecebido::EnviadoDrive)
+                    ->find($id);
+
+                if ($documento === null) {
+                    continue;
+                }
+
+                $mover->excluir($documento);
+            }
+
+            $this->cancelarExclusao();
+            $this->selecionados = [];
+        } catch (\Throwable $exception) {
+            $this->erro = $exception->getMessage();
+        }
+    }
+
     public function baixarPastaAtual(CompactarDocumentosDriveService $compactar)
     {
         if ($this->empresaId === null) {
@@ -236,6 +417,15 @@ class ExploradorDocumentos extends Component
         }
 
         $chavesVisiveis = $itens->pluck('chave')->filter()->values()->all();
+        $moverItens = collect();
+        $moverBreadcrumb = [];
+        $moverNivel = 'empresas';
+        $moverPodeConfirmar = false;
+        $moverDestinoIgual = false;
+
+        if ($this->modalMoverAberto && ! $precisaSelecionarEscritorio) {
+            [$moverItens, $moverNivel, $moverBreadcrumb, $moverPodeConfirmar, $moverDestinoIgual] = $this->montarModalMover($empresas);
+        }
 
         return view('livewire.documentos.explorador-documentos', [
             'precisaSelecionarEscritorio' => $precisaSelecionarEscritorio,
@@ -249,6 +439,11 @@ class ExploradorDocumentos extends Component
             'chavesVisiveis' => $chavesVisiveis,
             'todosSelecionados' => $chavesVisiveis !== [] && count($this->selecionados) === count($chavesVisiveis),
             'podeConfigurar' => $this->podeConfigurar(),
+            'moverItens' => $moverItens,
+            'moverBreadcrumb' => $moverBreadcrumb,
+            'moverNivel' => $moverNivel,
+            'moverPodeConfirmar' => $moverPodeConfirmar,
+            'moverDestinoIgual' => $moverDestinoIgual,
         ]);
     }
 
@@ -383,29 +578,62 @@ class ExploradorDocumentos extends Component
     private function itensArquivo(Empresa $empresa, int $ano, string $tipo): Collection
     {
         $busca = trim($this->busca);
+        $atencao = $tipo === TipoDocumentoRecebido::AtencaoIdentificarEmpresa->value;
 
         return DocumentoRecebido::query()
-            ->where('empresa_id', $empresa->id)
             ->where('ano', $ano)
-            ->where('tipo_documento', $tipo)
             ->whereNotNull('drive_file_id')
             ->where('status', StatusDocumentoRecebido::EnviadoDrive)
+            ->when(! $atencao, fn ($q) => $q->where('empresa_id', $empresa->id)->where('tipo_documento', $tipo))
+            ->when($atencao, fn ($q) => $q->where('metadados->identificacao_pendente', true))
             ->when($busca !== '', fn ($q) => $q->where('nome_original', 'like', '%'.$busca.'%'))
             ->orderByDesc('data_documento')
             ->orderByDesc('id')
             ->get()
-            ->map(function (DocumentoRecebido $documento) {
+            ->filter(function (DocumentoRecebido $documento) use ($empresa, $atencao) {
+                $pendente = (bool) ($documento->metadados['identificacao_pendente'] ?? false);
+
+                if ($atencao) {
+                    return $this->copiaDriveDaEmpresa($documento, (int) $empresa->id) !== null;
+                }
+
+                return ! $pendente;
+            })
+            ->map(function (DocumentoRecebido $documento) use ($empresa) {
+                $copia = $this->copiaDriveDaEmpresa($documento, (int) $empresa->id);
+
                 return [
                     'chave' => 'arquivo:'.$documento->id,
                     'tipo' => 'arquivo',
                     'nome' => $documento->nome_original,
                     'subtitulo' => $documento->data_documento?->format('d/m/Y') ?: $documento->created_at?->format('d/m/Y H:i'),
-                    'url_drive' => $documento->urlDrive(),
+                    'tamanho' => $this->tamanhoFormatado($documento),
+                    'url_drive' => is_array($copia) ? ($copia['drive_link'] ?? $documento->urlDrive()) : $documento->urlDrive(),
                     'abrir' => 'arquivo',
                     'id' => $documento->id,
                 ];
             })
             ->values();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function copiaDriveDaEmpresa(DocumentoRecebido $documento, int $empresaId): ?array
+    {
+        $copias = $documento->metadados['copias_drive'] ?? [];
+
+        if (! is_array($copias)) {
+            return null;
+        }
+
+        foreach ($copias as $copia) {
+            if (is_array($copia) && (int) ($copia['empresa_id'] ?? 0) === $empresaId) {
+                return $copia;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -449,9 +677,21 @@ class ExploradorDocumentos extends Component
                 if ($this->empresaId === null || $this->ano === null) {
                     continue;
                 }
-                $query->where('empresa_id', $this->empresaId)
-                    ->where('ano', $this->ano)
-                    ->where('tipo_documento', substr($chave, 5));
+                $tipo = substr($chave, 5);
+                $query->where('ano', $this->ano);
+
+                if ($tipo === TipoDocumentoRecebido::AtencaoIdentificarEmpresa->value) {
+                    $empresaId = (int) $this->empresaId;
+                    $idsPasta = $query->where('metadados->identificacao_pendente', true)->get()
+                        ->filter(fn (DocumentoRecebido $doc) => $this->copiaDriveDaEmpresa($doc, $empresaId) !== null)
+                        ->pluck('id')
+                        ->all();
+                    $ids = array_merge($ids, $idsPasta);
+
+                    continue;
+                }
+
+                $query->where('empresa_id', $this->empresaId)->where('tipo_documento', $tipo);
             } else {
                 continue;
             }
@@ -460,6 +700,26 @@ class ExploradorDocumentos extends Component
         }
 
         return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * @param  list<string>  $chaves
+     * @return list<int>
+     */
+    private function idsArquivosDoEscritorio(array $chaves): array
+    {
+        $ids = $this->idsArquivosDasChaves($chaves);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return DocumentoRecebido::query()
+            ->whereIn('id', $ids)
+            ->where('status', StatusDocumentoRecebido::EnviadoDrive)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -565,5 +825,209 @@ class ExploradorDocumentos extends Component
         $user = auth()->user();
 
         return $user !== null && ($user->isSuperAdmin() || in_array($user->role, ['admin', 'gerente'], true));
+    }
+
+    /**
+     * @param  list<string>  $chaves
+     */
+    private function abrirMoverChaves(array $chaves): void
+    {
+        $this->erro = null;
+        $this->garantirEmpresaDoEscritorio();
+
+        if ($this->precisaSelecionarEscritorio()) {
+            return;
+        }
+
+        $ids = $this->idsArquivosDoEscritorio($chaves);
+
+        if ($ids === []) {
+            $this->erro = 'Selecione um arquivo para mover.';
+
+            return;
+        }
+
+        $this->idsMover = $ids;
+        $this->modalMoverAberto = true;
+        $this->confirmandoExclusao = false;
+        $candidatas = $this->idsEmpresasCandidatasMover($ids);
+        $atencaoGrupo = $this->tipo === TipoDocumentoRecebido::AtencaoIdentificarEmpresa->value
+            && count($candidatas) > 1;
+
+        if ($atencaoGrupo) {
+            $this->moverEmpresaIdsPermitidas = $candidatas;
+            $this->moverEmpresaId = null;
+            $this->moverAno = null;
+            $this->moverTipo = '';
+
+            return;
+        }
+
+        $this->moverEmpresaIdsPermitidas = [];
+        $this->moverEmpresaId = $this->empresaId;
+        $this->moverAno = $this->ano;
+        $this->moverTipo = '';
+    }
+
+    /**
+     * @param  list<string>  $chaves
+     */
+    private function pedirExcluirChaves(array $chaves): void
+    {
+        $this->erro = null;
+        $this->garantirEmpresaDoEscritorio();
+
+        if ($this->precisaSelecionarEscritorio()) {
+            return;
+        }
+
+        $ids = $this->idsArquivosDoEscritorio($chaves);
+
+        if ($ids === []) {
+            $this->erro = 'Selecione um arquivo para excluir.';
+
+            return;
+        }
+
+        $this->idsExcluir = $ids;
+        $this->confirmandoExclusao = true;
+        $this->modalMoverAberto = false;
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function idsEmpresasCandidatasMover(array $ids): array
+    {
+        $comDrive = $this->empresasDoEscritorio()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $candidatas = [];
+
+        $documentos = DocumentoRecebido::query()
+            ->whereIn('id', $ids)
+            ->where('status', StatusDocumentoRecebido::EnviadoDrive)
+            ->with('grupo')
+            ->get();
+
+        foreach ($documentos as $documento) {
+            $copias = $documento->metadados['copias_drive'] ?? [];
+
+            if (is_array($copias)) {
+                foreach ($copias as $copia) {
+                    if (is_array($copia)) {
+                        $empresaId = (int) ($copia['empresa_id'] ?? 0);
+
+                        if ($empresaId > 0) {
+                            $candidatas[] = $empresaId;
+                        }
+                    }
+                }
+            }
+
+            if ($documento->grupo !== null) {
+                $candidatas = array_merge($candidatas, $documento->grupo->idsEmpresas());
+            }
+        }
+
+        return array_values(array_unique(array_intersect($candidatas, $comDrive)));
+    }
+
+    /**
+     * @param  Collection<int, Empresa>  $empresas
+     * @return array{0: Collection<int, array<string, mixed>>, 1: string, 2: list<array{label: string, nivel: string}>, 3: bool, 4: bool}
+     */
+    private function montarModalMover(Collection $empresas): array
+    {
+        $empresasModal = $this->moverEmpresaIdsPermitidas !== []
+            ? $empresas->filter(fn (Empresa $empresa) => in_array((int) $empresa->id, $this->moverEmpresaIdsPermitidas, true))->values()
+            : $empresas;
+
+        $breadcrumb = [['label' => 'Empresas', 'nivel' => 'empresas']];
+        $empresaAtual = $this->moverEmpresaId
+            ? $empresas->firstWhere('id', $this->moverEmpresaId)
+            : null;
+
+        if ($empresaAtual === null) {
+            $itens = $empresasModal->map(function (Empresa $empresa) {
+                return [
+                    'chave' => 'empresa:'.$empresa->id,
+                    'tipo' => 'pasta',
+                    'nome' => $empresa->nome_fantasia ?: $empresa->nome,
+                    'subtitulo' => $empresa->codigo_sistema ?: $empresa->cnpj,
+                    'abrir' => 'empresa',
+                    'id' => $empresa->id,
+                ];
+            })->values();
+
+            return [$itens, 'empresas', $breadcrumb, false, false];
+        }
+
+        $breadcrumb[] = [
+            'label' => (string) ($empresaAtual->nome_fantasia ?: $empresaAtual->nome),
+            'nivel' => 'empresa',
+        ];
+
+        if ($this->moverAno === null) {
+            $itens = $this->itensAno($empresaAtual)->map(function (array $item) {
+                $item['abrir'] = 'ano';
+
+                return $item;
+            });
+
+            return [$itens, 'anos', $breadcrumb, false, false];
+        }
+
+        $breadcrumb[] = ['label' => (string) $this->moverAno, 'nivel' => 'ano'];
+
+        if ($this->moverTipo === '') {
+            $itens = $this->itensTipo($empresaAtual, $this->moverAno)->map(function (array $item) {
+                $item['abrir'] = 'tipo';
+
+                return $item;
+            });
+
+            return [$itens, 'tipos', $breadcrumb, false, false];
+        }
+
+        $tipoEnum = TipoDocumentoRecebido::tryFrom($this->moverTipo);
+        $breadcrumb[] = ['label' => $tipoEnum?->rotulo() ?? $this->moverTipo, 'nivel' => 'tipo'];
+        $itens = collect([
+            [
+                'chave' => 'destino:'.$this->moverTipo,
+                'tipo' => 'pasta',
+                'nome' => $tipoEnum?->rotulo() ?? $this->moverTipo,
+                'subtitulo' => 'Pasta de destino',
+                'abrir' => '',
+                'id' => $this->moverTipo,
+            ],
+        ]);
+
+        return [$itens, 'destino', $breadcrumb, true, $this->destinoMoverIgualOrigem()];
+    }
+
+    private function destinoMoverIgualOrigem(): bool
+    {
+        return $this->moverEmpresaId !== null
+            && $this->moverAno !== null
+            && $this->moverTipo !== ''
+            && $this->empresaId === $this->moverEmpresaId
+            && $this->ano === $this->moverAno
+            && $this->tipo === $this->moverTipo;
+    }
+
+    private function tamanhoFormatado(DocumentoRecebido $documento): string
+    {
+        if ($documento->tamanho_bytes === null && is_string($documento->storage_path) && $documento->storage_path !== '') {
+            try {
+                if (Storage::exists($documento->storage_path)) {
+                    $documento->update(['tamanho_bytes' => Storage::size($documento->storage_path)]);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return DocumentoRecebido::formatarTamanho(
+            $documento->tamanho_bytes !== null ? (int) $documento->tamanho_bytes : null,
+        );
     }
 }

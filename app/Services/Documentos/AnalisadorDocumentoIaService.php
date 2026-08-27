@@ -2,6 +2,7 @@
 
 namespace App\Services\Documentos;
 
+use App\Models\Empresa;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -14,7 +15,8 @@ class AnalisadorDocumentoIaService
     ) {}
 
     /**
-     * @return array{saida: array<string, mixed>, origem: string, modelo: string}|null
+     * @param  iterable<int, \App\Models\Empresa>  $empresasGrupo
+     * @return array{saida: ?array<string, mixed>, origem: ?string, modelo: ?string, prompt: string, resposta: ?string}
      */
     public function analisar(
         ?int $operadoraId,
@@ -22,11 +24,19 @@ class AnalisadorDocumentoIaService
         string $mime,
         string $nomeArquivo,
         ?string $textoExtraido = null,
-    ): ?array {
+        iterable $empresasGrupo = [],
+    ): array {
         $chaves = $this->credenciais->credenciais($operadoraId);
-        $prompt = $this->prompt($nomeArquivo, $textoExtraido);
+        $prompt = $this->prompt($nomeArquivo, $textoExtraido, $empresasGrupo);
         $ehImagem = str_starts_with(strtolower($mime), 'image/');
         $ehPdf = str_contains(strtolower($mime), 'pdf') || str_starts_with($conteudo, '%PDF');
+        $ultimo = [
+            'saida' => null,
+            'origem' => null,
+            'modelo' => null,
+            'prompt' => $prompt,
+            'resposta' => null,
+        ];
 
         if ($chaves['gemini'] !== '') {
             foreach ((array) config('documentos.ia.gemini_modelos', []) as $modelo) {
@@ -34,10 +44,20 @@ class AnalisadorDocumentoIaService
                     continue;
                 }
 
-                $saida = $this->chamarGemini($chaves['gemini'], $modelo, $prompt, $conteudo, $mime, $ehImagem, $ehPdf);
+                $chamada = $this->chamarGemini($chaves['gemini'], $modelo, $prompt, $conteudo, $mime, $ehImagem, $ehPdf);
 
-                if ($saida !== null) {
-                    return ['saida' => $saida, 'origem' => 'ia_gemini', 'modelo' => $modelo];
+                if ($chamada === null) {
+                    continue;
+                }
+
+                $ultimo['origem'] = 'ia_gemini';
+                $ultimo['modelo'] = $modelo;
+                $ultimo['resposta'] = $chamada['resposta'];
+
+                if ($chamada['saida'] !== null) {
+                    $ultimo['saida'] = $chamada['saida'];
+
+                    return $ultimo;
                 }
             }
         }
@@ -48,10 +68,20 @@ class AnalisadorDocumentoIaService
                     continue;
                 }
 
-                $saida = $this->chamarGroq($chaves['groq'], $modelo, $prompt, $conteudo, $mime);
+                $chamada = $this->chamarGroq($chaves['groq'], $modelo, $prompt, $conteudo, $mime);
 
-                if ($saida !== null) {
-                    return ['saida' => $saida, 'origem' => 'ia_groq', 'modelo' => $modelo];
+                if ($chamada === null) {
+                    continue;
+                }
+
+                $ultimo['origem'] = 'ia_groq';
+                $ultimo['modelo'] = $modelo;
+                $ultimo['resposta'] = $chamada['resposta'];
+
+                if ($chamada['saida'] !== null) {
+                    $ultimo['saida'] = $chamada['saida'];
+
+                    return $ultimo;
                 }
             }
         }
@@ -62,19 +92,29 @@ class AnalisadorDocumentoIaService
                     continue;
                 }
 
-                $saida = $this->chamarGroqTexto($chaves['groq'], $modelo, $prompt);
+                $chamada = $this->chamarGroqTexto($chaves['groq'], $modelo, $prompt);
 
-                if ($saida !== null) {
-                    return ['saida' => $saida, 'origem' => 'ia_groq', 'modelo' => $modelo];
+                if ($chamada === null) {
+                    continue;
+                }
+
+                $ultimo['origem'] = 'ia_groq';
+                $ultimo['modelo'] = $modelo;
+                $ultimo['resposta'] = $chamada['resposta'];
+
+                if ($chamada['saida'] !== null) {
+                    $ultimo['saida'] = $chamada['saida'];
+
+                    return $ultimo;
                 }
             }
         }
 
-        return null;
+        return $ultimo;
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array{saida: ?array<string, mixed>, resposta: string}|null
      */
     private function chamarGemini(
         string $apiKey,
@@ -127,11 +167,15 @@ class AnalisadorDocumentoIaService
 
         $texto = $response->json('candidates.0.content.parts.0.text');
 
-        return is_string($texto) ? $this->parseJson($texto) : null;
+        if (! is_string($texto) || trim($texto) === '') {
+            return null;
+        }
+
+        return ['saida' => $this->parseJson($texto), 'resposta' => $texto];
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array{saida: ?array<string, mixed>, resposta: string}|null
      */
     private function chamarGroq(string $apiKey, string $modelo, string $prompt, string $conteudo, string $mime): ?array
     {
@@ -171,11 +215,15 @@ class AnalisadorDocumentoIaService
 
         $texto = $response->json('choices.0.message.content');
 
-        return is_string($texto) ? $this->parseJson($texto) : null;
+        if (! is_string($texto) || trim($texto) === '') {
+            return null;
+        }
+
+        return ['saida' => $this->parseJson($texto), 'resposta' => $texto];
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array{saida: ?array<string, mixed>, resposta: string}|null
      */
     private function chamarGroqTexto(string $apiKey, string $modelo, string $prompt): ?array
     {
@@ -202,21 +250,31 @@ class AnalisadorDocumentoIaService
 
         $texto = $response->json('choices.0.message.content');
 
-        return is_string($texto) ? $this->parseJson($texto) : null;
+        if (! is_string($texto) || trim($texto) === '') {
+            return null;
+        }
+
+        return ['saida' => $this->parseJson($texto), 'resposta' => $texto];
     }
 
-    private function prompt(string $nomeArquivo, ?string $textoExtraido): string
+    /**
+     * @param  iterable<int, \App\Models\Empresa>  $empresasGrupo
+     */
+    private function prompt(string $nomeArquivo, ?string $textoExtraido, iterable $empresasGrupo = []): string
     {
         $trecho = is_string($textoExtraido) && $textoExtraido !== ''
             ? mb_substr($textoExtraido, 0, 8000)
             : '';
+        $listaEmpresas = $this->blocoEmpresasGrupo($empresasGrupo);
 
         return <<<PROMPT
 Você é um especialista em documentos contábeis, fiscais e trabalhistas brasileiros.
 Analise o documento e retorne SOMENTE um JSON válido, sem markdown, com estes campos:
-- tipo_documento (ex.: danfe, nfc-e, nfs-e, cte, mdfe, comprovante pix, extrato, boleto, aviso prévio, outros)
-- empresa_razao_social
-- empresa_cnpj
+- tipo_documento (ex.: danfe, nfc-e, nfs-e, cte, mdfe, fatura, comprovante pix, extrato, boleto, aviso prévio, outros)
+Use "fatura" para conta de água, luz/energia (NF3-e / DANF3E), telefone, internet, gás e demais contas de consumo. Não classifique esses como danfe/nfe.
+- empresa_id (id numérico da lista abaixo da empresa do cliente / dona da pasta no Drive, ou null)
+- empresa_razao_social (use o nome da lista, não invente)
+- empresa_cnpj (use o CNPJ da lista se coincidir; senão o CNPJ lido no documento)
 - terceiro_razao_social
 - terceiro_cnpj
 - numero_documento
@@ -225,12 +283,48 @@ Analise o documento e retorne SOMENTE um JSON válido, sem markdown, com estes c
 - categoria_arquivo (FISCAL, CONTABIL, FOLHA ou OUTROS)
 - ano
 - mes (MM)
-- sugestao_nome_arquivo (Tipo - Nome - dd.mm.aaaa + extensão)
+- sugestao_nome_arquivo (Tipo - Nome da empresa da lista - dd.mm.aaaa + extensão)
+
+Empresas vinculadas ao grupo WhatsApp (compare CNPJ e nomes — razão, fantasia, nome e pasta — para escolher a pasta no Drive):
+{$listaEmpresas}
+
+Se o documento tiver emitente e destinatário, escolha o que estiver nesta lista. Se nenhum CNPJ bater, use o nome mais parecido. Se não tiver certeza, empresa_id = null.
 
 Nome original informado (não use como critério de tipo): {$nomeArquivo}
 Texto extraído (pode estar vazio):
 {$trecho}
 PROMPT;
+    }
+
+    /**
+     * @param  iterable<int, \App\Models\Empresa>  $empresas
+     */
+    private function blocoEmpresasGrupo(iterable $empresas): string
+    {
+        $nomer = new NomePastaDriveEmpresa;
+        $linhas = [];
+
+        foreach ($empresas as $empresa) {
+            if (! $empresa instanceof Empresa) {
+                continue;
+            }
+
+            $linhas[] = sprintf(
+                '- id=%d | CNPJ %s | razão: %s | fantasia: %s | nome: %s | pasta Drive: %s',
+                (int) $empresa->id,
+                trim((string) ($empresa->cnpj ?: '(sem CNPJ)')),
+                trim((string) ($empresa->razao_social ?: '-')),
+                trim((string) ($empresa->nome_fantasia ?: '-')),
+                trim((string) ($empresa->nome ?: '-')),
+                $nomer->sugerir($empresa) ?: '-',
+            );
+        }
+
+        if ($linhas === []) {
+            return '(nenhuma empresa vinculada ao grupo)';
+        }
+
+        return implode("\n", $linhas);
     }
 
     /**

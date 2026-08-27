@@ -3,13 +3,20 @@
 namespace Tests\Feature;
 
 use App\Enums\Documentos\StatusConexaoWhatsapp;
+use App\Enums\Documentos\StatusContaGoogle;
 use App\Enums\Documentos\StatusDocumentoRecebido;
+use App\Enums\Documentos\TipoDocumentoRecebido;
 use App\Models\Documentos\ConexaoWhatsapp;
+use App\Models\Documentos\ContaGoogle;
+use App\Models\Documentos\DocumentoProcessoLog;
 use App\Models\Documentos\DocumentoRecebido;
+use App\Models\Documentos\EmpresaPastaDrive;
 use App\Models\Documentos\GrupoWhatsapp;
 use App\Models\Empresa;
 use App\Models\EmpresasOperadora;
 use App\Models\User;
+use App\Services\Documentos\ClassificadorDocumentoService;
+use App\Services\Documentos\GoogleDriveService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -239,5 +246,200 @@ class TenantIsolationDocumentosWebhookTest extends TestCase
 
         $this->assertSame(StatusDocumentoRecebido::Ignorado, $segundo->status);
         $this->assertSame(1, DocumentoRecebido::query()->where('status', StatusDocumentoRecebido::EnviadoDrive)->count());
+    }
+
+    public function test_debug_desligado_nao_grava_log_de_grupo_nao_monitorado(): void
+    {
+        config(['evolution.api_key' => '', 'documentos.debug' => false]);
+
+        $operadora = $this->enviarPdfGrupoNaoMonitorado();
+
+        $this->assertSame(0, DocumentoProcessoLog::query()->where('empresa_operadora_id', $operadora->id)->count());
+        $this->assertSame(0, DocumentoRecebido::withoutGlobalScope('operadora')->where('empresa_operadora_id', $operadora->id)->count());
+    }
+
+    public function test_debug_ligado_grava_ignorado_do_grupo_nao_monitorado(): void
+    {
+        config(['evolution.api_key' => '', 'documentos.debug' => true]);
+
+        $operadora = $this->enviarPdfGrupoNaoMonitorado();
+
+        $this->assertSame(0, DocumentoRecebido::withoutGlobalScope('operadora')->where('empresa_operadora_id', $operadora->id)->count());
+        $this->assertDatabaseHas('documentos_processo_logs', [
+            'empresa_operadora_id' => $operadora->id,
+            'etapa' => 'ignorado',
+            'nivel' => 'aviso',
+        ]);
+
+        $log = DocumentoProcessoLog::query()->where('empresa_operadora_id', $operadora->id)->first();
+        $this->assertNotNull($log);
+        $this->assertStringContainsString('POSTO PILECCO X CONTAB', (string) $log->mensagem);
+        $this->assertSame('grupo_nao_monitorado', $log->contexto['motivo'] ?? null);
+        $this->assertSame('ENERGIA ELETRICA 07.2026.pdf', $log->contexto['nome_arquivo'] ?? null);
+    }
+
+    public function test_debug_ligado_nao_grava_texto_de_conversa_particular(): void
+    {
+        config(['evolution.api_key' => '', 'documentos.debug' => true, 'queue.default' => 'sync']);
+
+        $operadora = EmpresasOperadora::factory()->create();
+        $conexao = ConexaoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'status' => StatusConexaoWhatsapp::Conectado,
+            'nome_instancia' => 'integrar-op-'.$operadora->id,
+        ]);
+
+        $this->postJson('/webhooks/evolution', [
+            'event' => 'messages.upsert',
+            'instance' => $conexao->nome_instancia,
+            'data' => [
+                'key' => [
+                    'id' => 'MSG-PV-TEXTO',
+                    'remoteJid' => '5551999999999@s.whatsapp.net',
+                    'fromMe' => false,
+                ],
+                'message' => ['conversation' => 'oi'],
+            ],
+        ])->assertOk();
+
+        $this->assertSame(0, DocumentoProcessoLog::query()->where('empresa_operadora_id', $operadora->id)->count());
+    }
+
+    public function test_debug_ligado_registra_fluxo_ate_o_drive(): void
+    {
+        config([
+            'evolution.api_key' => '',
+            'evolution.url_base' => 'http://evolution.test',
+            'queue.default' => 'sync',
+            'documentos.debug' => true,
+        ]);
+        Storage::fake();
+
+        $operadora = EmpresasOperadora::factory()->create();
+        $empresa = Empresa::factory()->create(['empresa_operadora_id' => $operadora->id]);
+        $conexao = ConexaoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'status' => StatusConexaoWhatsapp::Conectado,
+            'nome_instancia' => 'integrar-op-'.$operadora->id,
+            'credenciais' => ['apikey' => 'k'],
+        ]);
+        GrupoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'conexao_whatsapp_id' => $conexao->id,
+            'empresa_id' => $empresa->id,
+            'jid' => '120363411193685778@g.us',
+            'nome' => 'TESTE DE DOCUMENTOS',
+            'monitorar' => true,
+        ]);
+        ContaGoogle::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'google_email' => 'drive@escritorio.test',
+            'access_token' => 'token',
+            'refresh_token' => 'refresh',
+            'status' => StatusContaGoogle::Conectado,
+        ]);
+        EmpresaPastaDrive::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'tipo' => EmpresaPastaDrive::TIPO_RAIZ,
+            'ano' => EmpresaPastaDrive::ANO_RAIZ,
+            'google_folder_id' => 'pasta-raiz',
+            'google_folder_nome' => 'Empresa',
+        ]);
+
+        $this->mock(ClassificadorDocumentoService::class, function ($mock) {
+            $mock->shouldReceive('classificar')->andReturn([
+                'tipo' => TipoDocumentoRecebido::Extratos,
+                'ano' => 2026,
+                'data' => '2026-07-01',
+                'metadados' => ['origem' => 'teste'],
+                'conclusivo' => true,
+            ]);
+        });
+        $this->mock(GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('enviarArquivo')->once()->andReturn([
+                'id' => 'file-1',
+                'link' => 'https://drive.google.com/file/d/file-1',
+                'path' => '2026/extratos/extrato.pdf',
+            ]);
+        });
+
+        Http::fake();
+
+        $this->postJson('/webhooks/evolution', [
+            'event' => 'messages.upsert',
+            'instance' => $conexao->nome_instancia,
+            'data' => [
+                'key' => [
+                    'id' => '3EB0FLUXO-DRIVE',
+                    'remoteJid' => '120363411193685778@g.us',
+                    'fromMe' => true,
+                ],
+                'message' => [
+                    'documentMessage' => [
+                        'fileName' => 'extrato.pdf',
+                        'mimetype' => 'application/pdf',
+                    ],
+                    'base64' => base64_encode('%PDF-1.4 teste'),
+                ],
+                'messageType' => 'documentMessage',
+            ],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('documentos_recebidos', [
+            'mensagem_whatsapp_id' => '3EB0FLUXO-DRIVE',
+            'status' => StatusDocumentoRecebido::EnviadoDrive->value,
+        ]);
+
+        $etapas = DocumentoProcessoLog::query()
+            ->where('empresa_operadora_id', $operadora->id)
+            ->orderBy('id')
+            ->pluck('etapa')
+            ->all();
+
+        $this->assertContains('baixar_midia', $etapas);
+        $this->assertContains('arquivo_local', $etapas);
+        $this->assertContains('enfileirado', $etapas);
+        $this->assertContains('classificar', $etapas);
+        $this->assertContains('enviado_drive', $etapas);
+    }
+
+    private function enviarPdfGrupoNaoMonitorado(): EmpresasOperadora
+    {
+        $operadora = EmpresasOperadora::factory()->create();
+        $conexao = ConexaoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'status' => StatusConexaoWhatsapp::Conectado,
+            'nome_instancia' => 'integrar-op-'.$operadora->id,
+        ]);
+        GrupoWhatsapp::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'conexao_whatsapp_id' => $conexao->id,
+            'empresa_id' => null,
+            'jid' => '120363376218800233@g.us',
+            'nome' => 'POSTO PILECCO X CONTAB',
+            'monitorar' => false,
+        ]);
+
+        $this->postJson('/webhooks/evolution', [
+            'event' => 'messages.upsert',
+            'instance' => $conexao->nome_instancia,
+            'data' => [
+                'key' => [
+                    'id' => 'MSG-IGNORADO-GRUPO',
+                    'remoteJid' => '120363376218800233@g.us',
+                    'fromMe' => false,
+                ],
+                'message' => [
+                    'documentMessage' => [
+                        'fileName' => 'ENERGIA ELETRICA 07.2026.pdf',
+                        'mimetype' => 'application/pdf',
+                    ],
+                ],
+                'messageType' => 'documentMessage',
+            ],
+        ])->assertOk();
+
+        return $operadora;
     }
 }

@@ -3,6 +3,7 @@
 return [
     'fila' => env('DOCUMENTOS_QUEUE', 'documentos'),
     'max_anexo_bytes' => (int) env('DOCUMENTOS_MAX_ANEXO_MB', 80) * 1024 * 1024,
+    'debug' => filter_var(env('DOCUMENTOS_DEBUG', false), FILTER_VALIDATE_BOOLEAN),
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID', ''),
         'client_secret' => env('GOOGLE_CLIENT_SECRET', ''),

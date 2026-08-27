@@ -11,7 +11,9 @@ enum TipoDocumentoRecebido: string
     case Mdfe = 'mdfe';
     case Xmls = 'xmls';
     case ComprovantesPagamento = 'comprovantes-pagamento';
+    case Faturas = 'faturas';
     case Extratos = 'extratos';
+    case AtencaoIdentificarEmpresa = 'atencao-identificar-empresa';
     case Outros = 'outros';
 
     public function rotulo(): string
@@ -24,14 +26,19 @@ enum TipoDocumentoRecebido: string
             self::Mdfe => 'MDF-e',
             self::Xmls => 'XMLs',
             self::ComprovantesPagamento => 'Comprovantes de pagamento',
+            self::Faturas => 'Faturas',
             self::Extratos => 'Extratos',
+            self::AtencaoIdentificarEmpresa => 'Atenção - identificar a empresa',
             self::Outros => 'Outros',
         };
     }
 
     public function pastaDrive(): string
     {
-        return $this->value;
+        return match ($this) {
+            self::AtencaoIdentificarEmpresa => 'Atenção - identificar a empresa',
+            default => $this->value,
+        };
     }
 
     /**
@@ -47,7 +54,9 @@ enum TipoDocumentoRecebido: string
             self::Mdfe,
             self::Xmls,
             self::ComprovantesPagamento,
+            self::Faturas,
             self::Extratos,
+            self::AtencaoIdentificarEmpresa,
             self::Outros,
         ];
     }

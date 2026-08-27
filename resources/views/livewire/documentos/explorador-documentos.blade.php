@@ -115,6 +115,14 @@
                         <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
                             <p class="text-sm font-semibold text-indigo-900">{{ count($selecionados) }} selecionado(s)</p>
                             <div class="flex gap-2">
+                                <button type="button" wire:click="abrirMoverSelecionados"
+                                        class="h-10 px-4 rounded-xl border border-indigo-200 bg-white text-indigo-800 text-sm font-semibold hover:bg-indigo-50">
+                                    Mover
+                                </button>
+                                <button type="button" wire:click="pedirExcluirSelecionados"
+                                        class="h-10 px-4 rounded-xl border border-red-200 bg-white text-red-700 text-sm font-semibold hover:bg-red-50">
+                                    Excluir
+                                </button>
                                 <button type="button" wire:click="baixarSelecionados" wire:loading.attr="disabled"
                                         class="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">
                                     Baixar
@@ -140,7 +148,8 @@
                                     </th>
                                     <th class="text-left px-3 py-3 font-medium">Nome</th>
                                     <th class="text-left px-3 py-3 font-medium hidden md:table-cell">Detalhe</th>
-                                    <th class="w-40 px-3 py-3"></th>
+                                    <th class="text-right px-3 py-3 font-medium hidden sm:table-cell">Tamanho</th>
+                                    <th class="w-56 px-3 py-3"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -188,10 +197,23 @@
                                             </div>
                                         </td>
                                         <td class="px-3 py-3 text-gray-500 hidden md:table-cell">{{ $item['subtitulo'] }}</td>
+                                        <td class="px-3 py-3 text-gray-500 text-right hidden sm:table-cell">
+                                            {{ $item['tipo'] === 'arquivo' ? ($item['tamanho'] ?? '—') : '—' }}
+                                        </td>
                                         <td class="px-3 py-3 text-right whitespace-nowrap">
                                             @if ($item['url_drive'])
                                                 <a href="{{ $item['url_drive'] }}" target="_blank" rel="noopener"
                                                    class="text-indigo-600 font-semibold mr-3">Abrir</a>
+                                            @endif
+                                            @if ($item['tipo'] === 'arquivo')
+                                                <button type="button" wire:click="abrirMoverItem('{{ $item['chave'] }}')"
+                                                        class="text-gray-700 font-semibold mr-3">
+                                                    Mover
+                                                </button>
+                                                <button type="button" wire:click="pedirExcluirItem('{{ $item['chave'] }}')"
+                                                        class="text-red-600 font-semibold mr-3">
+                                                    Excluir
+                                                </button>
                                             @endif
                                             <button type="button" wire:click="baixarItem('{{ $item['chave'] }}')"
                                                     class="text-gray-700 font-semibold">
@@ -201,7 +223,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="4" class="px-4 py-12 text-center text-gray-500">
+                                        <td colspan="5" class="px-4 py-12 text-center text-gray-500">
                                             @if ($nivel === 'empresas')
                                                 Nenhuma empresa com pasta no Drive.
                                                 @if ($podeConfigurar)
@@ -231,4 +253,97 @@
             </div>
         </div>
     </div>
+
+    @if ($modalMoverAberto)
+        <div class="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50">
+            <div class="fixed inset-0 bg-gray-500 opacity-75" wire:click="fecharMover"></div>
+            <div class="relative mb-6 bg-white rounded-lg overflow-hidden shadow-xl sm:w-full sm:max-w-2xl sm:mx-auto">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Mover para</h2>
+                    <p class="text-sm text-gray-600 mt-1">Escolha a pasta de destino no Drive.</p>
+                </div>
+                <nav class="flex flex-wrap items-center gap-1 px-6 py-3 border-b border-gray-100 bg-gray-50">
+                    @foreach ($moverBreadcrumb as $item)
+                        @if (! $loop->first)
+                            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        @endif
+                        @if ($loop->last)
+                            <span class="text-sm font-semibold text-gray-900 truncate">{{ $item['label'] }}</span>
+                        @else
+                            <button type="button" wire:click="moverIrPara('{{ $item['nivel'] }}')"
+                                    class="text-sm font-medium text-indigo-700 hover:text-indigo-900 truncate">
+                                {{ $item['label'] }}
+                            </button>
+                        @endif
+                    @endforeach
+                </nav>
+                <div class="overflow-y-auto divide-y divide-gray-100" style="max-height: 32rem;">
+                    @forelse ($moverItens as $pasta)
+                        <div class="flex items-center gap-3 px-6 py-3" wire:key="mover-{{ $pasta['chave'] }}">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-500 shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                            </span>
+                            @if (($pasta['abrir'] ?? '') === 'empresa')
+                                <button type="button" wire:click="moverAbrirEmpresa({{ (int) $pasta['id'] }})"
+                                        class="min-w-0 text-left font-semibold text-gray-900 hover:text-indigo-700 truncate">
+                                    {{ $pasta['nome'] }}
+                                </button>
+                            @elseif (($pasta['abrir'] ?? '') === 'ano')
+                                <button type="button" wire:click="moverAbrirAno({{ (int) $pasta['id'] }})"
+                                        class="min-w-0 text-left font-semibold text-gray-900 hover:text-indigo-700 truncate">
+                                    {{ $pasta['nome'] }}
+                                </button>
+                            @elseif (($pasta['abrir'] ?? '') === 'tipo')
+                                <button type="button" wire:click="moverAbrirTipo('{{ $pasta['id'] }}')"
+                                        class="min-w-0 text-left font-semibold text-gray-900 hover:text-indigo-700 truncate">
+                                    {{ $pasta['nome'] }}
+                                </button>
+                            @else
+                                <span class="min-w-0 font-semibold text-gray-900 truncate">{{ $pasta['nome'] }}</span>
+                            @endif
+                        </div>
+                    @empty
+                        <p class="px-6 py-8 text-sm text-gray-500 text-center">Nenhuma pasta para exibir.</p>
+                    @endforelse
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 flex flex-wrap justify-end gap-2">
+                    <button type="button" wire:click="fecharMover"
+                            class="h-12 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold">
+                        Cancelar
+                    </button>
+                    <button type="button" wire:click="confirmarMover" wire:loading.attr="disabled"
+                            @disabled(! $moverPodeConfirmar || $moverDestinoIgual)
+                            class="h-12 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50">
+                        <span wire:loading.remove wire:target="confirmarMover">Mover para esta pasta</span>
+                        <span wire:loading wire:target="confirmarMover">Movendo...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if ($confirmandoExclusao)
+        <div class="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50">
+            <div class="fixed inset-0 bg-gray-500 opacity-75" wire:click="cancelarExclusao"></div>
+            <div class="relative mb-6 bg-white rounded-lg overflow-hidden shadow-xl sm:w-full sm:max-w-md sm:mx-auto">
+                <div class="px-6 py-5">
+                    <h2 class="text-lg font-semibold text-gray-900">Excluir arquivo</h2>
+                    <p class="text-sm text-gray-600 mt-2">O arquivo sai do Drive e desta lista.</p>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                    <button type="button" wire:click="cancelarExclusao"
+                            class="h-12 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold">
+                        Cancelar
+                    </button>
+                    <button type="button" wire:click="confirmarExclusao" wire:loading.attr="disabled"
+                            class="h-12 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold">
+                        <span wire:loading.remove wire:target="confirmarExclusao">Excluir</span>
+                        <span wire:loading wire:target="confirmarExclusao">Excluindo...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

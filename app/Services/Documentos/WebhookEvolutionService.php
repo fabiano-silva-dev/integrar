@@ -9,6 +9,10 @@ use Illuminate\Http\Request;
 
 class WebhookEvolutionService
 {
+    public function __construct(
+        private readonly DocumentoProcessoLogService $logs,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $payload
      */
@@ -22,6 +26,14 @@ class WebhookEvolutionService
 
         if (in_array($tipo, ['messages.upsert', 'messages_upsert'], true)
             && ($conexao === null || ! app(ReceberMidiaWhatsappService::class)->payloadRelevante($conexao, $payload))) {
+            if ($this->logs->ativo()) {
+                if ($conexao !== null) {
+                    app(ReceberMidiaWhatsappService::class)->registrarIgnorados($conexao, $payload);
+                } else {
+                    $this->logInstanciaDesconhecida($payload, $instancia);
+                }
+            }
+
             return null;
         }
 
@@ -58,6 +70,14 @@ class WebhookEvolutionService
 
         if ($instancia === null || $instancia === '') {
             $evento->update(['status' => 'ignorado', 'erro' => 'Instância ausente.', 'processado_em' => now()]);
+            $this->logs->registrar(
+                'aviso',
+                'ignorado',
+                'Webhook sem instância.',
+                ['tipo_evento' => $tipo],
+                operadoraId: $evento->empresa_operadora_id !== null ? (int) $evento->empresa_operadora_id : null,
+                conexaoId: $evento->conexao_whatsapp_id !== null ? (int) $evento->conexao_whatsapp_id : null,
+            );
 
             return;
         }
@@ -68,6 +88,7 @@ class WebhookEvolutionService
 
         if ($conexao === null) {
             $evento->update(['status' => 'ignorado', 'erro' => 'Instância desconhecida.', 'processado_em' => now()]);
+            $this->logInstanciaDesconhecida($payload, $instancia);
 
             return;
         }
@@ -106,6 +127,45 @@ class WebhookEvolutionService
         }
 
         $evento->update(['status' => 'ignorado', 'erro' => 'Tipo não suportado.', 'processado_em' => now()]);
+        $this->logs->daConexao(
+            $conexao,
+            'aviso',
+            'ignorado',
+            'Tipo de evento não suportado.',
+            ['tipo_evento' => $tipo],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function logInstanciaDesconhecida(array $payload, ?string $instancia): void
+    {
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
+        $chave = is_array($data['key'] ?? null) ? $data['key'] : [];
+        $remoteJid = is_string($chave['remoteJid'] ?? null) ? $chave['remoteJid'] : null;
+        $mensagemId = is_string($chave['id'] ?? null) ? $chave['id'] : null;
+        $ehGrupo = is_string($remoteJid) && str_contains($remoteJid, '@g.us');
+        $temMidia = app(EvolutionAdaptador::class)->mensagemTemMidia($data);
+        $metadados = $temMidia ? app(EvolutionAdaptador::class)->metadadosMidiaDaMensagem($data) : [];
+
+        if (! $ehGrupo && ! $temMidia) {
+            return;
+        }
+
+        $this->logs->registrar(
+            'aviso',
+            'ignorado',
+            'Instância do WhatsApp desconhecida.',
+            [
+                'instancia' => $instancia,
+                'remote_jid' => $remoteJid,
+                'nome_arquivo' => $metadados['nome_arquivo'] ?? null,
+                'tem_midia' => $temMidia,
+                'eh_grupo' => $ehGrupo,
+            ],
+            mensagemWhatsappId: $mensagemId,
+        );
     }
 
     /**

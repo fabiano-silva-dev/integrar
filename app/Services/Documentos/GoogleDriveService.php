@@ -313,7 +313,7 @@ class GoogleDriveService
     }
 
     /**
-     * @return array{id: string, link: ?string, path: string}
+     * @return array{id: string, link: ?string, path: string, size: int}
      */
     public function enviarArquivo(
         ContaGoogle $conta,
@@ -344,19 +344,73 @@ class GoogleDriveService
             'data' => $conteudo,
             'mimeType' => $mime ?: 'application/octet-stream',
             'uploadType' => 'multipart',
-            'fields' => 'id, name, webViewLink',
+            'fields' => 'id, name, webViewLink, size',
             'supportsAllDrives' => true,
         ]);
 
         $this->tornarAcessivelPorLink($conta, (string) $criado->getId(), $drive);
 
         $link = $criado->getWebViewLink() ?: EmpresaPastaDrive::urlArquivo((string) $criado->getId());
+        $size = $criado->getSize();
 
         return [
             'id' => (string) $criado->getId(),
             'link' => $link,
             'path' => $ano.'/'.$tipo->pastaDrive().'/'.$nomeFinal,
+            'size' => is_numeric($size) ? (int) $size : strlen($conteudo),
         ];
+    }
+
+    /**
+     * @return array{id: string, link: string, name: string, size: ?int}
+     */
+    public function moverArquivo(ContaGoogle $conta, string $fileId, string $pastaDestinoId): array
+    {
+        $drive = new Drive($this->clienteDaConta($conta));
+        $arquivo = $drive->files->get($fileId, [
+            'fields' => 'id, name, parents, webViewLink, size',
+            'supportsAllDrives' => true,
+        ]);
+        $parents = $arquivo->getParents() ?? [];
+        $remover = array_values(array_filter($parents, fn ($id) => $id !== $pastaDestinoId));
+        $jaNoDestino = in_array($pastaDestinoId, $parents, true);
+
+        if (! $jaNoDestino || $remover !== []) {
+            $opts = [
+                'supportsAllDrives' => true,
+                'fields' => 'id, name, webViewLink, size, parents',
+            ];
+
+            if (! $jaNoDestino) {
+                $opts['addParents'] = $pastaDestinoId;
+            }
+
+            if ($remover !== []) {
+                $opts['removeParents'] = implode(',', $remover);
+            }
+
+            $arquivo = $drive->files->update($fileId, new DriveFile(), $opts);
+        }
+
+        $link = $arquivo->getWebViewLink() ?: EmpresaPastaDrive::urlArquivo((string) $arquivo->getId());
+        $size = $arquivo->getSize();
+
+        return [
+            'id' => (string) $arquivo->getId(),
+            'link' => is_string($link) && $link !== '' ? $link : EmpresaPastaDrive::urlArquivo($fileId),
+            'name' => (string) $arquivo->getName(),
+            'size' => is_numeric($size) ? (int) $size : null,
+        ];
+    }
+
+    public function enviarParaLixeira(ContaGoogle $conta, string $fileId): void
+    {
+        $drive = new Drive($this->clienteDaConta($conta));
+        $meta = new DriveFile();
+        $meta->setTrashed(true);
+        $drive->files->update($fileId, $meta, [
+            'supportsAllDrives' => true,
+        ]);
     }
 
     public function baixarConteudo(ContaGoogle $conta, string $fileId): string

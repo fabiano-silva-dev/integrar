@@ -23,6 +23,10 @@
            class="px-3 py-2 text-sm rounded-t-lg {{ $itemAtivo === 'recebidos' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }}">
             Recebidos
         </a>
+        <a href="{{ route('documentos.log') }}"
+           class="px-3 py-2 text-sm rounded-t-lg {{ $itemAtivo === 'log' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }}">
+            Log
+        </a>
     </div>
     <a href="{{ route('documentos') }}" class="text-sm font-semibold text-indigo-600 pb-2">
         Ver arquivos

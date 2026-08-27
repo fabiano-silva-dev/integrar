@@ -15,6 +15,7 @@ class ReceberMidiaWhatsappService
 {
     public function __construct(
         private readonly EvolutionAdaptador $adaptador,
+        private readonly DocumentoProcessoLogService $logs,
     ) {}
 
     /**
@@ -33,12 +34,28 @@ class ReceberMidiaWhatsappService
     public function payloadRelevante(ConexaoWhatsapp $conexao, array $payload): bool
     {
         foreach ($this->extrairMensagens($payload) as $dados) {
-            if ($this->mensagemCandidata($conexao, $dados) !== null) {
+            if ($this->avaliarMensagem($conexao, $dados)['aceita']) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function registrarIgnorados(ConexaoWhatsapp $conexao, array $payload): void
+    {
+        foreach ($this->extrairMensagens($payload) as $dados) {
+            $avaliacao = $this->avaliarMensagem($conexao, $dados);
+
+            if ($avaliacao['aceita'] || ! $avaliacao['deve_logar']) {
+                continue;
+            }
+
+            $this->logIgnorado($conexao, $avaliacao);
+        }
     }
 
     /**
@@ -66,23 +83,59 @@ class ReceberMidiaWhatsappService
 
     /**
      * @param  array<string, mixed>  $dados
+     * @return array{
+     *     aceita: bool,
+     *     deve_logar: bool,
+     *     motivo: ?string,
+     *     grupo: ?GrupoWhatsapp,
+     *     mensagem_id: ?string,
+     *     remote_jid: ?string,
+     *     tem_midia: bool,
+     *     eh_grupo: bool,
+     *     nome_arquivo: ?string
+     * }
      */
-    private function mensagemCandidata(ConexaoWhatsapp $conexao, array $dados): ?GrupoWhatsapp
+    private function avaliarMensagem(ConexaoWhatsapp $conexao, array $dados): array
     {
         $chave = is_array($dados['key'] ?? null) ? $dados['key'] : [];
         $remoteJid = is_string($chave['remoteJid'] ?? null) ? $chave['remoteJid'] : null;
         $mensagemId = is_string($chave['id'] ?? null) ? $chave['id'] : null;
+        $temMidia = $this->adaptador->mensagemTemMidia($dados);
+        $metadados = $temMidia ? $this->adaptador->metadadosMidiaDaMensagem($dados) : [];
+        $nomeArquivo = is_string($metadados['nome_arquivo'] ?? null) ? $metadados['nome_arquivo'] : null;
+        $ehGrupo = is_string($remoteJid) && str_contains($remoteJid, '@g.us');
+
+        $base = [
+            'aceita' => false,
+            'deve_logar' => false,
+            'motivo' => null,
+            'grupo' => null,
+            'mensagem_id' => $mensagemId,
+            'remote_jid' => $remoteJid,
+            'tem_midia' => $temMidia,
+            'eh_grupo' => $ehGrupo,
+            'nome_arquivo' => $nomeArquivo,
+        ];
 
         if ($remoteJid === null || $mensagemId === null) {
-            return null;
+            return array_merge($base, [
+                'motivo' => 'sem_identificacao',
+                'deve_logar' => $temMidia || $ehGrupo,
+            ]);
         }
 
-        if (! str_contains($remoteJid, '@g.us')) {
-            return null;
+        if (! $ehGrupo) {
+            return array_merge($base, [
+                'motivo' => 'conversa_particular',
+                'deve_logar' => $temMidia,
+            ]);
         }
 
-        if (! $this->adaptador->mensagemTemMidia($dados)) {
-            return null;
+        if (! $temMidia) {
+            return array_merge($base, [
+                'motivo' => 'grupo_sem_midia',
+                'deve_logar' => true,
+            ]);
         }
 
         $grupo = GrupoWhatsapp::withoutGlobalScope('operadora')
@@ -90,11 +143,30 @@ class ReceberMidiaWhatsappService
             ->where('jid', $remoteJid)
             ->first();
 
-        if ($grupo === null || ! $grupo->podeMonitorar()) {
-            return null;
+        if ($grupo === null) {
+            return array_merge($base, [
+                'motivo' => 'grupo_nao_cadastrado',
+                'deve_logar' => true,
+            ]);
         }
 
-        return $grupo;
+        $base['grupo'] = $grupo;
+
+        if (! $grupo->monitorar) {
+            return array_merge($base, [
+                'motivo' => 'grupo_nao_monitorado',
+                'deve_logar' => true,
+            ]);
+        }
+
+        if ($grupo->idsEmpresas() === []) {
+            return array_merge($base, [
+                'motivo' => 'grupo_sem_empresa',
+                'deve_logar' => true,
+            ]);
+        }
+
+        return array_merge($base, ['aceita' => true]);
     }
 
     /**
@@ -102,15 +174,20 @@ class ReceberMidiaWhatsappService
      */
     private function processarMensagem(ConexaoWhatsapp $conexao, array $dados): void
     {
-        $grupo = $this->mensagemCandidata($conexao, $dados);
+        $avaliacao = $this->avaliarMensagem($conexao, $dados);
 
-        if ($grupo === null) {
+        if (! $avaliacao['aceita']) {
+            if ($avaliacao['deve_logar']) {
+                $this->logIgnorado($conexao, $avaliacao);
+            }
+
             return;
         }
 
-        $chave = is_array($dados['key'] ?? null) ? $dados['key'] : [];
-        $remoteJid = is_string($chave['remoteJid'] ?? null) ? $chave['remoteJid'] : null;
-        $mensagemId = is_string($chave['id'] ?? null) ? $chave['id'] : null;
+        /** @var GrupoWhatsapp $grupo */
+        $grupo = $avaliacao['grupo'];
+        $remoteJid = $avaliacao['remote_jid'];
+        $mensagemId = $avaliacao['mensagem_id'];
 
         if ($mensagemId === null) {
             return;
@@ -122,8 +199,35 @@ class ReceberMidiaWhatsappService
             ->first();
 
         if ($existente !== null) {
+            $this->logs->daConexao(
+                $conexao,
+                'aviso',
+                'duplicado',
+                'Mensagem já recebida (mesmo ID do WhatsApp).',
+                [
+                    'nome_arquivo' => $existente->nome_original,
+                    'documento_id' => $existente->id,
+                    'remote_jid' => $remoteJid,
+                ],
+                $grupo,
+                $mensagemId,
+            );
+
             return;
         }
+
+        $this->logs->daConexao(
+            $conexao,
+            'info',
+            'baixar_midia',
+            'Baixando arquivo do WhatsApp.',
+            [
+                'nome_arquivo' => $avaliacao['nome_arquivo'],
+                'remote_jid' => $remoteJid,
+            ],
+            $grupo,
+            $mensagemId,
+        );
 
         $midia = $this->adaptador->baixarMidia($conexao, $dados);
 
@@ -132,6 +236,18 @@ class ReceberMidiaWhatsappService
                 'grupo_id' => $grupo->id,
                 'mensagem_id' => $mensagemId,
             ]);
+            $this->logs->daConexao(
+                $conexao,
+                'erro',
+                'baixar_midia',
+                'Não foi possível baixar a mídia do grupo.',
+                [
+                    'nome_arquivo' => $avaliacao['nome_arquivo'],
+                    'remote_jid' => $remoteJid,
+                ],
+                $grupo,
+                $mensagemId,
+            );
 
             return;
         }
@@ -139,6 +255,19 @@ class ReceberMidiaWhatsappService
         $binario = base64_decode($midia['base64'], true);
 
         if ($binario === false || $binario === '') {
+            $this->logs->daConexao(
+                $conexao,
+                'erro',
+                'baixar_midia',
+                'Mídia baixada está vazia ou ilegível.',
+                [
+                    'nome_arquivo' => $avaliacao['nome_arquivo'] ?? $midia['nome_arquivo'] ?? null,
+                    'remote_jid' => $remoteJid,
+                ],
+                $grupo,
+                $mensagemId,
+            );
+
             return;
         }
 
@@ -149,6 +278,20 @@ class ReceberMidiaWhatsappService
                 'mensagem_id' => $mensagemId,
                 'bytes' => strlen($binario),
             ]);
+            $this->logs->daConexao(
+                $conexao,
+                'aviso',
+                'ignorado',
+                'Arquivo acima do limite permitido.',
+                [
+                    'bytes' => strlen($binario),
+                    'limite_bytes' => $maxBytes,
+                    'nome_arquivo' => $midia['nome_arquivo'] ?? $avaliacao['nome_arquivo'],
+                    'remote_jid' => $remoteJid,
+                ],
+                $grupo,
+                $mensagemId,
+            );
 
             return;
         }
@@ -160,6 +303,7 @@ class ReceberMidiaWhatsappService
         $idsEmpresas = $grupo->idsEmpresas();
         $duplicado = DocumentoRecebido::withoutGlobalScope('operadora')
             ->where('hash_sha256', $hash)
+            ->where('status', '!=', StatusDocumentoRecebido::Excluido)
             ->where(function ($query) use ($grupo, $idsEmpresas) {
                 $query->where('grupo_whatsapp_id', $grupo->id);
                 if ($idsEmpresas !== []) {
@@ -185,6 +329,7 @@ class ReceberMidiaWhatsappService
                 ? StatusDocumentoRecebido::Ignorado
                 : StatusDocumentoRecebido::Recebido,
             'storage_path' => $storagePath,
+            'tamanho_bytes' => strlen($binario),
             'erro_mensagem' => $duplicado !== null ? 'Arquivo duplicado (mesmo conteúdo já recebido).' : null,
             'metadados' => [
                 'caption' => $metadados['caption'],
@@ -194,9 +339,93 @@ class ReceberMidiaWhatsappService
             ],
         ]);
 
-        if ($documento->status === StatusDocumentoRecebido::Recebido) {
-            ArquivarDocumentoRecebidoJob::dispatch($documento->id);
+        $this->logs->doDocumento(
+            $documento,
+            'info',
+            'arquivo_local',
+            'Arquivo gravado no servidor.',
+            [
+                'bytes' => strlen($binario),
+                'mime' => $midia['mime'],
+                'remote_jid' => $remoteJid,
+                'grupo_nome' => $grupo->nome,
+            ],
+        );
+
+        if ($documento->status === StatusDocumentoRecebido::Ignorado) {
+            $this->logs->doDocumento(
+                $documento,
+                'aviso',
+                'duplicado',
+                'Arquivo duplicado (mesmo conteúdo já recebido).',
+                [
+                    'documento_original_id' => $duplicado?->id,
+                    'grupo_nome' => $grupo->nome,
+                ],
+            );
+
+            return;
         }
+
+        ArquivarDocumentoRecebidoJob::dispatch($documento->id);
+        $this->logs->doDocumento(
+            $documento,
+            'info',
+            'enfileirado',
+            'Arquivo na fila para classificar e enviar ao Drive.',
+            ['grupo_nome' => $grupo->nome],
+        );
+    }
+
+    /**
+     * @param  array{
+     *     motivo: ?string,
+     *     grupo: ?GrupoWhatsapp,
+     *     mensagem_id: ?string,
+     *     remote_jid: ?string,
+     *     tem_midia: bool,
+     *     eh_grupo: bool,
+     *     nome_arquivo: ?string
+     * }  $avaliacao
+     */
+    private function logIgnorado(ConexaoWhatsapp $conexao, array $avaliacao): void
+    {
+        $grupo = $avaliacao['grupo'];
+        $nomeGrupo = $grupo?->nome;
+        $jid = $avaliacao['remote_jid'];
+
+        $mensagem = match ($avaliacao['motivo']) {
+            'sem_identificacao' => 'Mensagem sem identificador.',
+            'conversa_particular' => 'Arquivo em conversa particular — só grupos monitorados entram em Recebidos.',
+            'grupo_sem_midia' => $nomeGrupo
+                ? "Mensagem de texto no grupo {$nomeGrupo} (sem arquivo)."
+                : 'Mensagem de texto no grupo (sem arquivo).',
+            'grupo_nao_cadastrado' => 'Grupo ainda não está na lista sincronizada.',
+            'grupo_nao_monitorado' => $nomeGrupo
+                ? "Grupo {$nomeGrupo} sem monitoramento."
+                : 'Grupo sem monitoramento.',
+            'grupo_sem_empresa' => $nomeGrupo
+                ? "Grupo {$nomeGrupo} sem empresa vinculada."
+                : 'Grupo sem empresa vinculada.',
+            default => 'Mensagem ignorada.',
+        };
+
+        $this->logs->daConexao(
+            $conexao,
+            'aviso',
+            'ignorado',
+            $mensagem,
+            [
+                'motivo' => $avaliacao['motivo'],
+                'remote_jid' => $jid,
+                'nome_arquivo' => $avaliacao['nome_arquivo'],
+                'tem_midia' => $avaliacao['tem_midia'],
+                'eh_grupo' => $avaliacao['eh_grupo'],
+                'grupo_nome' => $nomeGrupo,
+            ],
+            $grupo,
+            $avaliacao['mensagem_id'],
+        );
     }
 
     private function nomeArquivo(?string $informado, ?string $mime): string

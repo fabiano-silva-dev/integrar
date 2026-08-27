@@ -105,11 +105,13 @@ Route::middleware(['auth'])->group(function () {
         Route::redirect('/documentos/drive', '/configuracoes/documentos/drive');
         Route::redirect('/documentos/ia', '/configuracoes/documentos/ia');
         Route::redirect('/documentos/recebidos', '/configuracoes/documentos/recebidos');
+        Route::redirect('/documentos/log', '/configuracoes/documentos/log');
         Route::get('/configuracoes/documentos/whatsapp', App\Livewire\Documentos\ConexaoWhatsapp::class)->name('documentos.whatsapp');
         Route::get('/configuracoes/documentos/grupos', App\Livewire\Documentos\GruposWhatsapp::class)->name('documentos.grupos');
         Route::get('/configuracoes/documentos/drive', App\Livewire\Documentos\ContaGoogleDrive::class)->name('documentos.drive');
         Route::get('/configuracoes/documentos/ia', App\Livewire\Documentos\ConfiguracaoIaDocumentos::class)->name('documentos.ia');
         Route::get('/configuracoes/documentos/recebidos', App\Livewire\Documentos\DocumentosRecebidos::class)->name('documentos.recebidos');
+        Route::get('/configuracoes/documentos/log', App\Livewire\Documentos\DocumentosProcessoLog::class)->name('documentos.log');
         Route::get('/oauth/google/redirect', [App\Http\Controllers\OAuth\GoogleOAuthController::class, 'redirect'])->name('oauth.google.redirect');
         Route::get('/oauth/google/callback', [App\Http\Controllers\OAuth\GoogleOAuthController::class, 'callback'])->name('oauth.google.callback');
     });

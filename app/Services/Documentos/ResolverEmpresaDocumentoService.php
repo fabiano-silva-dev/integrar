@@ -37,7 +37,13 @@ class ResolverEmpresaDocumentoService
             return $encontradas->first();
         }
 
-        return null;
+        $peloId = $this->escolherPorId($documento, $candidatas);
+
+        if ($peloId !== null) {
+            return $peloId;
+        }
+
+        return $this->escolherPorNome($documento, $candidatas);
     }
 
     /**
@@ -68,7 +74,7 @@ class ResolverEmpresaDocumentoService
         $brutos = [];
         $meta = is_array($documento->metadados) ? $documento->metadados : [];
 
-        foreach (['empresa_cnpj', 'cnpj_emitente', 'cnpj_destinatario'] as $chave) {
+        foreach (['empresa_cnpj', 'cnpj_emitente', 'cnpj_destinatario', 'terceiro_cnpj'] as $chave) {
             if (! empty($meta[$chave]) && is_string($meta[$chave])) {
                 $brutos[] = $meta[$chave];
             }
@@ -109,5 +115,101 @@ class ResolverEmpresaDocumentoService
         }
 
         return array_values(array_unique($encontrados[1]));
+    }
+
+    /**
+     * @param  Collection<int, Empresa>  $candidatas
+     */
+    private function escolherPorId(DocumentoRecebido $documento, Collection $candidatas): ?Empresa
+    {
+        $meta = is_array($documento->metadados) ? $documento->metadados : [];
+        $id = $meta['empresa_id'] ?? null;
+
+        if (! is_numeric($id)) {
+            return null;
+        }
+
+        return $candidatas->firstWhere('id', (int) $id);
+    }
+
+    /**
+     * @param  Collection<int, Empresa>  $candidatas
+     */
+    private function escolherPorNome(DocumentoRecebido $documento, Collection $candidatas): ?Empresa
+    {
+        $meta = is_array($documento->metadados) ? $documento->metadados : [];
+        $nomesDocumento = [];
+
+        foreach (['empresa_razao_social', 'empresa_nome', 'razao_social'] as $chave) {
+            if (! empty($meta[$chave]) && is_string($meta[$chave])) {
+                $nomesDocumento[] = $meta[$chave];
+            }
+        }
+
+        if ($nomesDocumento === []) {
+            return null;
+        }
+
+        $nomer = new NomePastaDriveEmpresa;
+        $vencedoras = [];
+
+        foreach ($nomesDocumento as $nomeDoc) {
+            $alvo = $this->normalizarNome($nomer->limparRazao($nomeDoc));
+
+            if ($alvo === '' || strlen($alvo) < 6) {
+                continue;
+            }
+
+            $melhor = null;
+            $melhorPct = 0.0;
+            $empates = 0;
+
+            foreach ($candidatas as $empresa) {
+                $pctEmpresa = 0.0;
+
+                foreach ([$empresa->razao_social, $empresa->nome_fantasia, $empresa->nome, $nomer->sugerir($empresa)] as $nomeEmp) {
+                    $norm = $this->normalizarNome($nomer->limparRazao((string) $nomeEmp));
+
+                    if ($norm === '') {
+                        continue;
+                    }
+
+                    if ($norm === $alvo) {
+                        $pctEmpresa = 100.0;
+                        break;
+                    }
+
+                    similar_text($alvo, $norm, $pct);
+                    $pctEmpresa = max($pctEmpresa, (float) $pct);
+                }
+
+                if ($pctEmpresa < 82.0) {
+                    continue;
+                }
+
+                if ($pctEmpresa > $melhorPct + 0.5) {
+                    $melhor = $empresa;
+                    $melhorPct = $pctEmpresa;
+                    $empates = 1;
+                } elseif (abs($pctEmpresa - $melhorPct) <= 0.5) {
+                    $empates++;
+                }
+            }
+
+            if ($melhor !== null && $empates === 1) {
+                $vencedoras[$melhor->id] = $melhor;
+            }
+        }
+
+        return count($vencedoras) === 1 ? reset($vencedoras) : null;
+    }
+
+    private function normalizarNome(string $nome): string
+    {
+        $nome = mb_strtolower(trim($nome));
+        $semAcento = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nome);
+        $nome = is_string($semAcento) ? $semAcento : $nome;
+
+        return preg_replace('/[^a-z0-9]+/', '', $nome) ?? $nome;
     }
 }

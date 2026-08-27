@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Documentos\StatusConexaoWhatsapp;
 use App\Models\Documentos\ConexaoWhatsapp;
+use App\Models\Documentos\DocumentoProcessoLog;
 use App\Models\Documentos\GrupoWhatsapp;
 use App\Models\Empresa;
 use App\Models\EmpresasOperadora;
@@ -68,6 +69,24 @@ class TenantIsolationDocumentosTest extends TestCase
             ->assertSee('Gemini')
             ->assertSee('Testar');
         $this->get(route('documentos.recebidos'))->assertOk();
+
+        DocumentoProcessoLog::query()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nivel' => 'info',
+            'etapa' => 'ia',
+            'mensagem' => 'Classificado pela IA (ia_gemini).',
+            'contexto' => [
+                'prompt' => 'PROMPT-TESTE-CNPJ-GRUPO',
+                'resposta_ia' => '{"tipo_documento":"danfe","empresa_id":3}',
+            ],
+        ]);
+
+        $this->get(route('documentos.log'))
+            ->assertOk()
+            ->assertSee('Log')
+            ->assertSee('Prompt enviado à IA')
+            ->assertSee('PROMPT-TESTE-CNPJ-GRUPO')
+            ->assertSee('Retorno da IA');
         $this->get(route('documentos'))
             ->assertOk()
             ->assertSee('Selecione a empresa');
@@ -557,5 +576,311 @@ class TenantIsolationDocumentosTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('lote.zip', (string) $response->headers->get('content-disposition'));
+    }
+
+    public function test_explorador_nao_lista_documento_excluido(): void
+    {
+        [$operadora, $user, $empresa] = $this->escritorioComPastaDrive();
+        $this->pastaTipoDrive($operadora->id, $empresa->id, \App\Enums\Documentos\TipoDocumentoRecebido::Nfe, 2026, 'pasta-nfe');
+
+        \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'nome_original' => 'nota-visivel.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive,
+            'drive_file_id' => 'file-visivel',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::Nfe,
+            'ano' => 2026,
+            'tamanho_bytes' => 131072,
+        ]);
+        \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'nome_original' => 'nota-excluida.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::Excluido,
+            'drive_file_id' => 'file-excluido',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::Nfe,
+            'ano' => 2026,
+            'tamanho_bytes' => 2048,
+        ]);
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ExploradorDocumentos::class)
+            ->call('abrirEmpresa', $empresa->id)
+            ->call('abrirAno', 2026)
+            ->call('abrirTipo', 'nfe')
+            ->assertSee('nota-visivel.pdf')
+            ->assertSee('128 KB')
+            ->assertDontSee('nota-excluida.pdf');
+    }
+
+    public function test_mover_atualiza_tipo_documento_no_catalogo(): void
+    {
+        [$operadora, $user, $empresa] = $this->escritorioComPastaDrive();
+        $this->contaGoogleConectada($operadora->id);
+        $this->pastaTipoDrive($operadora->id, $empresa->id, \App\Enums\Documentos\TipoDocumentoRecebido::Nfe, 2026, 'pasta-nfe');
+        $this->pastaTipoDrive($operadora->id, $empresa->id, \App\Enums\Documentos\TipoDocumentoRecebido::Extratos, 2026, 'pasta-extratos');
+
+        $documento = \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'nome_original' => 'nota-mover.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive,
+            'drive_file_id' => 'file-mover',
+            'drive_web_link' => 'https://drive.google.com/file/d/file-mover/view',
+            'drive_path' => '2026/nfe/nota-mover.pdf',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::Nfe,
+            'ano' => 2026,
+            'tamanho_bytes' => 4096,
+        ]);
+
+        $this->mock(\App\Services\Documentos\GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('garantirEstruturaAno')->once();
+            $mock->shouldReceive('moverArquivo')->once()->andReturn([
+                'id' => 'file-mover',
+                'link' => 'https://drive.google.com/file/d/file-mover/view',
+                'name' => 'nota-mover.pdf',
+                'size' => 4096,
+            ]);
+        });
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ExploradorDocumentos::class)
+            ->call('abrirEmpresa', $empresa->id)
+            ->call('abrirAno', 2026)
+            ->call('abrirTipo', 'nfe')
+            ->call('abrirMoverItem', 'arquivo:'.$documento->id)
+            ->assertSet('modalMoverAberto', true)
+            ->assertSet('moverTipo', '')
+            ->call('moverAbrirTipo', 'extratos')
+            ->call('confirmarMover')
+            ->assertHasNoErrors()
+            ->assertSet('modalMoverAberto', false);
+
+        $documento->refresh();
+        $this->assertSame(\App\Enums\Documentos\TipoDocumentoRecebido::Extratos, $documento->tipo_documento);
+        $this->assertSame((int) $empresa->id, (int) $documento->empresa_id);
+        $this->assertSame('2026/extratos/nota-mover.pdf', $documento->drive_path);
+    }
+
+    public function test_mover_atencao_define_empresa_e_limpa_pendencia(): void
+    {
+        [$operadora, $user, $empresaA] = $this->escritorioComPastaDrive();
+        $this->contaGoogleConectada($operadora->id);
+        $empresaB = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Filial Documentos',
+            'nome_fantasia' => 'Filial Documentos',
+            'ativo' => true,
+        ]);
+        \App\Models\Documentos\EmpresaPastaDrive::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresaB->id,
+            'tipo' => \App\Models\Documentos\EmpresaPastaDrive::TIPO_RAIZ,
+            'ano' => 0,
+            'google_folder_id' => 'raiz-'.$empresaB->id,
+            'google_folder_nome' => 'Filial Documentos',
+        ]);
+        $this->pastaTipoDrive($operadora->id, $empresaA->id, \App\Enums\Documentos\TipoDocumentoRecebido::Nfe, 2026, 'pasta-nfe-a');
+        $this->pastaTipoDrive($operadora->id, $empresaA->id, \App\Enums\Documentos\TipoDocumentoRecebido::AtencaoIdentificarEmpresa, 2026, 'pasta-atencao-a');
+
+        $documento = \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresaA->id,
+            'nome_original' => 'nota-atencao.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive,
+            'drive_file_id' => 'copia-a',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::AtencaoIdentificarEmpresa,
+            'ano' => 2026,
+            'metadados' => [
+                'identificacao_pendente' => true,
+                'copias_drive' => [
+                    [
+                        'empresa_id' => $empresaA->id,
+                        'empresa_nome' => 'Matriz Documentos',
+                        'drive_file_id' => 'copia-a',
+                        'drive_path' => '2026/Atenção - identificar a empresa/nota-atencao.pdf',
+                        'drive_link' => 'https://drive.google.com/file/d/copia-a/view',
+                    ],
+                    [
+                        'empresa_id' => $empresaB->id,
+                        'empresa_nome' => 'Filial Documentos',
+                        'drive_file_id' => 'copia-b',
+                        'drive_path' => '2026/Atenção - identificar a empresa/nota-atencao.pdf',
+                        'drive_link' => 'https://drive.google.com/file/d/copia-b/view',
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->mock(\App\Services\Documentos\GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('garantirEstruturaAno')->once();
+            $mock->shouldReceive('moverArquivo')->once()->andReturn([
+                'id' => 'copia-a',
+                'link' => 'https://drive.google.com/file/d/copia-a/view',
+                'name' => 'nota-atencao.pdf',
+                'size' => 1024,
+            ]);
+            $mock->shouldReceive('enviarParaLixeira')->once();
+        });
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ExploradorDocumentos::class)
+            ->call('abrirEmpresa', $empresaA->id)
+            ->call('abrirAno', 2026)
+            ->call('abrirTipo', \App\Enums\Documentos\TipoDocumentoRecebido::AtencaoIdentificarEmpresa->value)
+            ->assertSee('nota-atencao.pdf')
+            ->call('abrirMoverItem', 'arquivo:'.$documento->id)
+            ->assertSet('modalMoverAberto', true)
+            ->assertSet('moverEmpresaId', null)
+            ->call('moverAbrirEmpresa', $empresaA->id)
+            ->call('moverAbrirAno', 2026)
+            ->call('moverAbrirTipo', 'nfe')
+            ->call('confirmarMover')
+            ->assertSet('modalMoverAberto', false);
+
+        $documento->refresh();
+        $this->assertSame((int) $empresaA->id, (int) $documento->empresa_id);
+        $this->assertSame(\App\Enums\Documentos\TipoDocumentoRecebido::Nfe, $documento->tipo_documento);
+        $this->assertFalse((bool) ($documento->metadados['identificacao_pendente'] ?? false));
+        $this->assertArrayNotHasKey('copias_drive', $documento->metadados ?? []);
+    }
+
+    public function test_excluir_marca_excluido_e_nao_aparece_no_explorador(): void
+    {
+        [$operadora, $user, $empresa] = $this->escritorioComPastaDrive();
+        $this->contaGoogleConectada($operadora->id);
+        $this->pastaTipoDrive($operadora->id, $empresa->id, \App\Enums\Documentos\TipoDocumentoRecebido::Nfe, 2026, 'pasta-nfe');
+
+        $documento = \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'nome_original' => 'nota-apagar.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive,
+            'drive_file_id' => 'file-apagar',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::Nfe,
+            'ano' => 2026,
+        ]);
+
+        $this->mock(\App\Services\Documentos\GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('enviarParaLixeira')->once();
+        });
+
+        $this->actingAs($user);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ExploradorDocumentos::class)
+            ->call('abrirEmpresa', $empresa->id)
+            ->call('abrirAno', 2026)
+            ->call('abrirTipo', 'nfe')
+            ->assertSee('nota-apagar.pdf')
+            ->call('pedirExcluirItem', 'arquivo:'.$documento->id)
+            ->assertSet('confirmandoExclusao', true)
+            ->call('confirmarExclusao')
+            ->assertSet('confirmandoExclusao', false)
+            ->assertDontSee('nota-apagar.pdf');
+
+        $this->assertSame(
+            \App\Enums\Documentos\StatusDocumentoRecebido::Excluido,
+            $documento->fresh()?->status,
+        );
+    }
+
+    public function test_nao_move_nem_exclui_documento_de_outro_escritorio(): void
+    {
+        [$operadoraA, $userA] = $this->escritorioComPastaDrive();
+        $opB = EmpresasOperadora::factory()->create();
+        $empresaB = Empresa::factory()->create([
+            'empresa_operadora_id' => $opB->id,
+            'ativo' => true,
+        ]);
+
+        $documentoB = \App\Models\Documentos\DocumentoRecebido::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $opB->id,
+            'empresa_id' => $empresaB->id,
+            'nome_original' => 'secreto-outro-escritorio.pdf',
+            'status' => \App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive,
+            'drive_file_id' => 'file-secreto',
+            'tipo_documento' => \App\Enums\Documentos\TipoDocumentoRecebido::Nfe,
+            'ano' => 2026,
+        ]);
+
+        $this->mock(\App\Services\Documentos\GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('moverArquivo')->never();
+            $mock->shouldReceive('enviarParaLixeira')->never();
+            $mock->shouldReceive('garantirEstruturaAno')->never();
+        });
+
+        $this->actingAs($userA);
+
+        \Livewire\Livewire::test(\App\Livewire\Documentos\ExploradorDocumentos::class)
+            ->call('pedirExcluirItem', 'arquivo:'.$documentoB->id)
+            ->call('confirmarExclusao')
+            ->call('abrirMoverItem', 'arquivo:'.$documentoB->id)
+            ->call('confirmarMover');
+
+        $documentoB->refresh();
+        $this->assertSame(\App\Enums\Documentos\StatusDocumentoRecebido::EnviadoDrive, $documentoB->status);
+        $this->assertSame(\App\Enums\Documentos\TipoDocumentoRecebido::Nfe, $documentoB->tipo_documento);
+        $this->assertSame((int) $empresaB->id, (int) $documentoB->empresa_id);
+    }
+
+    /**
+     * @return array{0: EmpresasOperadora, 1: User, 2: Empresa}
+     */
+    private function escritorioComPastaDrive(): array
+    {
+        $operadora = EmpresasOperadora::factory()->create();
+        $user = User::factory()->admin()->create(['empresa_operadora_id' => $operadora->id]);
+        $empresa = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'nome' => 'Matriz Documentos',
+            'nome_fantasia' => 'Matriz Documentos',
+            'ativo' => true,
+        ]);
+
+        \App\Models\Documentos\EmpresaPastaDrive::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'tipo' => \App\Models\Documentos\EmpresaPastaDrive::TIPO_RAIZ,
+            'ano' => 0,
+            'google_folder_id' => 'raiz-'.$empresa->id,
+            'google_folder_nome' => 'Matriz Documentos',
+        ]);
+        \App\Models\Documentos\EmpresaPastaDrive::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'tipo' => 'ano-2026',
+            'ano' => 2026,
+            'google_folder_id' => 'ano-'.$empresa->id,
+            'google_folder_nome' => '2026',
+        ]);
+
+        return [$operadora, $user, $empresa];
+    }
+
+    private function pastaTipoDrive(int $operadoraId, int $empresaId, \App\Enums\Documentos\TipoDocumentoRecebido $tipo, int $ano, string $folderId): void
+    {
+        \App\Models\Documentos\EmpresaPastaDrive::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadoraId,
+            'empresa_id' => $empresaId,
+            'tipo' => $tipo->value,
+            'ano' => $ano,
+            'google_folder_id' => $folderId,
+            'google_folder_nome' => $tipo->pastaDrive(),
+        ]);
+    }
+
+    private function contaGoogleConectada(int $operadoraId): void
+    {
+        \App\Models\Documentos\ContaGoogle::withoutGlobalScope('operadora')->create([
+            'empresa_operadora_id' => $operadoraId,
+            'google_email' => 'drive@escritorio.test',
+            'access_token' => 'token',
+            'refresh_token' => 'refresh',
+            'status' => \App\Enums\Documentos\StatusContaGoogle::Conectado,
+        ]);
     }
 }

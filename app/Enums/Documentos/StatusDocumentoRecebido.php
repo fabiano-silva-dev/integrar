@@ -10,6 +10,7 @@ enum StatusDocumentoRecebido: string
     case Pendente = 'pendente';
     case Erro = 'erro';
     case Ignorado = 'ignorado';
+    case Excluido = 'excluido';
 
     public function rotulo(): string
     {
@@ -20,6 +21,7 @@ enum StatusDocumentoRecebido: string
             self::Pendente => 'Pendente',
             self::Erro => 'Erro',
             self::Ignorado => 'Ignorado',
+            self::Excluido => 'Excluído',
         };
     }
 }

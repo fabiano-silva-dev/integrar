@@ -46,6 +46,16 @@ class ProcessarWebhookEvolutionJob implements ShouldQueue
                 'erro' => $exception->getMessage(),
             ]);
 
+            $eventoFalha = EventoWebhookWhatsapp::query()->find($this->eventoWebhookId);
+            app(\App\Services\Documentos\DocumentoProcessoLogService::class)->registrar(
+                'erro',
+                'erro',
+                'Falha ao processar o webhook: '.$exception->getMessage(),
+                ['evento_id' => $this->eventoWebhookId],
+                operadoraId: $eventoFalha?->empresa_operadora_id !== null ? (int) $eventoFalha->empresa_operadora_id : null,
+                conexaoId: $eventoFalha?->conexao_whatsapp_id !== null ? (int) $eventoFalha->conexao_whatsapp_id : null,
+            );
+
             throw $exception;
         } finally {
             OperadoraContext::enableScope();

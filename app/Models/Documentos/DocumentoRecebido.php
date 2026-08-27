@@ -28,6 +28,7 @@ class DocumentoRecebido extends Model
         'ano',
         'status',
         'storage_path',
+        'tamanho_bytes',
         'drive_file_id',
         'drive_web_link',
         'drive_path',
@@ -42,6 +43,7 @@ class DocumentoRecebido extends Model
             'status' => StatusDocumentoRecebido::class,
             'tipo_documento' => TipoDocumentoRecebido::class,
             'ano' => 'integer',
+            'tamanho_bytes' => 'integer',
             'data_documento' => 'date',
             'metadados' => 'array',
         ];
@@ -60,6 +62,29 @@ class DocumentoRecebido extends Model
     public function conexao(): BelongsTo
     {
         return $this->belongsTo(ConexaoWhatsapp::class, 'conexao_whatsapp_id');
+    }
+
+    public static function formatarTamanho(?int $bytes): string
+    {
+        if ($bytes === null || $bytes < 0) {
+            return '—';
+        }
+
+        if ($bytes < 1024) {
+            return $bytes.' B';
+        }
+
+        if ($bytes < 1024 * 1024) {
+            $kb = $bytes / 1024;
+
+            if (abs($kb - round($kb)) < 0.05) {
+                return ((int) round($kb)).' KB';
+            }
+
+            return number_format($kb, 1, ',', '.').' KB';
+        }
+
+        return number_format($bytes / (1024 * 1024), 1, ',', '.').' MB';
     }
 
     public function urlDrive(): ?string

@@ -193,6 +193,17 @@ XML;
         $this->assertSame('12345678000199', $resultado['metadados']['cnpj_emitente'] ?? null);
     }
 
+    public function test_texto_energia_eletrica_vai_para_faturas(): void
+    {
+        $resultado = $this->classificador->classificarTextoDocumento(
+            'FATURA DE ENERGIA ELETRICA Unidade consumidora 123 Competencia 07/2026',
+            new DateTimeImmutable('2026-07-01'),
+        );
+
+        $this->assertTrue($resultado['conclusivo']);
+        $this->assertSame(TipoDocumentoRecebido::Faturas, $resultado['tipo']);
+    }
+
     public function test_texto_banrisul_vai_para_extratos(): void
     {
         $resultado = $this->classificador->classificarTextoDocumento(

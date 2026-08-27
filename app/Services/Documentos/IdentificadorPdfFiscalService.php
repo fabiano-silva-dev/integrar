@@ -45,6 +45,13 @@ class IdentificadorPdfFiscalService
             ]));
         }
 
+        if ($modelo === '66' || $this->pareceFatura($normalizado)) {
+            return $this->resultado(TipoDocumentoRecebido::Faturas, $data, $this->metadadosFiscais($chave, [
+                'origem' => 'pdf_fatura',
+                'modelo' => $modelo,
+            ]));
+        }
+
         if ($modelo === '55' || $this->pareceNfe($normalizado)) {
             return $this->resultado(TipoDocumentoRecebido::Nfe, $data, $this->metadadosFiscais($chave, [
                 'origem' => 'pdf_fiscal',
@@ -90,6 +97,38 @@ class IdentificadorPdfFiscalService
         return str_contains($texto, 'damdfe')
             || str_contains($texto, 'manifesto eletronico de documentos fiscais')
             || preg_match('/\bmdf-?e\b/', $texto) === 1;
+    }
+
+    private function pareceFatura(string $texto): bool
+    {
+        if (str_contains($texto, 'danf3e')
+            || str_contains($texto, 'nf3-e')
+            || str_contains($texto, 'nf3e')
+            || str_contains($texto, 'nota fiscal de energia')) {
+            return true;
+        }
+
+        $sinais = [
+            'conta de energia',
+            'conta de luz',
+            'energia eletrica',
+            'fatura de energia',
+            'conta de agua',
+            'fatura de agua',
+            'fatura de telefone',
+            'fatura de internet',
+            'conta de gas',
+            'gas natural',
+            'saneamento',
+        ];
+
+        foreach ($sinais as $sinal) {
+            if (str_contains($texto, $sinal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function primeiraChaveAcesso(string $texto): ?string

@@ -237,6 +237,7 @@ trait MenuTrait
                             || request()->routeIs('documentos.drive')
                             || request()->routeIs('documentos.ia')
                             || request()->routeIs('documentos.recebidos')
+                            || request()->routeIs('documentos.log')
                             || request()->routeIs('oauth.google.*'),
                         'title' => 'Configurar recebimento de documentos',
                         'roles' => ['admin', 'gerente'],

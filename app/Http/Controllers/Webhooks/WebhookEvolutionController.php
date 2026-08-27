@@ -14,6 +14,11 @@ class WebhookEvolutionController extends Controller
     {
         if (! $this->apikeyValida($request)) {
             Log::warning('Webhook Evolution: apikey inválida ou ausente.');
+            app(\App\Services\Documentos\DocumentoProcessoLogService::class)->registrar(
+                'erro',
+                'webhook',
+                'Webhook recusado: apikey inválida ou ausente.',
+            );
 
             return response()->json(['mensagem' => 'Não autorizado.'], 401);
         }

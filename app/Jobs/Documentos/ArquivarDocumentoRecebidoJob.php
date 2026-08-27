@@ -4,6 +4,7 @@ namespace App\Jobs\Documentos;
 
 use App\Models\Documentos\DocumentoRecebido;
 use App\Services\Documentos\ArquivarDocumentoService;
+use App\Services\Documentos\DocumentoProcessoLogService;
 use App\Services\OperadoraContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -36,6 +37,26 @@ class ArquivarDocumentoRecebidoJob implements ShouldQueue
             }
 
             $arquivar->arquivar($documento);
+        } catch (\Throwable $exception) {
+            $documento = DocumentoRecebido::query()->find($this->documentoId);
+
+            if ($documento !== null) {
+                app(DocumentoProcessoLogService::class)->doDocumento(
+                    $documento,
+                    'erro',
+                    'erro',
+                    'Falha ao arquivar: '.$exception->getMessage(),
+                );
+            } else {
+                app(DocumentoProcessoLogService::class)->registrar(
+                    'erro',
+                    'erro',
+                    'Falha ao arquivar documento inexistente: '.$exception->getMessage(),
+                    ['documento_id' => $this->documentoId],
+                );
+            }
+
+            throw $exception;
         } finally {
             OperadoraContext::enableScope();
         }

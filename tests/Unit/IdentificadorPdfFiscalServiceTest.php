@@ -45,4 +45,33 @@ class IdentificadorPdfFiscalServiceTest extends TestCase
         $this->assertNotNull($r);
         $this->assertSame(TipoDocumentoRecebido::Mdfe, $r['tipo']);
     }
+
+    public function test_nf3e_pelo_modelo_66(): void
+    {
+        $id = new IdentificadorPdfFiscalService;
+        $chave = '35260312345678000199660010000001231234567890';
+        $r = $id->identificar('chave de acesso '.$chave);
+
+        $this->assertNotNull($r);
+        $this->assertSame(TipoDocumentoRecebido::Faturas, $r['tipo']);
+        $this->assertSame('66', $r['metadados']['modelo'] ?? null);
+    }
+
+    public function test_conta_de_energia_vai_para_faturas(): void
+    {
+        $id = new IdentificadorPdfFiscalService;
+        $r = $id->identificar('FATURA DE ENERGIA ELETRICA Competencia 07/2026 Vencimento 10/08/2026');
+
+        $this->assertNotNull($r);
+        $this->assertSame(TipoDocumentoRecebido::Faturas, $r['tipo']);
+    }
+
+    public function test_danf3e_nao_e_nfe(): void
+    {
+        $id = new IdentificadorPdfFiscalService;
+        $r = $id->identificar('DANF3E Documento Auxiliar da Nota Fiscal de Energia Eletronica');
+
+        $this->assertNotNull($r);
+        $this->assertSame(TipoDocumentoRecebido::Faturas, $r['tipo']);
+    }
 }
