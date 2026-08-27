@@ -73,15 +73,26 @@
                             
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Nível</label>
-                                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                                        wire:model="role" 
+                                <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent {{ $podeAlterarNivel ? '' : 'bg-gray-100' }}"
+                                        wire:model.live="role"
                                         autocomplete="off"
+                                        @disabled(! $podeAlterarNivel)
                                         required>
-                                    <option value="operador">👤 Operador</option>
-                                    <option value="gerente">👨‍💼 Gerente</option>
-                                    <option value="admin">👑 Administrador</option>
+                                    @php
+                                        $opcoesNivel = $podeAlterarNivel ? $niveisAtribuiveis : [$role];
+                                    @endphp
+                                    @foreach (['operador' => '👤 Operador', 'gerente' => '👨‍💼 Gerente', 'admin' => '👑 Administrador'] as $valor => $rotulo)
+                                        @if (in_array($valor, $opcoesNivel, true))
+                                            <option value="{{ $valor }}">{{ $rotulo }}</option>
+                                        @endif
+                                    @endforeach
                                 </select>
                                 @error('role') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                                @if (! $podeAlterarNivel)
+                                    <p class="mt-1 text-xs text-gray-500">O seu nível só pode ser alterado por um administrador.</p>
+                                @elseif (isset($niveisAcesso[$role]))
+                                    <p class="mt-1 text-xs text-gray-500">{{ $niveisAcesso[$role]['resumo'] }}</p>
+                                @endif
                             </div>
                             
                             <div class="flex items-end space-x-3">
@@ -96,6 +107,77 @@
                             </div>
                         </div>
                         
+                        <div class="mt-6 pt-6 border-t border-gray-200">
+                            <p class="text-sm font-medium text-gray-800 mb-1">Acessos de cada nível</p>
+                            <p class="text-xs text-gray-500 mb-4">
+                                @if (count($niveisAtribuiveis) < 3)
+                                    Você cadastra apenas operador. Gerente e administrador são informativos e só o administrador atribui.
+                                @else
+                                    Clique em um nível para selecioná-lo no cadastro. A lista abaixo mostra o que a pessoa poderá usar.
+                                @endif
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                @foreach($niveisAcesso as $chave => $nivel)
+                                    @php
+                                        $selecionado = $role === $chave;
+                                        $podeSelecionar = $podeAlterarNivel && in_array($chave, $niveisAtribuiveis, true);
+                                        $cores = [
+                                            'operador' => ['borda' => 'border-green-300', 'anel' => 'ring-green-500', 'fundo' => 'bg-green-50', 'badge' => 'bg-green-100 text-green-800'],
+                                            'gerente' => ['borda' => 'border-blue-300', 'anel' => 'ring-blue-500', 'fundo' => 'bg-blue-50', 'badge' => 'bg-blue-100 text-blue-800'],
+                                            'admin' => ['borda' => 'border-purple-300', 'anel' => 'ring-purple-500', 'fundo' => 'bg-purple-50', 'badge' => 'bg-purple-100 text-purple-800'],
+                                        ][$chave];
+                                        $classeCard = 'text-left rounded-lg border p-4 '.$cores['borda'].' '.$cores['anel'].' '.($selecionado ? 'ring-2 '.$cores['fundo'] : 'bg-white');
+                                    @endphp
+                                    @if ($podeSelecionar)
+                                        <button type="button"
+                                                wire:click="selecionarNivel('{{ $chave }}')"
+                                                class="{{ $classeCard }} transition duration-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2">
+                                    @else
+                                        <div class="{{ $classeCard }} {{ $selecionado ? '' : 'opacity-80' }}">
+                                    @endif
+                                            <div class="flex items-center justify-between gap-2 mb-2">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $cores['badge'] }}">
+                                                    {{ $nivel['rotulo'] }}
+                                                </span>
+                                                @if($selecionado)
+                                                    <span class="text-xs font-medium text-gray-600">Selecionado</span>
+                                                @endif
+                                            </div>
+                                            <p class="text-sm text-gray-800 font-medium mb-3">{{ $nivel['resumo'] }}</p>
+                                            <ul class="space-y-1 mb-3">
+                                                @foreach($nivel['acessos'] as $acesso)
+                                                    <li class="flex gap-2 text-xs text-gray-700">
+                                                        <span class="mt-0.5 text-green-600" aria-hidden="true">✓</span>
+                                                        <span>{{ $acesso }}</span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                            @if(!empty($nivel['restricoes']))
+                                                <ul class="space-y-1 border-t border-gray-100 pt-3">
+                                                    @foreach($nivel['restricoes'] as $restricao)
+                                                        <li class="flex gap-2 text-xs text-gray-500">
+                                                            <span class="mt-0.5" aria-hidden="true">–</span>
+                                                            <span>{{ $restricao }}</span>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            @endif
+                                            @if (! $podeSelecionar)
+                                                @if (! $podeAlterarNivel && $selecionado)
+                                                    <p class="mt-3 text-xs text-gray-500">Este nível não pode ser alterado aqui.</p>
+                                                @elseif ($podeAlterarNivel)
+                                                    <p class="mt-3 text-xs text-gray-500">Somente o administrador atribui este nível.</p>
+                                                @endif
+                                            @endif
+                                    @if ($podeSelecionar)
+                                        </button>
+                                    @else
+                                        </div>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+
                         @if($modoEdicao)
                             <div class="mt-4 flex justify-end">
                                 <button type="button" 
@@ -134,30 +216,37 @@
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         @if($usuario->role === 'admin')
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
+                                                  title="{{ $niveisAcesso['admin']['resumo'] }}">
                                                 👑 Admin
                                             </span>
                                         @elseif($usuario->role === 'gerente')
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                                  title="{{ $niveisAcesso['gerente']['resumo'] }}">
                                                 👨‍💼 Gerente
                                             </span>
                                         @else
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                                  title="{{ $niveisAcesso['operador']['resumo'] }}">
                                                 👤 Operador
                                             </span>
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <div class="flex space-x-2">
-                                            <button class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-md transition duration-200" 
-                                                    wire:click="editarUsuario({{ $usuario->id }})">
-                                                ✏️ Editar
-                                            </button>
-                                            <button class="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition duration-200" 
-                                                    wire:click="excluirUsuario({{ $usuario->id }})" 
-                                                    onclick="return confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')">
-                                                🗑️ Excluir
-                                            </button>
+                                            @if (auth()->user()?->podeEditarUsuario($usuario))
+                                                <button class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-md transition duration-200"
+                                                        wire:click="editarUsuario({{ $usuario->id }})">
+                                                    ✏️ Editar
+                                                </button>
+                                            @endif
+                                            @if (auth()->user()?->podeExcluirUsuario($usuario))
+                                                <button class="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition duration-200"
+                                                        wire:click="excluirUsuario({{ $usuario->id }})"
+                                                        onclick="return confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')">
+                                                    🗑️ Excluir
+                                                </button>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

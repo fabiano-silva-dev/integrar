@@ -48,4 +48,11 @@ class UserFactory extends Factory
             'role' => 'admin',
         ]);
     }
+
+    public function gerente(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'gerente',
+        ]);
+    }
 }

@@ -54,6 +54,87 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    public function isGerente(): bool
+    {
+        return $this->role === 'gerente';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function niveisQuePodeAtribuir(): array
+    {
+        if ($this->isSuperAdmin() || $this->isEscritorioAdmin()) {
+            return ['operador', 'gerente', 'admin'];
+        }
+
+        if ($this->isGerente()) {
+            return ['operador'];
+        }
+
+        return [];
+    }
+
+    public function podeAtribuirNivel(string $role): bool
+    {
+        return in_array($role, $this->niveisQuePodeAtribuir(), true);
+    }
+
+    public function podeEditarUsuario(self $alvo): bool
+    {
+        if ($alvo->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin() || $this->isEscritorioAdmin()) {
+            return true;
+        }
+
+        if ($this->isGerente()) {
+            return (int) $alvo->id === (int) $this->id || $alvo->role === 'operador';
+        }
+
+        return false;
+    }
+
+    public function podeExcluirUsuario(self $alvo): bool
+    {
+        if ((int) $alvo->id === (int) $this->id || $alvo->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin() || $this->isEscritorioAdmin()) {
+            return true;
+        }
+
+        if ($this->isGerente()) {
+            return $alvo->role === 'operador';
+        }
+
+        return false;
+    }
+
+    public function podeAlterarNivelDe(self $alvo): bool
+    {
+        if ($alvo->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($this->isGerente() && (int) $alvo->id === (int) $this->id) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin() || $this->isEscritorioAdmin()) {
+            return true;
+        }
+
+        if ($this->isGerente()) {
+            return $alvo->role === 'operador';
+        }
+
+        return false;
+    }
+
     public function empresaOperadora(): BelongsTo
     {
         return $this->belongsTo(EmpresasOperadora::class, 'empresa_operadora_id');

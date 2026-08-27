@@ -28,7 +28,8 @@ abstract class TestCase extends BaseTestCase
             || str_contains(static::class, 'TenantLancamentoBulkInsert')
             || str_contains(static::class, 'TenantPlanoContas')
             || str_contains(static::class, 'TenantRegrasAmarracao')
-            || str_contains(static::class, 'TenantAutomacaoFiscal');
+            || str_contains(static::class, 'TenantAutomacaoFiscal')
+            || str_contains(static::class, 'TenantGerenciadorUsuarios');
     }
 
     protected function resolveMysqlDatabaseName(): string
