@@ -22,7 +22,7 @@ class DocumentosProcessoLog extends Component
 
     public function mount(): void
     {
-        $this->garantirAcessoDocumentos();
+        $this->garantirAcessoLogDocumentos();
     }
 
     public function updatedBusca(): void
@@ -42,7 +42,7 @@ class DocumentosProcessoLog extends Component
 
     public function limpar(): void
     {
-        $this->garantirAcessoDocumentos();
+        $this->garantirAcessoLogDocumentos();
 
         $operadoraId = OperadoraContext::id();
 

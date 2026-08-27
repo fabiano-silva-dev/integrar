@@ -16,6 +16,15 @@ trait AutorizaModuloDocumentos
         }
     }
 
+    protected function garantirAcessoLogDocumentos(): void
+    {
+        $user = Auth::user();
+
+        if (! $user || ! $user->podeVerLogDocumentos()) {
+            abort(403, 'Sem permissão para o registro de documentos.');
+        }
+    }
+
     protected function precisaSelecionarEscritorio(): bool
     {
         return OperadoraContext::superAdminPrecisaSelecionarEscritorio();

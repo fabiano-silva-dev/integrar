@@ -59,6 +59,11 @@ class User extends Authenticatable
         return $this->role === 'gerente';
     }
 
+    public function podeVerLogDocumentos(): bool
+    {
+        return $this->isSuperAdmin() || $this->isEscritorioAdmin();
+    }
+
     /**
      * @return list<string>
      */

@@ -92,6 +92,19 @@ class TenantIsolationDocumentosTest extends TestCase
             ->assertSee('Selecione a empresa');
     }
 
+    public function test_gerente_nao_acessa_aba_log_de_documentos(): void
+    {
+        $operadora = EmpresasOperadora::factory()->create();
+        $gerente = User::factory()->gerente()->create(['empresa_operadora_id' => $operadora->id]);
+
+        $this->actingAs($gerente);
+
+        $this->get(route('documentos.recebidos'))
+            ->assertOk()
+            ->assertDontSee(route('documentos.log'));
+        $this->get(route('documentos.log'))->assertForbidden();
+    }
+
     public function test_chaves_ia_nao_vazam_entre_escritorios(): void
     {
         config([
