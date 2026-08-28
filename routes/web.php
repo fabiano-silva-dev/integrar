@@ -73,11 +73,12 @@ Route::middleware(['auth'])->group(function () {
                 ->with('message', 'Não foi possível localizar a análise desta coleta.');
         }
 
-        return redirect()->route('automacao-fiscal.analise', [
+        return redirect()->route('automacao-fiscal.analise', array_filter([
             'empresa' => $resolvido['empresa_id'],
             'portal' => $resolvido['portal_id'],
             'competencia' => $resolvido['competencia'],
-        ]);
+            'listagem' => $resolvido['tipo_listagem'] ?? null,
+        ]));
     })->whereNumber('coleta')->name('automacao-fiscal.analises.coleta');
     Route::get('/automacao-fiscal/resumo-nfe/{coleta?}', function (?int $coleta = null) {
         if ($coleta) {

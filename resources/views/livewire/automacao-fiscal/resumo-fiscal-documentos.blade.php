@@ -77,6 +77,7 @@
                             <tr>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Empresa</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Portal</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Tipo</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Competência</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Docs</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Total</th>
@@ -87,14 +88,24 @@
                             @forelse($analises ?? [] as $analise)
                                 <tr
                                     class="hover:bg-indigo-50 cursor-pointer transition-colors"
-                                    onclick="window.location='{{ route('automacao-fiscal.analise', [
+                                    onclick="window.location='{{ route('automacao-fiscal.analise', array_filter([
                                         'empresa' => $analise->empresa_id,
                                         'portal' => $analise->portal_integracao_id,
                                         'competencia' => $analise->competencia,
-                                    ]) }}'"
+                                        'listagem' => $analise->tipo_listagem ?: null,
+                                    ])) }}'"
                                 >
                                     <td class="px-4 py-3 font-medium text-gray-900">{{ $analise->empresa_nome }}</td>
                                     <td class="px-4 py-3 text-gray-700">{{ $analise->portal_nome }}</td>
+                                    <td class="px-4 py-3">
+                                        @if ($analise->tipo_listagem === 'emitidas')
+                                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Emitidas</span>
+                                        @elseif ($analise->tipo_listagem === 'recebidas')
+                                            <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-600/20">Recebidas</span>
+                                        @else
+                                            <span class="text-gray-400">—</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-gray-700">{{ $analise->competencia_label }}</td>
                                     <td class="px-4 py-3 text-right text-gray-700">{{ $analise->quantidade_documentos }}</td>
                                     <td class="px-4 py-3 text-right text-gray-700">
@@ -106,7 +117,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-4 py-10 text-center text-gray-500">
+                                    <td colspan="7" class="px-4 py-10 text-center text-gray-500">
                                         Nenhuma análise encontrada. Execute consultas no painel da automação.
                                     </td>
                                 </tr>
@@ -132,11 +143,35 @@
                     <p class="text-[11px] text-gray-500 uppercase tracking-wide">Competência</p>
                     <p class="font-semibold text-gray-900">{{ $analiseCompetenciaLabel ?? '—' }}</p>
                 </div>
+                @if ($analiseEhNfse)
+                    <div>
+                        <p class="text-[11px] text-gray-500 uppercase tracking-wide">Tipo</p>
+                        <p class="font-semibold text-gray-900">
+                            @if ($analiseTipoListagem === 'emitidas')
+                                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Emitidas</span>
+                            @elseif ($analiseTipoListagem === 'recebidas')
+                                <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-600/20">Recebidas</span>
+                            @else
+                                {{ $analiseTipoListagemLabel ?? '—' }}
+                            @endif
+                        </p>
+                    </div>
+                @endif
             </div>
 
             @if (!empty($resumo))
                 <div class="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
-                    @foreach (['resumo' => 'Resumo', 'grupos' => 'Agrupamentos', 'documentos' => 'Documentos', 'colunas' => 'Colunas do arquivo'] as $key => $label)
+                    @php
+                        $abas = [
+                            'documentos' => 'Documentos',
+                            'grupos' => 'Agrupamentos',
+                            'resumo' => 'Resumo',
+                        ];
+                        if ($this->podeVerAbaColunas()) {
+                            $abas['colunas'] = 'Colunas do arquivo';
+                        }
+                    @endphp
+                    @foreach ($abas as $key => $label)
                         <button type="button" wire:click="setAba('{{ $key }}')"
                                 class="px-4 py-2 text-sm font-medium rounded-t-lg {{ $aba === $key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">
                             {{ $label }}
@@ -395,7 +430,7 @@
                             <div class="p-3 border-t border-gray-100">{{ $documentos->links() }}</div>
                         @endif
                     </div>
-                @elseif ($aba === 'colunas')
+                @elseif ($aba === 'colunas' && $this->podeVerAbaColunas())
                     <div class="bg-white shadow rounded-xl p-4">
                         <p class="text-sm text-gray-600 mb-3">
                             @if ($analiseEhNfse)

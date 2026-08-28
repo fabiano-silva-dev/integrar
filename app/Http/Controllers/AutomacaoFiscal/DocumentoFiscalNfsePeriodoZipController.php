@@ -29,8 +29,10 @@ class DocumentoFiscalNfsePeriodoZipController
         $portalModel = PortalIntegracao::query()->whereKey($portal)->firstOrFail();
         abort_unless($portalModel->codigo === 'nfse_nacional', 404);
 
+        $tipoListagem = AnaliseFiscalService::normalizarTipoListagem($request->query('listagem'));
+
         $docs = app(AnaliseFiscalService::class)
-            ->queryDocumentos($empresaModel->id, $portalModel->id, $competencia)
+            ->queryDocumentos($empresaModel->id, $portalModel->id, $competencia, $tipoListagem)
             ->where('tipo_documento', 'nfse')
             ->orderBy('numero')
             ->get();
@@ -38,11 +40,12 @@ class DocumentoFiscalNfsePeriodoZipController
         $comXml = $docs->filter(fn (DocumentoFiscal $doc) => $doc->temXmlPersistido());
         if ($comXml->isEmpty()) {
             return redirect()
-                ->route('automacao-fiscal.analise', [
+                ->route('automacao-fiscal.analise', array_filter([
                     'empresa' => $empresaModel->id,
                     'portal' => $portalModel->id,
                     'competencia' => $competencia,
-                ])
+                    'listagem' => $tipoListagem,
+                ]))
                 ->with('error', 'Nenhum XML baixado neste período ainda.');
         }
 
@@ -64,7 +67,8 @@ class DocumentoFiscalNfsePeriodoZipController
         }
         $zip->close();
 
-        $nome = 'nfse-'.$competencia.'-'.$empresaModel->id.'.zip';
+        $sufixoTipo = $tipoListagem ? '-'.$tipoListagem : '';
+        $nome = 'nfse-'.$competencia.$sufixoTipo.'-'.$empresaModel->id.'.zip';
 
         return response()->download($zipPath, $nome, [
             'Content-Type' => 'application/zip',

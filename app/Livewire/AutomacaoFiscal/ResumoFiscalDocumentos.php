@@ -34,12 +34,14 @@ class ResumoFiscalDocumentos extends Component
     public ?int $analiseEmpresaId = null;
     public ?int $analisePortalId = null;
     public ?string $analiseCompetencia = null;
+    public ?string $analiseTipoListagem = null;
 
     public array $resumo = [];
-    public string $aba = 'resumo';
+    public string $aba = 'documentos';
     public ?string $analiseEmpresaNome = null;
     public ?string $analisePortalNome = null;
     public ?string $analiseCompetenciaLabel = null;
+    public ?string $analiseTipoListagemLabel = null;
     public bool $analiseEhNfse = false;
 
     public bool $xmlModalAberto = false;
@@ -61,7 +63,10 @@ class ResumoFiscalDocumentos extends Component
     public function mount(?int $empresa = null, ?int $portal = null, ?string $competencia = null): void
     {
         if ($empresa && $portal && $competencia) {
-            $this->carregarAnalise($empresa, $portal, $competencia);
+            $listagem = AnaliseFiscalService::normalizarTipoListagem(
+                request()->query('listagem')
+            );
+            $this->carregarAnalise($empresa, $portal, $competencia, $listagem);
         }
     }
 
@@ -80,26 +85,53 @@ class ResumoFiscalDocumentos extends Component
         $this->resetPage('listagemPage');
     }
 
-    public function carregarAnalise(int $empresaId, int $portalId, string $competencia): void
-    {
-        $dados = app(AnaliseFiscalService::class)->carregar($empresaId, $portalId, $competencia);
+    public function carregarAnalise(
+        int $empresaId,
+        int $portalId,
+        string $competencia,
+        ?string $tipoListagem = null
+    ): void {
+        $dados = app(AnaliseFiscalService::class)->carregar(
+            $empresaId,
+            $portalId,
+            $competencia,
+            $tipoListagem
+        );
 
         $this->analiseEmpresaId = $empresaId;
         $this->analisePortalId = $portalId;
         $this->analiseCompetencia = $competencia;
+        $this->analiseTipoListagem = $dados['tipo_listagem'];
         $this->analiseEmpresaNome = $dados['empresa']->nome;
         $this->analisePortalNome = $dados['portal']?->nome ?? '—';
         $this->analiseCompetenciaLabel = $dados['competencia_label'];
+        $this->analiseTipoListagemLabel = $dados['tipo_listagem_label'];
         $this->analiseEhNfse = $dados['eh_nfse'];
         $this->resumo = $dados['resumo'];
-        $this->aba = 'resumo';
+        $this->aba = 'documentos';
         $this->resetPage();
     }
 
     public function setAba(string $aba): void
     {
+        $permitidas = ['documentos', 'grupos', 'resumo'];
+        if ($this->podeVerAbaColunas()) {
+            $permitidas[] = 'colunas';
+        }
+
+        if (! in_array($aba, $permitidas, true)) {
+            return;
+        }
+
         $this->aba = $aba;
         $this->resetPage();
+    }
+
+    public function podeVerAbaColunas(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && $user->isSuperAdmin();
     }
 
     public function limparFiltros(): void
@@ -199,7 +231,8 @@ class ResumoFiscalDocumentos extends Component
             ->queryDocumentos(
                 (int) $this->analiseEmpresaId,
                 (int) $this->analisePortalId,
-                (string) $this->analiseCompetencia
+                (string) $this->analiseCompetencia,
+                $this->analiseTipoListagem
             )
             ->where('tipo_documento', 'nfse')
             ->get();
@@ -219,11 +252,12 @@ class ResumoFiscalDocumentos extends Component
                 );
             }
 
-            return redirect()->route('automacao-fiscal.nfse.periodo.zip', [
+            return redirect()->route('automacao-fiscal.nfse.periodo.zip', array_filter([
                 'empresa' => $this->analiseEmpresaId,
                 'portal' => $this->analisePortalId,
                 'competencia' => $this->analiseCompetencia,
-            ]);
+                'listagem' => $this->analiseTipoListagem,
+            ]));
         }
 
         session()->flash(
@@ -336,6 +370,10 @@ class ResumoFiscalDocumentos extends Component
 
     public function render()
     {
+        if ($this->aba === 'colunas' && ! $this->podeVerAbaColunas()) {
+            $this->aba = 'documentos';
+        }
+
         $empresas = Empresa::query()->where('ativo', true)->orderBy('nome')->get();
         $portais = PortalIntegracao::query()->where('ativo', true)->orderBy('nome')->get();
         $analises = null;
@@ -358,7 +396,8 @@ class ResumoFiscalDocumentos extends Component
                 ->queryDocumentos(
                     (int) $this->analiseEmpresaId,
                     (int) $this->analisePortalId,
-                    (string) $this->analiseCompetencia
+                    (string) $this->analiseCompetencia,
+                    $this->analiseTipoListagem
                 )
                 ->orderByDesc('data_emissao')
                 ->orderByDesc('numero')

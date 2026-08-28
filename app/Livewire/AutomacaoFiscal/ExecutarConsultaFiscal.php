@@ -34,6 +34,9 @@ class ExecutarConsultaFiscal extends Component
 
     public string $nome_consulta_salva = '';
 
+    /** Quando true, não sobrescreve o nome digitado pelo usuário. */
+    public bool $nome_consulta_manual = false;
+
     /** @var array<string, mixed> */
     public array $parametros = [];
 
@@ -115,6 +118,7 @@ class ExecutarConsultaFiscal extends Component
     {
         $this->consulta_salva_id = '';
         $this->nome_consulta_salva = '';
+        $this->nome_consulta_manual = false;
         $this->parametros = [];
         $this->aplicarTipoConsulta();
     }
@@ -122,8 +126,8 @@ class ExecutarConsultaFiscal extends Component
     public function updatedConsultaSalvaId(): void
     {
         if (!$this->consulta_salva_id) {
-            $this->nome_consulta_salva = '';
-            $this->carregarParametrosDoRecurso();
+            $this->nome_consulta_manual = false;
+            $this->carregarParametrosDoRecurso(buscarMatch: false);
 
             return;
         }
@@ -142,6 +146,12 @@ class ExecutarConsultaFiscal extends Component
 
         $this->aplicarParametrosSalvos((array) ($preset->parametros ?? []));
         $this->nome_consulta_salva = $preset->nome;
+        $this->nome_consulta_manual = false;
+    }
+
+    public function updatedNomeConsultaSalva(): void
+    {
+        $this->nome_consulta_manual = trim($this->nome_consulta_salva) !== '';
     }
 
     public function updatedPeriodoModo(): void
@@ -151,16 +161,45 @@ class ExecutarConsultaFiscal extends Component
         }
 
         $this->aplicarDatasDoPeriodoModo();
+        $this->sincronizarSugestaoModelo();
     }
 
     public function updatedModeloNfe(): void
     {
         $this->sincronizarModeloNosParametros();
+        $this->sincronizarSugestaoModelo();
     }
 
     public function updatedModeloNfce(): void
     {
         $this->sincronizarModeloNosParametros();
+        $this->sincronizarSugestaoModelo();
+    }
+
+    public function updated(string $property): void
+    {
+        if (! str_starts_with($property, 'parametros.')) {
+            return;
+        }
+
+        $chave = substr($property, strlen('parametros.'));
+        if (! in_array($chave, [
+            'periodo_inicial',
+            'periodo_final',
+            'periodo_inicio',
+            'periodo_fim',
+            'busca',
+            'operacao',
+            'modelo',
+            'situacao_normal',
+            'situacao_cancelada',
+            'totalizado_por_mes',
+            'excluir_venda_fora_estabelecimento',
+        ], true)) {
+            return;
+        }
+
+        $this->sincronizarSugestaoModelo();
     }
 
     public function carregarIntegracoesDaEmpresa(): void
@@ -168,7 +207,7 @@ class ExecutarConsultaFiscal extends Component
         // noop — render monta a lista; mantém método para updated hooks
     }
 
-    public function carregarParametrosDoRecurso(): void
+    public function carregarParametrosDoRecurso(bool $buscarMatch = true): void
     {
         $this->parametros = [];
 
@@ -191,6 +230,7 @@ class ExecutarConsultaFiscal extends Component
             ->first();
 
         $this->aplicarParametrosSalvos((array) ($vinculo?->parametros ?? []));
+        $this->sincronizarSugestaoModelo(buscarMatch: $buscarMatch);
     }
 
     /**
@@ -340,8 +380,9 @@ class ExecutarConsultaFiscal extends Component
         $this->consulta_salva_id = (string) $preset->id;
         $this->aplicarParametrosSalvos((array) ($preset->fresh()->parametros ?? $paramsPersistidos));
         $this->nome_consulta_salva = $preset->nome;
+        $this->nome_consulta_manual = false;
 
-        session()->flash('message', 'Modelo “'.$preset->nome.'” salvo.');
+        session()->flash('message', 'Modelo “'.$preset->nome.'” salvo. Os filtros ficam no vínculo e podem ser usados no agendamento.');
     }
 
     public function excluirConsultaSalva(): void
@@ -357,6 +398,7 @@ class ExecutarConsultaFiscal extends Component
 
         $this->consulta_salva_id = '';
         $this->nome_consulta_salva = '';
+        $this->nome_consulta_manual = false;
         $this->carregarParametrosDoRecurso();
         session()->flash('message', 'Modelo excluído.');
     }
@@ -498,6 +540,7 @@ class ExecutarConsultaFiscal extends Component
         $this->portal_recurso_id = '';
         $this->consulta_salva_id = '';
         $this->nome_consulta_salva = '';
+        $this->nome_consulta_manual = false;
         $this->periodo_modo = 'mes_atual';
         $this->modelo_nfe = true;
         $this->modelo_nfce = false;
@@ -736,6 +779,229 @@ class ExecutarConsultaFiscal extends Component
         }
 
         return $out;
+    }
+
+    /**
+     * Seleciona modelo existente com os mesmos filtros ou sugere um nome para gravar.
+     */
+    private function sincronizarSugestaoModelo(bool $buscarMatch = true): void
+    {
+        if (! in_array($this->tipo_consulta, ['extrato_nfe_nfce', 'extrato_nfse_emitidas', 'extrato_nfse_recebidas'], true)) {
+            return;
+        }
+
+        if (! $this->empresa_integracao_id || ! $this->portal_recurso_id) {
+            return;
+        }
+
+        $recurso = PortalRecurso::find($this->portal_recurso_id);
+        if (! $recurso || empty($recurso->parametros_schema)) {
+            return;
+        }
+
+        $paramsAtuais = $this->parametrosParaPersistencia($recurso);
+
+        if ($buscarMatch) {
+            $match = $this->encontrarModeloComParametros($paramsAtuais);
+            if ($match) {
+                $this->consulta_salva_id = (string) $match->id;
+                $this->nome_consulta_salva = $match->nome;
+                $this->nome_consulta_manual = false;
+
+                return;
+            }
+        }
+
+        $this->consulta_salva_id = '';
+
+        if (! $this->nome_consulta_manual) {
+            $this->nome_consulta_salva = $this->garantirNomeUnicoSugerido($this->gerarNomeModeloSugerido());
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $paramsAtuais
+     */
+    private function encontrarModeloComParametros(array $paramsAtuais): ?AutomacaoConsultaSalva
+    {
+        $assinatura = $this->assinaturaParametrosModelo($paramsAtuais);
+
+        return AutomacaoConsultaSalva::query()
+            ->where('empresa_integracao_id', $this->empresa_integracao_id)
+            ->where('portal_recurso_id', $this->portal_recurso_id)
+            ->get()
+            ->first(fn (AutomacaoConsultaSalva $modelo) => $this->assinaturaParametrosModelo(
+                (array) ($modelo->parametros ?? [])
+            ) === $assinatura);
+    }
+
+    /**
+     * Assinatura estável dos filtros que definem um modelo (ignora IE/CNPJ da empresa).
+     *
+     * @param  array<string, mixed>  $params
+     */
+    private function assinaturaParametrosModelo(array $params): string
+    {
+        $modo = (string) ($params['periodo_modo'] ?? '');
+        if (! in_array($modo, ['mes_atual', 'mes_anterior', 'personalizado'], true)) {
+            $modo = 'mes_atual';
+        }
+
+        $out = ['periodo_modo' => $modo];
+
+        if ($modo === 'personalizado') {
+            $out['periodo_inicial'] = (string) ($params['periodo_inicial'] ?? $params['periodo_inicio'] ?? '');
+            $out['periodo_final'] = (string) ($params['periodo_final'] ?? $params['periodo_fim'] ?? '');
+        }
+
+        foreach ([
+            'busca',
+            'modelo',
+            'operacao',
+            'situacao_normal',
+            'situacao_cancelada',
+            'totalizado_por_mes',
+            'excluir_venda_fora_estabelecimento',
+        ] as $chave) {
+            if (! array_key_exists($chave, $params)) {
+                continue;
+            }
+
+            $valor = $params[$chave];
+            if (is_bool($valor)) {
+                $out[$chave] = $valor;
+                continue;
+            }
+
+            if ($valor === null || $valor === '') {
+                continue;
+            }
+
+            $out[$chave] = $valor;
+        }
+
+        ksort($out);
+
+        return (string) json_encode($out, JSON_UNESCAPED_UNICODE);
+    }
+
+    public function gerarNomeModeloSugerido(): string
+    {
+        $periodo = match ($this->periodo_modo) {
+            'mes_atual' => 'mês atual',
+            'mes_anterior' => 'mês anterior',
+            'personalizado' => $this->rotuloPeriodoPersonalizado(),
+            default => 'mês atual',
+        };
+
+        if ($this->tipo_consulta === 'extrato_nfse_emitidas') {
+            $partes = ['NFS-e emitidas', $periodo];
+        } elseif ($this->tipo_consulta === 'extrato_nfse_recebidas') {
+            $partes = ['NFS-e recebidas', $periodo];
+        } else {
+            $operacao = match ((string) ($this->parametros['operacao'] ?? 'saida-consulente')) {
+                'saida-consulente' => 'Saídas próprias',
+                'saida-terceiros' => 'Entradas de terceiros',
+                'entrada-consulente' => 'Entradas próprias',
+                'entrada-terceiros' => 'Contra notas',
+                default => 'NF-e/NFC-e',
+            };
+            $modelo = match ((string) ($this->parametros['modelo'] ?? 'nfe')) {
+                'nfce' => 'NFC-e',
+                'ambos' => 'NF-e e NFC-e',
+                default => 'NF-e',
+            };
+            $partes = [$operacao, $modelo, $periodo];
+
+            $normal = filter_var($this->parametros['situacao_normal'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $cancelada = filter_var($this->parametros['situacao_cancelada'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($cancelada && ! $normal) {
+                $partes[] = 'só canceladas';
+            } elseif ($normal && $cancelada) {
+                $partes[] = 'normais e canceladas';
+            }
+
+            if (filter_var($this->parametros['totalizado_por_mes'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $partes[] = 'totalizado/mês';
+            }
+        }
+
+        $busca = trim((string) ($this->parametros['busca'] ?? ''));
+        if ($busca !== '') {
+            $partes[] = 'busca: '.$this->truncarTexto($busca, 40);
+        }
+
+        return $this->truncarTexto(implode(' — ', array_filter($partes)), 120);
+    }
+
+    public function nomeModeloEhSugestao(): bool
+    {
+        if ($this->consulta_salva_id || $this->nome_consulta_manual || trim($this->nome_consulta_salva) === '') {
+            return false;
+        }
+
+        $sugerido = $this->garantirNomeUnicoSugerido($this->gerarNomeModeloSugerido());
+
+        return $this->nome_consulta_salva === $sugerido;
+    }
+
+    private function rotuloPeriodoPersonalizado(): string
+    {
+        $ini = (string) ($this->parametros['periodo_inicial'] ?? $this->parametros['periodo_inicio'] ?? '');
+        $fim = (string) ($this->parametros['periodo_final'] ?? $this->parametros['periodo_fim'] ?? '');
+
+        if ($ini === '' && $fim === '') {
+            return 'período personalizado';
+        }
+
+        try {
+            $iniFmt = $ini !== '' ? \Carbon\Carbon::parse($ini)->format('d/m') : '?';
+            $fimFmt = $fim !== '' ? \Carbon\Carbon::parse($fim)->format('d/m') : '?';
+
+            return $iniFmt.' a '.$fimFmt;
+        } catch (\Throwable) {
+            return 'período personalizado';
+        }
+    }
+
+    private function garantirNomeUnicoSugerido(string $base): string
+    {
+        $base = trim($base);
+        if ($base === '' || ! $this->empresa_integracao_id || ! $this->portal_recurso_id) {
+            return $base;
+        }
+
+        $nomes = AutomacaoConsultaSalva::query()
+            ->where('empresa_integracao_id', $this->empresa_integracao_id)
+            ->where('portal_recurso_id', $this->portal_recurso_id)
+            ->pluck('nome')
+            ->map(fn ($n) => mb_strtolower((string) $n))
+            ->all();
+
+        $candidato = $this->truncarTexto($base, 120);
+        if (! in_array(mb_strtolower($candidato), $nomes, true)) {
+            return $candidato;
+        }
+
+        for ($i = 2; $i <= 99; $i++) {
+            $sufixo = ' ('.$i.')';
+            $candidato = $this->truncarTexto($base, 120 - mb_strlen($sufixo)).$sufixo;
+            if (! in_array(mb_strtolower($candidato), $nomes, true)) {
+                return $candidato;
+            }
+        }
+
+        return $this->truncarTexto($base, 120);
+    }
+
+    private function truncarTexto(string $texto, int $max): string
+    {
+        $texto = trim($texto);
+        if (mb_strlen($texto) <= $max) {
+            return $texto;
+        }
+
+        return rtrim(mb_substr($texto, 0, $max - 1)).'…';
     }
 
     /**

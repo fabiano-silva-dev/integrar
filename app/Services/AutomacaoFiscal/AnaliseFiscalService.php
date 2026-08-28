@@ -28,7 +28,7 @@ class AnaliseFiscalService
     }
 
     /**
-     * Lista análises agrupadas por Empresa + Portal + Competência.
+     * Lista análises agrupadas por Empresa + Portal + Competência (+ tipo NFS-e).
      *
      * @return LengthAwarePaginator<int, object>
      */
@@ -40,12 +40,14 @@ class AnaliseFiscalService
         string $pageName = 'listagemPage'
     ): LengthAwarePaginator {
         $competenciaExpr = $this->expressaoCompetencia();
+        $tipoListagemExpr = $this->expressaoTipoListagem();
 
         $query = DocumentoFiscal::query()
             ->select([
                 'documentos_fiscais.empresa_id',
                 'documentos_fiscais.portal_integracao_id',
                 DB::raw("{$competenciaExpr} as competencia"),
+                DB::raw("{$tipoListagemExpr} as tipo_listagem"),
                 DB::raw('COUNT(*) as quantidade_documentos'),
                 DB::raw('COALESCE(SUM(documentos_fiscais.valor_total), 0) as valor_total'),
                 DB::raw('MAX(documentos_fiscais.updated_at) as atualizado_em'),
@@ -63,6 +65,7 @@ class AnaliseFiscalService
                 'documentos_fiscais.empresa_id',
                 'documentos_fiscais.portal_integracao_id',
                 DB::raw($competenciaExpr),
+                DB::raw($tipoListagemExpr),
             ])
             ->orderByDesc(DB::raw('MAX(documentos_fiscais.updated_at)'));
 
@@ -85,6 +88,10 @@ class AnaliseFiscalService
             $row->portal_nome = $portal?->nome ?? '—';
             $row->competencia_label = self::formatarCompetencia((string) $row->competencia);
             $row->eh_nfse = str_starts_with((string) ($row->tipo_documento_amostra ?? ''), 'nfse');
+            $row->tipo_listagem = self::normalizarTipoListagem(
+                $row->eh_nfse ? (string) ($row->tipo_listagem ?? '') : null
+            );
+            $row->tipo_listagem_label = self::formatarTipoListagem($row->tipo_listagem);
 
             return $row;
         });
@@ -99,23 +106,32 @@ class AnaliseFiscalService
      *     competencia: string,
      *     competencia_label: string,
      *     eh_nfse: bool,
+     *     tipo_listagem: string|null,
+     *     tipo_listagem_label: string,
      *     resumo: array<string, mixed>,
      *     documentos_query: Builder
      * }
      */
-    public function carregar(int $empresaId, int $portalId, string $competencia): array
+    public function carregar(int $empresaId, int $portalId, string $competencia, ?string $tipoListagem = null): array
     {
         $empresa = Empresa::query()->findOrFail($empresaId);
         $portal = PortalIntegracao::query()->find($portalId);
         $competencia = trim($competencia);
+        $tipoListagem = self::normalizarTipoListagem($tipoListagem);
 
-        $docs = $this->queryDocumentos($empresaId, $portalId, $competencia)
+        $docs = $this->queryDocumentos($empresaId, $portalId, $competencia, $tipoListagem)
             ->orderBy('data_emissao')
             ->orderBy('numero')
             ->get();
 
         $ehNfse = $docs->contains(fn (DocumentoFiscal $d) => $d->tipo_documento === 'nfse')
             || ($portal?->codigo === 'nfse_nacional');
+
+        if ($ehNfse && $tipoListagem === null && $docs->isNotEmpty()) {
+            $tipoListagem = self::normalizarTipoListagem(
+                (string) data_get($docs->first()->dados_complementares, 'tipo_listagem', 'emitidas')
+            );
+        }
 
         $arrays = $docs->map(function (DocumentoFiscal $d) use ($empresa, $ehNfse) {
             $arr = $d->toArray();
@@ -137,15 +153,17 @@ class AnaliseFiscalService
             'competencia' => $competencia,
             'competencia_label' => self::formatarCompetencia($competencia),
             'eh_nfse' => $ehNfse,
+            'tipo_listagem' => $ehNfse ? $tipoListagem : null,
+            'tipo_listagem_label' => self::formatarTipoListagem($ehNfse ? $tipoListagem : null),
             'resumo' => $resumo,
-            'documentos_query' => $this->queryDocumentos($empresaId, $portalId, $competencia),
+            'documentos_query' => $this->queryDocumentos($empresaId, $portalId, $competencia, $tipoListagem),
         ];
     }
 
     /**
-     * Resolve a análise (empresa/portal/competência) a partir de uma coleta legada.
+     * Resolve a análise (empresa/portal/competência/tipo) a partir de uma coleta legada.
      *
-     * @return array{empresa_id: int, portal_id: int, competencia: string}|null
+     * @return array{empresa_id: int, portal_id: int, competencia: string, tipo_listagem: string|null}|null
      */
     public function resolverDeColeta(int $coletaId): ?array
     {
@@ -190,21 +208,49 @@ class AnaliseFiscalService
             return null;
         }
 
+        $tipoListagem = null;
+        $recursoCodigo = $coleta->execucao?->portalRecurso?->codigo;
+        if (in_array($recursoCodigo, ['nfse_emitidas', 'nfse_recebidas'], true)) {
+            $tipoListagem = $recursoCodigo === 'nfse_recebidas' ? 'recebidas' : 'emitidas';
+        } elseif (($coleta->origem ?? '') === 'nfse_nacional_extrato_txt') {
+            $amostra = DocumentoFiscal::query()
+                ->where('empresa_id', $coleta->empresa_id)
+                ->where('portal_integracao_id', $portalId)
+                ->where('automacao_execucao_id', $coleta->automacao_execucao_id)
+                ->value('dados_complementares');
+            if (is_string($amostra) && $amostra !== '') {
+                $amostra = json_decode($amostra, true);
+            }
+            $tipoListagem = self::normalizarTipoListagem(
+                is_array($amostra) ? (string) ($amostra['tipo_listagem'] ?? '') : null
+            ) ?? 'emitidas';
+        }
+
         return [
             'empresa_id' => (int) $coleta->empresa_id,
             'portal_id' => (int) $portalId,
             'competencia' => (string) $competencia,
+            'tipo_listagem' => $tipoListagem,
         ];
     }
 
-    public function queryDocumentos(int $empresaId, int $portalId, string $competencia): Builder
-    {
+    public function queryDocumentos(
+        int $empresaId,
+        int $portalId,
+        string $competencia,
+        ?string $tipoListagem = null
+    ): Builder {
         $competenciaExpr = $this->expressaoCompetencia();
+        $tipoListagem = self::normalizarTipoListagem($tipoListagem);
 
         return DocumentoFiscal::query()
             ->where('empresa_id', $empresaId)
             ->where('portal_integracao_id', $portalId)
-            ->whereRaw("{$competenciaExpr} = ?", [$competencia]);
+            ->whereRaw("{$competenciaExpr} = ?", [$competencia])
+            ->when(
+                $tipoListagem !== null,
+                fn (Builder $q) => $q->whereRaw("{$this->expressaoTipoListagem()} = ?", [$tipoListagem])
+            );
     }
 
     public static function formatarCompetencia(?string $competencia): string
@@ -216,9 +262,42 @@ class AnaliseFiscalService
         return $m[2].'/'.$m[1];
     }
 
+    public static function normalizarTipoListagem(?string $tipo): ?string
+    {
+        $tipo = strtolower(trim((string) $tipo));
+
+        return match ($tipo) {
+            'emitidas', 'recebidas' => $tipo,
+            default => null,
+        };
+    }
+
+    public static function formatarTipoListagem(?string $tipo): string
+    {
+        return match (self::normalizarTipoListagem($tipo)) {
+            'emitidas' => 'Emitidas',
+            'recebidas' => 'Recebidas',
+            default => '—',
+        };
+    }
+
     private function expressaoCompetencia(): string
     {
         return "COALESCE(NULLIF(documentos_fiscais.competencia, ''), DATE_FORMAT(documentos_fiscais.data_emissao, '%Y-%m'))";
+    }
+
+    /**
+     * Tipo da listagem NFS-e (emitidas/recebidas); vazio para demais documentos.
+     */
+    private function expressaoTipoListagem(): string
+    {
+        return "CASE
+            WHEN documentos_fiscais.tipo_documento = 'nfse' THEN COALESCE(
+                NULLIF(JSON_UNQUOTE(JSON_EXTRACT(documentos_fiscais.dados_complementares, '$.tipo_listagem')), ''),
+                'emitidas'
+            )
+            ELSE ''
+        END";
     }
 
     private function portalIdPorOrigem(?string $origem): ?int

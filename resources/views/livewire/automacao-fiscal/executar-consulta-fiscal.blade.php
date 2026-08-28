@@ -122,9 +122,12 @@
                                     </div>
                                     <div class="lg:col-span-5">
                                         <label class="block text-xs font-medium text-gray-600 mb-1">Nome</label>
-                                        <input type="text" wire:model="nome_consulta_salva" maxlength="120"
-                                            placeholder="Ex.: Competência mês anterior"
+                                        <input type="text" wire:model.live.debounce.400ms="nome_consulta_salva" maxlength="120"
+                                            placeholder="{{ $this->gerarNomeModeloSugerido() }}"
                                             class="w-full h-10 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white">
+                                        @if ($this->nomeModeloEhSugestao())
+                                            <p class="text-xs text-indigo-600 mt-1">Sugestão com base nos filtros — salve para reutilizar no agendamento.</p>
+                                        @endif
                                         @error('nome_consulta_salva') <p class="text-red-600 text-sm mt-1">{{ $message }}</p> @enderror
                                     </div>
                                     <div class="lg:col-span-3">
@@ -200,9 +203,12 @@
                                     </div>
                                     <div class="lg:col-span-5">
                                         <label class="block text-xs font-medium text-gray-600 mb-1">Nome</label>
-                                        <input type="text" wire:model="nome_consulta_salva" maxlength="120"
-                                            placeholder="Ex.: Saídas próprias"
+                                        <input type="text" wire:model.live.debounce.400ms="nome_consulta_salva" maxlength="120"
+                                            placeholder="{{ $this->gerarNomeModeloSugerido() }}"
                                             class="w-full h-10 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white">
+                                        @if ($this->nomeModeloEhSugestao())
+                                            <p class="text-xs text-indigo-600 mt-1">Sugestão com base nos filtros — salve para reutilizar no agendamento.</p>
+                                        @endif
                                         @error('nome_consulta_salva') <p class="text-red-600 text-sm mt-1">{{ $message }}</p> @enderror
                                     </div>
                                     <div class="lg:col-span-3">
