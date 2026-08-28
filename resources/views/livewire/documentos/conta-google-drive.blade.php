@@ -207,9 +207,13 @@
                                             <td class="px-3 py-2 font-medium">{{ $empresa->nome_fantasia ?: $empresa->nome }}</td>
                                             <td class="px-3 py-2">
                                                 @if ($raiz)
+                                                    @if (auth()->user()?->podeAbrirGoogleDriveExterno())
                                                     <a href="{{ $raiz->urlDrive() }}" target="_blank" class="text-indigo-600">
                                                         {{ $raiz->google_folder_nome ?: $raiz->google_folder_id }}
                                                     </a>
+                                                    @else
+                                                    <span>{{ $raiz->google_folder_nome ?: $raiz->google_folder_id }}</span>
+                                                    @endif
                                                 @else
                                                     <span class="text-gray-400">Ainda sem pasta</span>
                                                 @endif

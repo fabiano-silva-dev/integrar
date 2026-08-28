@@ -4,7 +4,7 @@
             <div class="p-6 border-b border-gray-200 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">Drive contábil</h1>
-                    <p class="text-sm text-gray-600 mt-1">Selecione a empresa e abra ou baixe os arquivos do Google Drive.</p>
+                    <p class="text-sm text-gray-600 mt-1">Selecione a empresa e visualize ou baixe os arquivos.</p>
                 </div>
                 @if ($podeConfigurar)
                     <a href="{{ route('documentos.whatsapp') }}"
@@ -95,7 +95,7 @@
                         </nav>
 
                         <div class="flex flex-wrap items-center gap-2">
-                            @if ($pastaDriveUrl)
+                            @if ($podeAbrirNoDrive && $pastaDriveUrl)
                                 <a href="{{ $pastaDriveUrl }}" target="_blank" rel="noopener"
                                    class="h-10 px-4 inline-flex items-center rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                     Abrir no Drive
@@ -171,8 +171,8 @@
                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
                                                     @endif
                                                 </span>
-                                                @if ($item['abrir'] === 'arquivo' && $item['url_drive'])
-                                                    <a href="{{ $item['url_drive'] }}" target="_blank" rel="noopener"
+                                                @if ($item['abrir'] === 'arquivo' && ! empty($item['url_visualizar']))
+                                                    <a href="{{ $item['url_visualizar'] }}" target="_blank" rel="noopener"
                                                        class="font-semibold text-gray-900 truncate hover:text-indigo-700">
                                                         {{ $item['nome'] }}
                                                     </a>
@@ -201,11 +201,15 @@
                                             {{ $item['tipo'] === 'arquivo' ? ($item['tamanho'] ?? '—') : '—' }}
                                         </td>
                                         <td class="px-3 py-3 text-right whitespace-nowrap">
-                                            @if ($item['url_drive'])
-                                                <a href="{{ $item['url_drive'] }}" target="_blank" rel="noopener"
-                                                   class="text-indigo-600 font-semibold mr-3">Abrir</a>
-                                            @endif
                                             @if ($item['tipo'] === 'arquivo')
+                                                @if (! empty($item['url_visualizar']))
+                                                    <a href="{{ $item['url_visualizar'] }}" target="_blank" rel="noopener"
+                                                       class="text-indigo-600 font-semibold mr-3">Visualizar</a>
+                                                @endif
+                                                @if ($podeAbrirNoDrive && ! empty($item['url_drive']))
+                                                    <a href="{{ $item['url_drive'] }}" target="_blank" rel="noopener"
+                                                       class="text-gray-700 font-semibold mr-3">Abrir no Drive</a>
+                                                @endif
                                                 <button type="button" wire:click="abrirMoverItem('{{ $item['chave'] }}')"
                                                         class="text-gray-700 font-semibold mr-3">
                                                     Mover
@@ -214,11 +218,25 @@
                                                         class="text-red-600 font-semibold mr-3">
                                                     Excluir
                                                 </button>
+                                                @if (! empty($item['url_download']))
+                                                    <a href="{{ $item['url_download'] }}"
+                                                       class="text-gray-700 font-semibold">Baixar</a>
+                                                @else
+                                                    <button type="button" wire:click="baixarItem('{{ $item['chave'] }}')"
+                                                            class="text-gray-700 font-semibold">
+                                                        Baixar
+                                                    </button>
+                                                @endif
+                                            @else
+                                                @if ($podeAbrirNoDrive && ! empty($item['url_drive']))
+                                                    <a href="{{ $item['url_drive'] }}" target="_blank" rel="noopener"
+                                                       class="text-indigo-600 font-semibold mr-3">Abrir no Drive</a>
+                                                @endif
+                                                <button type="button" wire:click="baixarItem('{{ $item['chave'] }}')"
+                                                        class="text-gray-700 font-semibold">
+                                                    Baixar
+                                                </button>
                                             @endif
-                                            <button type="button" wire:click="baixarItem('{{ $item['chave'] }}')"
-                                                    class="text-gray-700 font-semibold">
-                                                Baixar
-                                            </button>
                                         </td>
                                     </tr>
                                 @empty

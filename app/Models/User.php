@@ -64,6 +64,11 @@ class User extends Authenticatable
         return $this->isSuperAdmin() || $this->isEscritorioAdmin();
     }
 
+    public function podeAbrirGoogleDriveExterno(): bool
+    {
+        return $this->isSuperAdmin() || $this->isEscritorioAdmin();
+    }
+
     /**
      * @return list<string>
      */

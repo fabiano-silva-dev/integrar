@@ -385,7 +385,7 @@ class ExploradorDocumentos extends Component
         }
 
         try {
-            return $compactar->baixar($ids, $this->nomeArquivoZip($chaves));
+            return $compactar->baixar($ids, $this->nomeArquivoZip($chaves), $this->empresaId);
         } catch (\Throwable $exception) {
             $this->erro = $exception->getMessage();
 
@@ -435,10 +435,11 @@ class ExploradorDocumentos extends Component
             'nivel' => $nivel,
             'breadcrumb' => $breadcrumb,
             'breadcrumbIrmaos' => $this->irmaosDoNivel($empresas, $empresaAtual, $nivel),
-            'pastaDriveUrl' => $pastaDriveUrl,
+            'pastaDriveUrl' => $this->podeAbrirNoDrive() ? $pastaDriveUrl : null,
             'chavesVisiveis' => $chavesVisiveis,
             'todosSelecionados' => $chavesVisiveis !== [] && count($this->selecionados) === count($chavesVisiveis),
             'podeConfigurar' => $this->podeConfigurar(),
+            'podeAbrirNoDrive' => $this->podeAbrirNoDrive(),
             'moverItens' => $moverItens,
             'moverBreadcrumb' => $moverBreadcrumb,
             'moverNivel' => $moverNivel,
@@ -473,7 +474,7 @@ class ExploradorDocumentos extends Component
                     'tipo' => 'empresa',
                     'nome' => $empresa->nome_fantasia ?: $empresa->nome,
                     'subtitulo' => $empresa->codigo_sistema ?: $empresa->cnpj,
-                    'url_drive' => $raiz?->urlDrive(),
+                    'url_drive' => $this->podeAbrirNoDrive() ? $raiz?->urlDrive() : null,
                     'abrir' => 'empresa',
                     'id' => $empresa->id,
                 ];
@@ -541,7 +542,7 @@ class ExploradorDocumentos extends Component
                 'tipo' => 'pasta',
                 'nome' => (string) $ano,
                 'subtitulo' => 'Ano',
-                'url_drive' => $pasta?->urlDrive(),
+                'url_drive' => $this->podeAbrirNoDrive() ? $pasta?->urlDrive() : null,
                 'abrir' => 'ano',
                 'id' => $ano,
             ];
@@ -565,7 +566,7 @@ class ExploradorDocumentos extends Component
                 'tipo' => 'pasta',
                 'nome' => $tipo->rotulo(),
                 'subtitulo' => $tipo->pastaDrive(),
-                'url_drive' => $pasta?->urlDrive(),
+                'url_drive' => $this->podeAbrirNoDrive() ? $pasta?->urlDrive() : null,
                 'abrir' => 'tipo',
                 'id' => $tipo->value,
             ];
@@ -608,7 +609,11 @@ class ExploradorDocumentos extends Component
                     'nome' => $documento->nome_original,
                     'subtitulo' => $documento->data_documento?->format('d/m/Y') ?: $documento->created_at?->format('d/m/Y H:i'),
                     'tamanho' => $this->tamanhoFormatado($documento),
-                    'url_drive' => is_array($copia) ? ($copia['drive_link'] ?? $documento->urlDrive()) : $documento->urlDrive(),
+                    'url_drive' => $this->podeAbrirNoDrive()
+                        ? (is_array($copia) ? ($copia['drive_link'] ?? $documento->urlDrive()) : $documento->urlDrive())
+                        : null,
+                    'url_visualizar' => route('documentos.visualizar', ['documento' => $documento->id, 'empresa' => $empresa->id]),
+                    'url_download' => route('documentos.download', ['documento' => $documento->id, 'empresa' => $empresa->id]),
                     'abrir' => 'arquivo',
                     'id' => $documento->id,
                 ];
@@ -825,6 +830,11 @@ class ExploradorDocumentos extends Component
         $user = auth()->user();
 
         return $user !== null && ($user->isSuperAdmin() || in_array($user->role, ['admin', 'gerente'], true));
+    }
+
+    private function podeAbrirNoDrive(): bool
+    {
+        return auth()->user()?->podeAbrirGoogleDriveExterno() === true;
     }
 
     /**

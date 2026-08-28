@@ -317,9 +317,13 @@
                             <div class="mb-4 border rounded-lg p-4">
                                 <h3 class="text-sm font-semibold text-gray-900 mb-1">Pasta raiz no Drive</h3>
                                 @if ($pastaDriveRaiz)
+                                    @if (auth()->user()?->podeAbrirGoogleDriveExterno())
                                     <a href="{{ $pastaDriveRaiz->urlDrive() }}" target="_blank" class="text-indigo-600 text-sm">
                                         {{ $pastaDriveRaiz->google_folder_nome ?: $pastaDriveRaiz->google_folder_id }}
                                     </a>
+                                    @else
+                                    <p class="text-sm text-gray-700">{{ $pastaDriveRaiz->google_folder_nome ?: $pastaDriveRaiz->google_folder_id }}</p>
+                                    @endif
                                 @else
                                     <p class="text-sm text-gray-500">Não definida.</p>
                                 @endif

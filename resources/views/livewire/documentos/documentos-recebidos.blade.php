@@ -106,8 +106,9 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-2">
-                                            @if ($doc->urlDrive())
-                                                <a href="{{ $doc->urlDrive() }}" target="_blank" class="text-indigo-600">Abrir</a>
+                                            @if ($doc->drive_file_id)
+                                                <a href="{{ route('documentos.visualizar', ['documento' => $doc->id, 'empresa' => $doc->empresa_id]) }}" target="_blank" class="text-indigo-600">Visualizar</a>
+                                                <a href="{{ route('documentos.download', ['documento' => $doc->id, 'empresa' => $doc->empresa_id]) }}" class="text-gray-700 ml-2">Baixar</a>
                                                 <div class="text-xs text-gray-400">{{ $doc->drive_path }}</div>
                                             @else
                                                 —
