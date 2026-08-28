@@ -36,7 +36,7 @@ docker compose exec app python3 /var/www/html/scripts/conversor_extrato_pdf_ofx.
 | `banco-do-brasil/` | `conta-corrente.pdf` |
 | `banrisul/` | `conta-corrente-*.pdf`, `relatorio-pix-*.pdf`, `relatorio-pagamentos-titulos-*.pdf` |
 | `bradesco/` | `extrato-mensal-01-a-04-2026.pdf` |
-| `cora/` | `extrato-periodo.pdf` |
+| `cora/` | `extrato-periodo.pdf`, `extrato-01-a-08-2026.pdf` |
 | `cresol/` | `consolidado.pdf` / `conta-corrente.pdf` (+ variantes) — layouts `cresol` e `cresol_modelo2` |
 | `dominio/` | `extrato-2026-08-13.pdf` — layout `dominio_conta_digital` |
 | `grafeno/` | `extrato-claudio-abr.ofx` |

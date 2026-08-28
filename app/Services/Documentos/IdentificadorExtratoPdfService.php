@@ -23,6 +23,7 @@ class IdentificadorExtratoPdfService
         'grafeno' => ['grafeno'],
         'infinitepay' => ['infinitepay'],
         'dominio_conta_digital' => ['conta digital', 'dominio'],
+        'cora' => ['cora scfi'],
     ];
 
     /**

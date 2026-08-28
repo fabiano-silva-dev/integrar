@@ -72,6 +72,10 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_dominio_pdf_ofx.py',
     },
+    'cora': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_cora_pdf_ofx.py',
+    },
 }
 
 

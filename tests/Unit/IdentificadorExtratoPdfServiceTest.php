@@ -25,6 +25,17 @@ class IdentificadorExtratoPdfServiceTest extends TestCase
         $this->assertSame('banrisul', $r['layout']);
     }
 
+    public function test_cora(): void
+    {
+        $id = new IdentificadorExtratoPdfService;
+        $r = $id->identificar(
+            "UP ESPACO MULTIPROFISSIONAL LTDA\nAgência: 0001 - Conta: 6557797-8\nCora SCFI - CNPJ 37.880.206/0001-63"
+        );
+
+        $this->assertNotNull($r);
+        $this->assertSame('cora', $r['layout']);
+    }
+
     public function test_texto_generico_nao_e_extrato(): void
     {
         $id = new IdentificadorExtratoPdfService;
