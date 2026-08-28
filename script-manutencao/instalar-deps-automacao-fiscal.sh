@@ -12,8 +12,16 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Resolver caminho real (atalho na raiz / symlink) para não apontar PROJECT_DIR à pasta pai.
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+if [[ -f "$SCRIPT_DIR/../artisan" ]]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+elif [[ -f "$SCRIPT_DIR/artisan" ]]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+else
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 APP_USER="${SUDO_USER:-}"
 APP_GROUP="www-data"
 NODE_MAJOR_MIN=24
