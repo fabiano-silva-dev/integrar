@@ -3,8 +3,8 @@
         <div class="bg-white shadow-xl rounded-xl overflow-hidden">
             <div class="p-6 border-b border-gray-200 flex flex-wrap items-start justify-between gap-4">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">Documentos</h1>
-                    <p class="text-sm text-gray-600 mt-1">Selecione a empresa e abra ou baixe os arquivos do Drive.</p>
+                    <h1 class="text-2xl font-bold text-gray-900">Drive contábil</h1>
+                    <p class="text-sm text-gray-600 mt-1">Selecione a empresa e abra ou baixe os arquivos do Google Drive.</p>
                 </div>
                 @if ($podeConfigurar)
                     <a href="{{ route('documentos.whatsapp') }}"
@@ -24,7 +24,7 @@
 
                 @if ($precisaSelecionarEscritorio)
                     <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded">
-                        Selecione um escritório no menu superior para ver os documentos.
+                        Selecione um escritório no menu superior para ver o Drive contábil.
                     </div>
                 @else
                     <div class="flex flex-wrap gap-3 mb-5">

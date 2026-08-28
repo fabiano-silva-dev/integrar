@@ -301,7 +301,7 @@ class EcacRsPortal implements PortalAutomacao
     }
 
     /**
-     * Após extract bem-sucedido, importa o .txt do extrato para Análises fiscais.
+     * Após extract bem-sucedido, importa o .txt do extrato para Notas fiscais.
      *
      * @param  array{status: string, result: array<string, mixed>, events?: list<array<string, mixed>>, artifacts?: list<array<string, mixed>>}  $saida
      * @return array{mensagem?: string, encontrada?: int, importada?: int, ignorada?: int, coleta_id?: int, vazio?: bool}
@@ -406,7 +406,7 @@ class EcacRsPortal implements PortalAutomacao
             );
 
             return [
-                'mensagem' => 'Extrato baixado, mas a importação para Análises fiscais falhou: '.$e->getMessage(),
+                'mensagem' => 'Extrato baixado, mas a importação para Notas fiscais falhou: '.$e->getMessage(),
             ];
         }
 

@@ -12,7 +12,7 @@
                     </a>
                 @endif
                 <a href="{{ route('automacao-fiscal.analises') }}" class="px-4 py-2 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-50">
-                    Análises fiscais
+                    Notas fiscais
                 </a>
                 @if ($podeConfigurar)
                     <a href="{{ route('configuracoes.automacao-fiscal') }}" class="px-4 py-2 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-50">

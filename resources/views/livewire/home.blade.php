@@ -61,7 +61,7 @@
 
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Operações principais</h2>
-        <span class="text-xs text-gray-400">Importação, conversão e exportação</span>
+        <span class="text-xs text-gray-400">Extratos, notas fiscais e arquivos</span>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -131,6 +131,34 @@
             <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Transforme extratos em PDF em OFX ou planilha para importação.</p>
             <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
                 Iniciar
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
+
+        <a href="{{ route('automacao-fiscal.analises') }}"
+           class="group relative overflow-hidden rounded-2xl bg-indigo-600 p-6 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:scale-[1.01] transition-all duration-200 min-h-[220px] flex flex-col"
+           style="background-color: #4f46e5;">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                <x-menu-icon name="document" class="w-7 h-7 text-white" />
+            </div>
+            <h3 class="mt-5 text-xl font-bold">Notas fiscais</h3>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Consulte NF-e e NFS-e por competência — emitidas e recebidas.</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
+                Abrir
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
+
+        <a href="{{ route('documentos') }}"
+           class="group relative overflow-hidden rounded-2xl bg-indigo-600 p-6 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl hover:scale-[1.01] transition-all duration-200 min-h-[220px] flex flex-col"
+           style="background-color: #4f46e5;">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                <x-menu-icon name="folder" class="w-7 h-7 text-white" />
+            </div>
+            <h3 class="mt-5 text-xl font-bold">Drive contábil</h3>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Abra e baixe os arquivos das empresas no Google Drive.</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
+                Abrir
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </span>
         </a>

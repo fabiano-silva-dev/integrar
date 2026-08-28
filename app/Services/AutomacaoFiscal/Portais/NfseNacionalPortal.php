@@ -283,7 +283,7 @@ class NfseNacionalPortal implements PortalAutomacao
             );
 
             return [
-                'mensagem' => 'Extrato gerado, mas a importação para Análises fiscais falhou: '.$e->getMessage(),
+                'mensagem' => 'Extrato gerado, mas a importação para Notas fiscais falhou: '.$e->getMessage(),
             ];
         }
     }

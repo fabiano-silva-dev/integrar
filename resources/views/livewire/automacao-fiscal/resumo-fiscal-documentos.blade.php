@@ -5,12 +5,12 @@
     <div class="w-full max-w-[1600px] mx-auto space-y-5">
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">Análises fiscais</h1>
+                <h1 class="text-2xl font-bold text-gray-900">Notas fiscais</h1>
                 <p class="text-sm text-gray-600">
                     @if ($emDetalhe)
-                        Documentos da empresa no portal na competência selecionada.
+                        Notas da empresa no portal na competência selecionada.
                     @else
-                        Uma análise por empresa, portal e competência (mês/ano).
+                        NF-e e NFS-e por empresa, portal, tipo e competência (mês/ano).
                     @endif
                 </p>
             </div>

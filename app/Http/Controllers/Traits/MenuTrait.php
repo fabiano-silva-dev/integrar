@@ -166,26 +166,26 @@ trait MenuTrait
                         'roles' => ['super_admin'],
                     ],
                     [
-                        'name' => 'Análises fiscais',
+                        'name' => 'Notas fiscais',
                         'icon' => 'document',
                         'url' => route('automacao-fiscal.analises'),
                         'active' => request()->routeIs('automacao-fiscal.analises') || request()->routeIs('automacao-fiscal.analise'),
-                        'title' => 'Análises por empresa, portal e competência',
+                        'title' => 'NF-e e NFS-e por empresa, portal e competência',
                     ],
 
                 ],
             ],
             [
                 'id' => 'documentos',
-                'name' => 'Documentos',
+                'name' => 'Drive contábil',
                 'icon' => 'folder',
                 'items' => [
                     [
-                        'name' => 'Arquivos',
+                        'name' => 'Arquivos das empresas',
                         'icon' => 'folder',
                         'url' => route('documentos'),
                         'active' => request()->routeIs('documentos'),
-                        'title' => 'Arquivos das empresas no Google Drive',
+                        'title' => 'Pastas e arquivos das empresas no Google Drive',
                     ],
                 ],
             ],
