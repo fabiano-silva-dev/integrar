@@ -8,16 +8,16 @@
 
 export type NfseListItem = {
   chave: string;
-  dataGeracao?: string;
-  competencia?: string;
-  cnpjContraparte?: string;
-  nomeContraparte?: string;
-  municipioEmissor?: string;
-  valorServico?: string;
-  situacaoCodigo?: string;
-  situacaoLabel?: string;
-  href?: string;
-  trecho?: string;
+  dataGeracao?: string | undefined;
+  competencia?: string | undefined;
+  cnpjContraparte?: string | undefined;
+  nomeContraparte?: string | undefined;
+  municipioEmissor?: string | undefined;
+  valorServico?: string | undefined;
+  situacaoCodigo?: string | undefined;
+  situacaoLabel?: string | undefined;
+  href?: string | undefined;
+  trecho?: string | undefined;
 };
 
 /** Chave de acesso NFS-e (nacional): 50 dígitos. */
@@ -167,7 +167,7 @@ export function numeroFromChave(chave: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function parseContraparte(raw: string): { cnpj?: string; nome?: string } {
+function parseContraparte(raw: string): { cnpj?: string | undefined; nome?: string | undefined } {
   const text = collapseText(raw);
   const cnpjMatch = text.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}|\d{3}\.\d{3}\.\d{3}-\d{2}/);
   const cnpj = cnpjMatch?.[0];

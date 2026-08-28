@@ -639,7 +639,7 @@ export class EcacRsExtractNfeNfceFlow {
 
     if (!filled) {
       await target.evaluate((el, v) => {
-        const input = el as {
+        const input = el as unknown as {
           removeAttribute: (n: string) => void;
           focus: () => void;
           value: string;
@@ -667,7 +667,7 @@ export class EcacRsExtractNfeNfceFlow {
     const normalizedValue = value.replace(/\D/g, '');
     if (normalizedCurrent !== normalizedValue && current !== value) {
       await target.evaluate((el, v) => {
-        const input = el as {
+        const input = el as unknown as {
           value: string;
           dispatchEvent: (e: Event) => boolean;
         };
