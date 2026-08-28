@@ -71,7 +71,7 @@ class ImportadorExtratoNfseService
                 ->first()
             : null;
 
-        return DB::transaction(function () use (
+        $resultado = DB::transaction(function () use (
             $empresa,
             $parsed,
             $nomeArquivo,
@@ -85,6 +85,7 @@ class ImportadorExtratoNfseService
             $atualizados = 0;
             $ignorados = 0;
             $documentos = [];
+            $idsParaXml = [];
 
             foreach ($parsed['documentos'] as $doc) {
                 $doc = ExtratoNfseParser::completarComEmpresa($doc, $empresa->cnpj, $empresa->nome);
@@ -147,11 +148,15 @@ class ImportadorExtratoNfseService
                 ];
 
                 if (! $existente) {
-                    DocumentoFiscal::create($payload);
+                    $criado = DocumentoFiscal::create($payload);
                     $novos++;
+                    $idsParaXml[] = (int) $criado->id;
                 } elseif ($existente->hash_registro !== $hash) {
                     $existente->update($payload);
                     $atualizados++;
+                    if (! $existente->temXmlPersistido()) {
+                        $idsParaXml[] = (int) $existente->id;
+                    }
                 } else {
                     // Mesmo conteúdo: ainda vincula à execução/coleta atual para a análise fiscal.
                     if ($execucaoId && (int) $existente->automacao_execucao_id !== (int) $execucaoId) {
@@ -162,6 +167,9 @@ class ImportadorExtratoNfseService
                         ]);
                     }
                     $ignorados++;
+                    if (! $existente->temXmlPersistido()) {
+                        $idsParaXml[] = (int) $existente->id;
+                    }
                 }
             }
 
@@ -193,8 +201,20 @@ class ImportadorExtratoNfseService
                 'coleta' => $coleta,
                 'resumo' => $resumo,
                 'avisos' => $parsed['avisos'],
+                'ids_para_xml' => $idsParaXml,
             ];
         });
+
+        $idsParaXml = $resultado['ids_para_xml'] ?? [];
+        unset($resultado['ids_para_xml']);
+        if ($idsParaXml !== []) {
+            app(NfseXmlDownloadService::class)->enfileirarPendentes(
+                $idsParaXml,
+                (int) $empresa->empresa_operadora_id
+            );
+        }
+
+        return $resultado;
     }
 
     /**

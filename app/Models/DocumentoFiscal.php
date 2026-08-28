@@ -48,12 +48,17 @@ class DocumentoFiscal extends Model
         'dados_complementares',
         'hash_registro',
         'origem',
+        'xml_storage_path',
+        'xml_baixado_em',
+        'xml_fonte',
+        'xml_erro',
     ];
 
     protected $casts = [
         'data_emissao' => 'date',
         'data_entrada_saida' => 'date',
         'cancelado_em' => 'datetime',
+        'xml_baixado_em' => 'datetime',
         'valor_total' => 'decimal:2',
         'valor_bc_icms' => 'decimal:2',
         'valor_icms' => 'decimal:2',
@@ -70,5 +75,12 @@ class DocumentoFiscal extends Model
     public function execucao(): BelongsTo
     {
         return $this->belongsTo(AutomacaoExecucao::class, 'automacao_execucao_id');
+    }
+
+    public function temXmlPersistido(): bool
+    {
+        $path = trim((string) $this->xml_storage_path);
+
+        return $path !== '' && \Illuminate\Support\Facades\Storage::exists($path);
     }
 }
