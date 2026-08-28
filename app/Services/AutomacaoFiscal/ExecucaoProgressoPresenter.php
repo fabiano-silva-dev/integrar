@@ -296,6 +296,7 @@ class ExecucaoProgressoPresenter
         return match ($fonte) {
             'ws-distdfe-an' => 'DistDFe Ambiente Nacional — certificado A1 do destinatário (cliente)',
             'ws-contabilista-rs' => 'WS Contabilista SEFAZ-RS — certificado A1 do escritório (contador)',
+            'ws-sefin-nacional' => 'Sefin Nacional — certificado A1 da empresa (Portal Nacional da NFS-e)',
             default => $fonte !== null && $fonte !== '' ? $fonte : null,
         };
     }

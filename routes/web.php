@@ -49,6 +49,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/automacao-fiscal/xml-download/{token}/danfe', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlDanfeController::class)
         ->where('token', '[0-9a-fA-F-]{36}')
         ->name('automacao-fiscal.documento.xml.danfe');
+    Route::get('/automacao-fiscal/xml-download/{token}/danfse', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalXmlDanfseController::class)
+        ->where('token', '[0-9a-fA-F-]{36}')
+        ->name('automacao-fiscal.documento.xml.danfse');
+    Route::get('/automacao-fiscal/nfse/{documento}/xml', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalNfseXmlController::class)
+        ->whereNumber('documento')
+        ->name('automacao-fiscal.nfse.xml');
+    Route::get('/automacao-fiscal/nfse/{documento}/danfse', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalNfseDanfseController::class)
+        ->whereNumber('documento')
+        ->name('automacao-fiscal.nfse.danfse');
+    Route::get('/automacao-fiscal/analises/{empresa}/{portal}/{competencia}/xmls.zip', App\Http\Controllers\AutomacaoFiscal\DocumentoFiscalNfsePeriodoZipController::class)
+        ->where(['empresa' => '[0-9]+', 'portal' => '[0-9]+', 'competencia' => '[0-9]{4}-[0-9]{2}'])
+        ->name('automacao-fiscal.nfse.periodo.zip');
     Route::get('/automacao-fiscal/analises', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)
         ->name('automacao-fiscal.analises');
     Route::get('/automacao-fiscal/analises/{empresa}/{portal}/{competencia}', App\Livewire\AutomacaoFiscal\ResumoFiscalDocumentos::class)

@@ -237,12 +237,15 @@ class ExecutarConsultaAvulsa extends Component
             if ($chave === 'chave_acesso') {
                 $regras['entrada.chave_acesso'] = ['required', 'string', function ($attr, $value, $fail) {
                     $digits = AnaliseFiscalService::normalizarChaveAcesso((string) $value);
-                    if ($digits === null || strlen($digits) !== 44) {
-                        $fail('Informe a chave de acesso com 44 dígitos.');
+                    $esperado = $this->tipo === 'xml_nfse_por_chave' ? 50 : 44;
+                    if ($digits === null || strlen($digits) !== $esperado) {
+                        $fail("Informe a chave de acesso com {$esperado} dígitos.");
                     }
                 }];
             } elseif ($chave === 'certificado_digital_id') {
-                $regras['entrada.certificado_digital_id'] = ['nullable', 'integer'];
+                $regras['entrada.certificado_digital_id'] = $this->tipo === 'xml_nfse_por_chave'
+                    ? ['required', 'integer']
+                    : ['nullable', 'integer'];
             } else {
                 $regras['entrada.'.$chave] = ['nullable', 'string'];
             }

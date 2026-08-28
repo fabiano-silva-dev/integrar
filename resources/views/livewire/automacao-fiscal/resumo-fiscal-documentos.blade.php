@@ -274,6 +274,17 @@
                     </div>
                 @elseif ($aba === 'documentos')
                     <div class="bg-white shadow rounded-xl overflow-hidden border border-gray-100">
+                        @if ($analiseEhNfse)
+                            <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                                <p class="text-sm text-gray-600">XML e DANFSe (PDF) da competência. O download automático usa a Sefin Nacional.</p>
+                                <button type="button"
+                                        wire:click="baixarXmlsDoPeriodo"
+                                        wire:loading.attr="disabled"
+                                        class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
+                                    Baixar XMLs do período
+                                </button>
+                            </div>
+                        @endif
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="bg-gray-50 sticky top-0 z-10">
@@ -292,9 +303,7 @@
                                         @endunless
                                         <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Situação</th>
                                         <th class="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Chave</th>
-                                        @unless ($analiseEhNfse)
-                                            <th class="px-3 py-2.5 text-center font-semibold whitespace-nowrap">Ação</th>
-                                        @endunless
+                                        <th class="px-3 py-2.5 text-center font-semibold whitespace-nowrap">Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
@@ -308,6 +317,8 @@
                                                 || ($chaveDigits && strlen($chaveDigits) === 44 && substr($chaveDigits, 20, 2) === '55')
                                             );
                                             $podeBaixarXml = $ehModelo55 && $chaveDigits && strlen($chaveDigits) === 44;
+                                            $temXmlNfse = $analiseEhNfse && $doc->temXmlPersistido();
+                                            $podeBaixarNfse = $analiseEhNfse && $chaveDigits && strlen($chaveDigits) === 50;
                                         @endphp
                                         <tr class="hover:bg-slate-50/80">
                                             <td class="px-3 py-2 whitespace-nowrap text-gray-700">{{ $doc->data_emissao?->format('d/m/Y') }}</td>
@@ -336,26 +347,46 @@
                                                 @endif
                                             </td>
                                             <td class="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap" title="{{ $doc->chave_acesso }}">{{ $doc->chave_acesso }}</td>
-                                            @unless ($analiseEhNfse)
-                                                <td class="px-3 py-2 text-center whitespace-nowrap">
-                                                    @if ($podeBaixarXml)
+                                            <td class="px-3 py-2 text-center whitespace-nowrap">
+                                                @if ($analiseEhNfse)
+                                                    @if ($temXmlNfse)
+                                                        <span class="inline-flex items-center gap-1">
+                                                            <a href="{{ route('automacao-fiscal.nfse.xml', $doc->id) }}"
+                                                               class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700">XML</a>
+                                                            <a href="{{ route('automacao-fiscal.nfse.danfse', $doc->id) }}"
+                                                               target="_blank"
+                                                               class="inline-flex items-center rounded-md bg-white border border-indigo-200 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">PDF</a>
+                                                        </span>
+                                                    @elseif ($podeBaixarNfse)
                                                         <button type="button"
                                                                 wire:click="baixarXml({{ $doc->id }})"
                                                                 wire:loading.attr="disabled"
                                                                 wire:target="baixarXml({{ $doc->id }})"
                                                                 class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                                                                title="Baixar XML da NF-e e visualizar o DANFE em PDF">
-                                                            <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">XML/PDF</span>
+                                                                title="{{ $doc->xml_erro ? $doc->xml_erro : 'Baixar XML na Sefin e gerar o DANFSe' }}">
+                                                            <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">{{ $doc->xml_erro ? 'Tentar de novo' : 'XML/PDF' }}</span>
                                                             <span wire:loading wire:target="baixarXml({{ $doc->id }})">…</span>
                                                         </button>
                                                     @else
                                                         <span class="text-gray-300">—</span>
                                                     @endif
-                                                </td>
-                                            @endunless
+                                                @elseif ($podeBaixarXml)
+                                                    <button type="button"
+                                                            wire:click="baixarXml({{ $doc->id }})"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="baixarXml({{ $doc->id }})"
+                                                            class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                                                            title="Baixar XML da NF-e e visualizar o DANFE em PDF">
+                                                        <span wire:loading.remove wire:target="baixarXml({{ $doc->id }})">XML/PDF</span>
+                                                        <span wire:loading wire:target="baixarXml({{ $doc->id }})">…</span>
+                                                    </button>
+                                                @else
+                                                    <span class="text-gray-300">—</span>
+                                                @endif
+                                            </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="{{ $analiseEhNfse ? 7 : 11 }}" class="px-3 py-10 text-center text-gray-500">Nenhum documento listado.</td></tr>
+                                        <tr><td colspan="{{ $analiseEhNfse ? 8 : 11 }}" class="px-3 py-10 text-center text-gray-500">Nenhum documento listado.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -417,7 +448,7 @@
                         'duracaoMs' => $xmlDuracaoMs,
                         'finishedAt' => $xmlFinishedAt,
                         'parametros' => $xmlParametros,
-                        'contextoLabel' => 'NF-e · DistDFe / WS Contabilista',
+                        'contextoLabel' => $xmlContextoLabel,
                         'etapaAtual' => $xmlEtapaAtual,
                         'compact' => true,
                     ])

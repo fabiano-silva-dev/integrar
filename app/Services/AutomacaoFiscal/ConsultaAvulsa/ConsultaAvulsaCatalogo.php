@@ -41,6 +41,27 @@ final class ConsultaAvulsaCatalogo
                     ],
                 ],
             ],
+            [
+                'codigo' => 'xml_nfse_por_chave',
+                'nome' => 'XML NFS-e por chave',
+                'descricao' => 'Baixa o XML da NFS-e nacional na Sefin (mTLS do A1 da empresa).',
+                'roles' => ['super_admin'],
+                'campos' => [
+                    [
+                        'chave' => 'chave_acesso',
+                        'label' => 'Chave de acesso',
+                        'tipo' => 'text',
+                        'placeholder' => '50 dígitos da NFS-e',
+                        'hint' => 'Informe a chave de 50 dígitos do Portal Nacional da NFS-e.',
+                    ],
+                    [
+                        'chave' => 'certificado_digital_id',
+                        'label' => 'Certificado A1',
+                        'tipo' => 'certificado',
+                        'hint' => 'Selecione o A1 da empresa (prestador ou tomador da nota).',
+                    ],
+                ],
+            ],
             // Futuros: xml_cte_por_chave, consulta_cadastro, etc.
         ];
     }

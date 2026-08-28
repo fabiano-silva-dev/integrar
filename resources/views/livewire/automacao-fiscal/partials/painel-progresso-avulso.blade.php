@@ -18,6 +18,7 @@
     $fonteLabel = \App\Services\AutomacaoFiscal\ExecucaoProgressoPresenter::labelFonteDownload($fonte);
     $mostrarDownload = ($status ?? '') === 'succeeded' && ! empty($token);
     $mostrarDanfe = $mostrarDownload && is_string($nomeArquivo ?? null) && str_ends_with((string) $nomeArquivo, '-nfe.xml');
+    $mostrarDanfse = $mostrarDownload && is_string($nomeArquivo ?? null) && str_ends_with((string) $nomeArquivo, '-nfse.xml');
 @endphp
 
 <div class="space-y-4">
@@ -121,6 +122,13 @@
                            target="_blank"
                            class="inline-flex items-center rounded-xl bg-white border border-indigo-200 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
                             Visualizar DANFE (PDF)
+                        </a>
+                    @endif
+                    @if ($mostrarDanfse)
+                        <a href="{{ route('automacao-fiscal.documento.xml.danfse', $token) }}"
+                           target="_blank"
+                           class="inline-flex items-center rounded-xl bg-white border border-indigo-200 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
+                            Visualizar DANFSe (PDF)
                         </a>
                     @endif
                     <a href="{{ route('automacao-fiscal.documento.xml.arquivo', $token) }}"

@@ -3,6 +3,7 @@
 namespace App\Livewire\AutomacaoFiscal;
 
 use App\Jobs\AutomacaoFiscal\BaixarDocumentoFiscalXmlJob;
+use App\Jobs\AutomacaoFiscal\BaixarNfseXmlJob;
 use App\Models\DocumentoFiscal;
 use App\Models\Empresa;
 use App\Models\PortalIntegracao;
@@ -13,6 +14,7 @@ use App\Services\AutomacaoFiscal\ExtratoNfseParser;
 use App\Services\AutomacaoFiscal\FilaAutomacoesStatus;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadProgresso;
 use App\Services\AutomacaoFiscal\NfeXmlDownloadService;
+use App\Services\AutomacaoFiscal\NfseXmlDownloadService;
 use App\Services\OperadoraContext;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
@@ -52,6 +54,7 @@ class ResumoFiscalDocumentos extends Component
     public ?int $xmlDocumentoId = null;
     public ?int $xmlDuracaoMs = null;
     public ?string $xmlFinishedAt = null;
+    public string $xmlContextoLabel = 'NF-e · DistDFe / WS Contabilista';
     /** @var array<string, mixed> */
     public array $xmlParametros = [];
 
@@ -123,6 +126,13 @@ class ResumoFiscalDocumentos extends Component
         }
 
         $documento = DocumentoFiscal::query()->whereKey($documentoId)->firstOrFail();
+
+        if ((string) $documento->tipo_documento === 'nfse') {
+            $this->iniciarDownloadNfse($documento);
+
+            return;
+        }
+
         $service = app(NfeXmlDownloadService::class);
 
         if (! $service->ehModelo55($documento) || ! $service->chaveNfeValida($documento)) {
@@ -157,10 +167,115 @@ class ResumoFiscalDocumentos extends Component
         $this->xmlToken = $token;
         $this->xmlChave = $chave;
         $this->xmlDocumentoId = $documento->id;
+        $this->xmlContextoLabel = 'NF-e · DistDFe / WS Contabilista';
         $this->aplicarProgressoXml(NfeXmlDownloadProgresso::obter($token) ?? []);
         $this->xmlStatus = 'running';
 
         BaixarDocumentoFiscalXmlJob::dispatch($token, $documento->id, $operadoraId);
+    }
+
+    public function baixarXmlsDoPeriodo(): mixed
+    {
+        $mensagemFila = app(FilaAutomacoesStatus::class)->mensagemBloqueioDesenvolvimento();
+        if ($mensagemFila !== null) {
+            session()->flash('error', $mensagemFila);
+
+            return null;
+        }
+
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()) {
+            session()->flash('error', 'Selecione um escritório no menu superior.');
+
+            return null;
+        }
+
+        if (! $this->analiseEhNfse || ! $this->analiseEmpresaId || ! $this->analisePortalId || ! $this->analiseCompetencia) {
+            session()->flash('error', 'Baixar XMLs do período está disponível na análise de NFS-e.');
+
+            return null;
+        }
+
+        $docs = app(AnaliseFiscalService::class)
+            ->queryDocumentos(
+                (int) $this->analiseEmpresaId,
+                (int) $this->analisePortalId,
+                (string) $this->analiseCompetencia
+            )
+            ->where('tipo_documento', 'nfse')
+            ->get();
+
+        $pendentes = $docs->filter(fn (DocumentoFiscal $doc) => ! $doc->temXmlPersistido());
+        $enfileirados = app(NfseXmlDownloadService::class)->enfileirarPendentes(
+            $pendentes->pluck('id')->all(),
+            OperadoraContext::id()
+        );
+
+        $jaBaixados = $docs->filter(fn (DocumentoFiscal $doc) => $doc->temXmlPersistido())->count();
+        if ($jaBaixados > 0) {
+            if ($enfileirados > 0) {
+                session()->flash(
+                    'message',
+                    "{$enfileirados} XML(s) enfileirado(s). O ZIP inclui os {$jaBaixados} já baixado(s)."
+                );
+            }
+
+            return redirect()->route('automacao-fiscal.nfse.periodo.zip', [
+                'empresa' => $this->analiseEmpresaId,
+                'portal' => $this->analisePortalId,
+                'competencia' => $this->analiseCompetencia,
+            ]);
+        }
+
+        session()->flash(
+            'message',
+            $enfileirados > 0
+                ? "{$enfileirados} download(s) enfileirado(s). Atualize a lista em instantes."
+                : 'Nenhuma NFS-e elegível para download (verifique o certificado A1 da empresa).'
+        );
+
+        return null;
+    }
+
+    private function iniciarDownloadNfse(DocumentoFiscal $documento): void
+    {
+        $service = app(NfseXmlDownloadService::class);
+        if (! $service->chaveNfseValida($documento)) {
+            session()->flash('error', 'Download de XML disponível apenas para NFS-e com chave de 50 dígitos.');
+
+            return;
+        }
+
+        $chave = AnaliseFiscalService::normalizarChaveAcesso($documento->chave_acesso);
+        $token = (string) Str::uuid();
+        $operadoraId = OperadoraContext::id() ?? (int) $documento->empresa_operadora_id;
+
+        NfeXmlDownloadProgresso::iniciar(
+            $token,
+            $documento->id,
+            $operadoraId,
+            $chave,
+            'xml_nfse_documento',
+            [
+                'documento_id' => $documento->id,
+                'chave_acesso' => $chave,
+            ]
+        );
+        NfeXmlDownloadProgresso::adicionarLog(
+            $token,
+            'info',
+            'JOB_QUEUED',
+            'Na fila — aguardando worker de automações…'
+        );
+
+        $this->xmlModalAberto = true;
+        $this->xmlToken = $token;
+        $this->xmlChave = $chave;
+        $this->xmlDocumentoId = $documento->id;
+        $this->xmlContextoLabel = 'NFS-e · Sefin Nacional';
+        $this->aplicarProgressoXml(NfeXmlDownloadProgresso::obter($token) ?? []);
+        $this->xmlStatus = 'running';
+
+        BaixarNfseXmlJob::dispatch($documento->id, $operadoraId, $token, false);
     }
 
     public function atualizarProgressoXml(): void
@@ -192,6 +307,7 @@ class ResumoFiscalDocumentos extends Component
             $this->xmlDuracaoMs = null;
             $this->xmlFinishedAt = null;
             $this->xmlParametros = [];
+            $this->xmlContextoLabel = 'NF-e · DistDFe / WS Contabilista';
         }
     }
 

@@ -30,12 +30,15 @@ class DocumentoFiscalXmlArquivoController
         }
 
         $path = (string) ($progresso['storage_path'] ?? '');
-        abort_unless($path !== '' && Storage::disk('local')->exists($path), 404);
-
         $nome = (string) ($progresso['nome_arquivo'] ?? 'nfe.xml');
+        $headers = ['Content-Type' => 'application/xml; charset=utf-8'];
 
-        return Storage::disk('local')->download($path, $nome, [
-            'Content-Type' => 'application/xml; charset=utf-8',
-        ]);
+        if (Storage::disk('local')->exists($path)) {
+            return Storage::disk('local')->download($path, $nome, $headers);
+        }
+
+        abort_unless($path !== '' && Storage::exists($path), 404);
+
+        return Storage::download($path, $nome, $headers);
     }
 }
