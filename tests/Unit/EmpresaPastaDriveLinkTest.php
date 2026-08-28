@@ -43,4 +43,22 @@ class EmpresaPastaDriveLinkTest extends TestCase
         $this->assertSame('https://drive.google.com/file/d/file1/view?usp=drive_link', $comLink->urlDrive());
         $this->assertSame('https://drive.google.com/file/d/file2/view', $soId->urlDrive());
     }
+
+    public function test_drive_file_id_da_copia_da_empresa(): void
+    {
+        $documento = new DocumentoRecebido([
+            'empresa_id' => 10,
+            'drive_file_id' => 'original',
+            'metadados' => [
+                'copias_drive' => [
+                    ['empresa_id' => 10, 'drive_file_id' => 'copia-a'],
+                    ['empresa_id' => 20, 'drive_file_id' => 'copia-b'],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('copia-a', $documento->driveFileIdParaEmpresa(10));
+        $this->assertSame('copia-b', $documento->driveFileIdParaEmpresa(20));
+        $this->assertSame('original', $documento->driveFileIdParaEmpresa(99));
+    }
 }

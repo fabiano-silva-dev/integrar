@@ -15,13 +15,10 @@ class AcessoLinkDriveTest extends TestCase
         $this->acesso = new AcessoLinkDrive();
     }
 
-    public function test_permissao_anyone_e_somente_leitura_sem_busca_publica(): void
+    public function test_nao_cria_permissao_anyone(): void
     {
-        $perm = $this->acesso->permissaoAnyone();
-
-        $this->assertSame('anyone', $perm->getType());
-        $this->assertSame('reader', $perm->getRole());
-        $this->assertFalse($perm->getAllowFileDiscovery());
+        $this->assertFalse(method_exists($this->acesso, 'garantir'));
+        $this->assertFalse(method_exists($this->acesso, 'permissaoAnyone'));
     }
 
     public function test_ja_liberado_quando_anyone_leitor(): void
@@ -52,5 +49,24 @@ class AcessoLinkDriveTest extends TestCase
         $this->assertNull($this->acesso->dominioWorkspace('contador@gmail.com'));
         $this->assertSame('escritorio.com.br', $this->acesso->dominioWorkspace('ana@escritorio.com.br'));
         $this->assertNull($this->acesso->dominioWorkspace('invalido'));
+    }
+
+    public function test_identifica_somente_permissoes_publicas(): void
+    {
+        $this->assertTrue($this->acesso->ehPermissaoPublica(['id' => 'anyoneWithLink', 'type' => 'anyone', 'role' => 'reader']));
+        $this->assertTrue($this->acesso->ehPermissaoPublica(['id' => 'd1', 'type' => 'domain', 'role' => 'reader']));
+        $this->assertFalse($this->acesso->ehPermissaoPublica(['id' => 'u1', 'type' => 'user', 'role' => 'owner']));
+        $this->assertFalse($this->acesso->ehPermissaoPublica(['id' => 'g1', 'type' => 'group', 'role' => 'reader']));
+    }
+
+    public function test_upload_nao_publica_arquivo_como_anyone(): void
+    {
+        $fonte = file_get_contents(app_path('Services/Documentos/GoogleDriveService.php'));
+
+        $this->assertIsString($fonte);
+        $this->assertStringNotContainsString('tornarAcessivelPorLink', $fonte);
+        $this->assertStringNotContainsString('liberarLinksDaEmpresa', $fonte);
+        $this->assertDoesNotMatchRegularExpression('/permissions\s*->\s*create/', $fonte);
+        $this->assertStringNotContainsString("'anyone'", $fonte);
     }
 }
