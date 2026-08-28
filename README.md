@@ -282,6 +282,16 @@ sudo ./preparar-documentos-producao.sh --yes
 ./atualizar-producao.sh
 ```
 
+Arquivos no Google Drive ficam **privados**. Visualizar e Baixar passam pelo IntegraExpert
+(OAuth do escritório). **Abrir no Drive** fica só para admin e super_admin.
+
+Após o deploy deste fluxo (ou na migração de um servidor que já tinha links públicos):
+
+```bash
+sudo -u www-data php artisan documentos:remover-links-publicos --dry-run
+sudo -u www-data php artisan documentos:remover-links-publicos
+```
+
 ## 🔧 Comandos Úteis
 
 ### Acessar o container da aplicação
