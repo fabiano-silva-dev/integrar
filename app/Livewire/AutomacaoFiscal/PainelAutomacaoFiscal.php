@@ -62,7 +62,7 @@ class PainelAutomacaoFiscal extends Component
             'ultimas' => $ultimas,
             'certificados' => $certificados,
             'podeConfigurar' => Auth::user() && (Auth::user()->isSuperAdmin() || in_array(Auth::user()->role, ['admin', 'gerente'], true)),
-            'podeExecutar' => Auth::user() && (Auth::user()->isSuperAdmin() || Auth::user()->isAdmin()),
+            'podeExecutar' => Auth::user() && (Auth::user()->isSuperAdmin() || Auth::user()->isEscritorioAdmin()),
         ]);
     }
 }

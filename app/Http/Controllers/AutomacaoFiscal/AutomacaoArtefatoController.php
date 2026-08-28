@@ -13,7 +13,7 @@ class AutomacaoArtefatoController
     public function __invoke(Request $request, AutomacaoArtefato $artefato): StreamedResponse
     {
         $user = Auth::user();
-        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()), 403);
+        abort_unless($user && ($user->isSuperAdmin() || $user->isEscritorioAdmin()), 403);
 
         if (!$user->isSuperAdmin() && (int) $user->empresa_operadora_id !== (int) $artefato->empresa_operadora_id) {
             abort(403);

@@ -77,7 +77,7 @@
                         </div>
                     </form>
                 @elseif ($aba === 'portais')
-                    @if (auth()->user()?->isSuperAdmin() || auth()->user()?->isAdmin())
+                    @if (auth()->user()?->isSuperAdmin() || auth()->user()?->isEscritorioAdmin())
                         <div class="mb-4 flex justify-end">
                             <a href="{{ route('automacao-fiscal.executar') }}" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
                                 Executar consulta com parâmetros

@@ -87,7 +87,7 @@ class ExecutarConsultaFiscal extends Component
     {
         $user = Auth::user();
 
-        return $user && ($user->isSuperAdmin() || $user->isAdmin());
+        return $user && ($user->isSuperAdmin() || $user->isEscritorioAdmin());
     }
 
     public function updatedEmpresaId(): void
