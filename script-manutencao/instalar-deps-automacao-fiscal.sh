@@ -158,22 +158,52 @@ node_major() {
     node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0
 }
 
+# Ubuntu 24.04 (noble) renomeou vários pacotes com sufixo t64.
+# Em releases antigas o nome sem t64 ainda existe — escolhemos o disponível.
+resolve_apt_pkg() {
+    local pkg="$1"
+    if apt-cache show "$pkg" >/dev/null 2>&1; then
+        printf '%s\n' "$pkg"
+        return 0
+    fi
+    if apt-cache show "${pkg}t64" >/dev/null 2>&1; then
+        printf '%s\n' "${pkg}t64"
+        return 0
+    fi
+    return 1
+}
+
 install_apt_base() {
     $SKIP_APT && { warn "Pulando apt (--skip-apt)"; return 0; }
 
     info "Atualizando índices apt e pacotes base..."
     run apt-get update
-    run env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        ca-certificates curl gnupg unzip git openssl \
-        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-        libdrm2 libdbus-1-3 libxkbcommon0 libxcomposite1 libxdamage1 \
-        libxfixes3 libxrandr2 libgbm1 libasound2 libpango-1.0-0 \
-        libcairo2 libatspi2.0-0 libx11-6 libx11-xcb1 libxcb1 \
-        libxext6 libxshmfence1 fonts-liberation fonts-noto-color-emoji
 
-    # libasound2t64 / nomes novos em Ubuntu 24.04 — falha silenciosa se já cobertos acima
-    run env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        libasound2t64 2>/dev/null || true
+    local base_pkgs=(
+        ca-certificates curl gnupg unzip git openssl
+        libnss3 libnspr4 libdrm2 libdbus-1-3 libxkbcommon0
+        libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1
+        libpango-1.0-0 libcairo2 libx11-6 libx11-xcb1 libxcb1
+        libxext6 libxshmfence1 fonts-liberation fonts-noto-color-emoji
+    )
+    # Pacotes que no noble viraram *t64 (ou virtuais sem candidato).
+    local maybe_t64=(
+        libatk1.0-0 libatk-bridge2.0-0 libcups2 libasound2 libatspi2.0-0
+    )
+    local resolved=()
+    local pkg resolved_pkg
+    for pkg in "${base_pkgs[@]}"; do
+        resolved+=("$pkg")
+    done
+    for pkg in "${maybe_t64[@]}"; do
+        if resolved_pkg="$(resolve_apt_pkg "$pkg")"; then
+            resolved+=("$resolved_pkg")
+        else
+            warn "Pacote apt não encontrado: $pkg (nem ${pkg}t64)"
+        fi
+    done
+
+    run env DEBIAN_FRONTEND=noninteractive apt-get install -y "${resolved[@]}"
 
     if $DRY_RUN; then
         success "Pacotes apt base (dry-run)"
