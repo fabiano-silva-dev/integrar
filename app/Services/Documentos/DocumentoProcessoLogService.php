@@ -28,8 +28,9 @@ class DocumentoProcessoLogService
         ?int $grupoId = null,
         ?int $documentoId = null,
         ?string $mensagemWhatsappId = null,
+        bool $forcar = false,
     ): void {
-        if (! $this->ativo()) {
+        if (! $forcar && ! $this->ativo()) {
             return;
         }
 
@@ -55,6 +56,7 @@ class DocumentoProcessoLogService
         string $etapa,
         string $mensagem,
         array $contexto = [],
+        bool $forcar = false,
     ): void {
         $this->registrar(
             $nivel,
@@ -69,6 +71,33 @@ class DocumentoProcessoLogService
             grupoId: $documento->grupo_whatsapp_id !== null ? (int) $documento->grupo_whatsapp_id : null,
             documentoId: $documento->id,
             mensagemWhatsappId: $documento->mensagem_whatsapp_id,
+            forcar: $forcar,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $contexto
+     */
+    public function deAcesso(
+        DocumentoRecebido $documento,
+        string $mensagem,
+        array $contexto = [],
+        string $nivel = 'info',
+        string $etapa = 'acesso',
+    ): void {
+        $this->doDocumento(
+            $documento,
+            $nivel,
+            $etapa,
+            $mensagem,
+            array_merge([
+                'documento_id' => $documento->id,
+                'empresa_id' => $documento->empresa_id,
+                'empresa_operadora_id' => $documento->empresa_operadora_id,
+                'user_id' => auth()->id(),
+                'drive_file_id' => $documento->drive_file_id,
+            ], $contexto),
+            forcar: true,
         );
     }
 

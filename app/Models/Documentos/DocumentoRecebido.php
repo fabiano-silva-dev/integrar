@@ -101,4 +101,31 @@ class DocumentoRecebido extends Model
 
         return null;
     }
+
+    public function driveFileIdParaEmpresa(?int $empresaId = null): ?string
+    {
+        $empresaId ??= $this->empresa_id !== null ? (int) $this->empresa_id : null;
+
+        if ($empresaId !== null) {
+            $copias = $this->metadados['copias_drive'] ?? [];
+
+            if (is_array($copias)) {
+                foreach ($copias as $copia) {
+                    if (! is_array($copia) || (int) ($copia['empresa_id'] ?? 0) !== $empresaId) {
+                        continue;
+                    }
+
+                    $idCopia = trim((string) ($copia['drive_file_id'] ?? ''));
+
+                    if ($idCopia !== '') {
+                        return $idCopia;
+                    }
+                }
+            }
+        }
+
+        $id = trim((string) ($this->drive_file_id ?? ''));
+
+        return $id !== '' ? $id : null;
+    }
 }

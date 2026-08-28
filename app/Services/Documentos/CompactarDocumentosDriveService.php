@@ -20,7 +20,7 @@ class CompactarDocumentosDriveService
     /**
      * @param  list<int>  $documentoIds
      */
-    public function baixar(array $documentoIds, string $nomeZip = 'documentos.zip'): BinaryFileResponse
+    public function baixar(array $documentoIds, string $nomeZip = 'documentos.zip', ?int $empresaId = null): BinaryFileResponse
     {
         $documentos = $this->carregarDocumentos($documentoIds);
 
@@ -30,14 +30,13 @@ class CompactarDocumentosDriveService
 
         if ($documentos->count() === 1) {
             $unico = $documentos->first();
-            $conteudo = $this->conteudoDoDocumento($unico);
+            $caminho = $this->materializar($unico, $empresaId);
             $nome = $this->nomeSeguro((string) $unico->nome_original);
-            $caminho = $this->gravarTemp($nome, $conteudo);
 
             return response()->download($caminho, $nome)->deleteFileAfterSend();
         }
 
-        $zipPath = $this->montarZip($documentos, $nomeZip);
+        $zipPath = $this->montarZip($documentos, $nomeZip, $empresaId);
 
         return response()->download($zipPath, $nomeZip)->deleteFileAfterSend();
     }
@@ -67,7 +66,7 @@ class CompactarDocumentosDriveService
     /**
      * @param  \Illuminate\Support\Collection<int, DocumentoRecebido>  $documentos
      */
-    private function montarZip($documentos, string $nomeZip): string
+    private function montarZip($documentos, string $nomeZip, ?int $empresaId): string
     {
         $nomeArquivo = $this->nomeSeguro($nomeZip);
         if (! str_ends_with(strtolower($nomeArquivo), '.zip')) {
@@ -83,41 +82,81 @@ class CompactarDocumentosDriveService
         }
 
         $usados = [];
+        $temps = [];
 
-        foreach ($documentos as $documento) {
-            $entrada = $this->caminhoZip($documento);
-            $base = $entrada;
-            $n = 2;
-            while (isset($usados[$entrada])) {
-                $ext = pathinfo($base, PATHINFO_EXTENSION);
-                $stem = $ext !== '' ? substr($base, 0, -(strlen($ext) + 1)) : $base;
-                $entrada = $ext !== '' ? "{$stem}_{$n}.{$ext}" : "{$stem}_{$n}";
-                $n++;
+        try {
+            foreach ($documentos as $documento) {
+                $entrada = $this->caminhoZip($documento);
+                $base = $entrada;
+                $n = 2;
+                while (isset($usados[$entrada])) {
+                    $ext = pathinfo($base, PATHINFO_EXTENSION);
+                    $stem = $ext !== '' ? substr($base, 0, -(strlen($ext) + 1)) : $base;
+                    $entrada = $ext !== '' ? "{$stem}_{$n}.{$ext}" : "{$stem}_{$n}";
+                    $n++;
+                }
+                $usados[$entrada] = true;
+                $caminho = $this->materializar($documento, $empresaId);
+                $temps[] = $caminho;
+                $zip->addFile($caminho, $entrada);
             }
-            $usados[$entrada] = true;
-            $zip->addFromString($entrada, $this->conteudoDoDocumento($documento));
+
+            $zip->close();
+        } catch (\Throwable $exception) {
+            $zip->close();
+            foreach ($temps as $temp) {
+                @unlink($temp);
+            }
+            @unlink($zipPath);
+
+            throw $exception;
         }
 
-        $zip->close();
+        foreach ($temps as $temp) {
+            @unlink($temp);
+        }
 
         return $zipPath;
     }
 
-    private function conteudoDoDocumento(DocumentoRecebido $documento): string
+    private function materializar(DocumentoRecebido $documento, ?int $empresaId): string
     {
+        $nome = $this->nomeSeguro((string) $documento->nome_original);
+        $caminho = OperadoraStorage::tempDirectory(OperadoraContext::id())
+            .'/docs-'.str_replace('.', '', uniqid('', true)).'-'.$nome;
+
         if (is_string($documento->storage_path) && $documento->storage_path !== '' && Storage::exists($documento->storage_path)) {
-            return (string) Storage::get($documento->storage_path);
+            $origem = Storage::path($documento->storage_path);
+            if (! copy($origem, $caminho)) {
+                throw new \RuntimeException('Não foi possível preparar '.$documento->nome_original.'.');
+            }
+
+            return $caminho;
+        }
+
+        $fileId = $documento->driveFileIdParaEmpresa($empresaId);
+
+        if ($fileId === null) {
+            throw DocumentoDriveException::semArquivo();
         }
 
         $conta = ContaGoogle::query()
             ->where('empresa_operadora_id', $documento->empresa_operadora_id)
             ->first();
 
-        if ($conta === null || ! $conta->conectada() || ! is_string($documento->drive_file_id) || $documento->drive_file_id === '') {
+        if ($conta === null || ! $conta->conectada()) {
+            throw DocumentoDriveException::contaDesconectada();
+        }
+
+        try {
+            $this->drive->gravarArquivo($conta, $fileId, $caminho);
+        } catch (DocumentoDriveException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
             throw new \RuntimeException('Não foi possível baixar '.$documento->nome_original.'.');
         }
 
-        return $this->drive->baixarConteudo($conta, $documento->drive_file_id);
+        return $caminho;
     }
 
     private function caminhoZip(DocumentoRecebido $documento): string
@@ -137,17 +176,5 @@ class CompactarDocumentosDriveService
         $limpo = trim($limpo);
 
         return $limpo !== '' ? $limpo : 'arquivo';
-    }
-
-    private function gravarTemp(string $nome, string $conteudo): string
-    {
-        $relative = OperadoraStorage::put(
-            'temp',
-            'docs-'.uniqid('', true).'-'.$nome,
-            $conteudo,
-            OperadoraContext::id(),
-        );
-
-        return Storage::path($relative);
     }
 }

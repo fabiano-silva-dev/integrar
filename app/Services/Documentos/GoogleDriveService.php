@@ -6,7 +6,6 @@ use App\Enums\Documentos\StatusContaGoogle;
 use App\Enums\Documentos\TipoDocumentoRecebido;
 use App\Models\Documentos\ContaGoogle;
 use App\Models\Documentos\ConfiguracaoGoogle;
-use App\Models\Documentos\DocumentoRecebido;
 use App\Models\Documentos\EmpresaPastaDrive;
 use App\Models\Empresa;
 use App\Services\OperadoraContext;
@@ -18,9 +17,6 @@ use Illuminate\Support\Facades\Log;
 
 class GoogleDriveService
 {
-    public function __construct(
-        private readonly AcessoLinkDrive $acessoLink,
-    ) {}
 
     public function configurado(?int $operadoraId = null): bool
     {
@@ -148,13 +144,13 @@ class GoogleDriveService
             } catch (\Throwable $exception) {
                 $conta->update(['status' => StatusContaGoogle::Expirado]);
 
-                throw new \RuntimeException('Sessão Google expirada. Conecte a conta de novo.');
+                throw DocumentoDriveException::oauthExpirado();
             }
 
             if (isset($novo['error'])) {
                 $conta->update(['status' => StatusContaGoogle::Expirado]);
 
-                throw new \RuntimeException('Sessão Google expirada. Conecte a conta de novo.');
+                throw DocumentoDriveException::oauthExpirado();
             }
 
             $expiresIn = (int) ($novo['expires_in'] ?? 3600);
@@ -241,8 +237,6 @@ class GoogleDriveService
             $this->webViewLinkPasta($conta, $folderId),
         );
 
-        $this->tornarAcessivelPorLink($conta, $folderId);
-
         try {
             $this->garantirEstruturaAno($conta, $empresa, (int) now()->format('Y'));
         } catch (\Throwable $exception) {
@@ -277,7 +271,6 @@ class GoogleDriveService
                 'supportsAllDrives' => true,
             ]);
             $id = (string) $criada->getId();
-            $this->tornarAcessivelPorLink($conta, $id, $drive);
         }
 
         return $this->definirPastaRaiz($empresa, $conta, $id, $nome);
@@ -348,8 +341,6 @@ class GoogleDriveService
             'supportsAllDrives' => true,
         ]);
 
-        $this->tornarAcessivelPorLink($conta, (string) $criado->getId(), $drive);
-
         $link = $criado->getWebViewLink() ?: EmpresaPastaDrive::urlArquivo((string) $criado->getId());
         $size = $criado->getSize();
 
@@ -413,15 +404,128 @@ class GoogleDriveService
         ]);
     }
 
+    public function apiDaConta(ContaGoogle $conta): Drive
+    {
+        return new Drive($this->clienteDaConta($conta));
+    }
+
+    /**
+     * @return array{body: mixed, nome: string, mime: string, tamanho: ?int}
+     */
+    public function streamArquivo(ContaGoogle $conta, string $fileId): array
+    {
+        if ($fileId === '') {
+            throw DocumentoDriveException::semArquivo();
+        }
+
+        try {
+            $drive = $this->apiDaConta($conta);
+            $meta = $drive->files->get($fileId, [
+                'fields' => 'id, name, mimeType, size, trashed',
+                'supportsAllDrives' => true,
+            ]);
+
+            if ($meta->getTrashed()) {
+                throw DocumentoDriveException::arquivoNaoEncontrado();
+            }
+
+            $resposta = $drive->files->get($fileId, [
+                'alt' => 'media',
+                'supportsAllDrives' => true,
+            ]);
+            $size = $meta->getSize();
+
+            return [
+                'body' => $resposta->getBody(),
+                'nome' => (string) $meta->getName(),
+                'mime' => (string) ($meta->getMimeType() ?: 'application/octet-stream'),
+                'tamanho' => is_numeric($size) ? (int) $size : null,
+            ];
+        } catch (DocumentoDriveException $exception) {
+            throw $exception;
+        } catch (\Google\Service\Exception $exception) {
+            if ((int) $exception->getCode() === 404) {
+                throw DocumentoDriveException::arquivoNaoEncontrado();
+            }
+
+            Log::warning('Google: falha ao baixar arquivo.', [
+                'file_id' => $fileId,
+                'erro' => $exception->getMessage(),
+            ]);
+
+            throw DocumentoDriveException::falhaComunicacao();
+        } catch (\Throwable $exception) {
+            Log::warning('Google: falha ao baixar arquivo.', [
+                'file_id' => $fileId,
+                'erro' => $exception->getMessage(),
+            ]);
+
+            throw DocumentoDriveException::falhaComunicacao();
+        }
+    }
+
+    public function gravarArquivo(ContaGoogle $conta, string $fileId, string $caminhoDestino): void
+    {
+        $arquivo = $this->streamArquivo($conta, $fileId);
+        $dest = fopen($caminhoDestino, 'wb');
+
+        if ($dest === false) {
+            throw DocumentoDriveException::falhaComunicacao();
+        }
+
+        try {
+            $this->copiarCorpo($arquivo['body'], $dest);
+        } finally {
+            fclose($dest);
+        }
+    }
+
     public function baixarConteudo(ContaGoogle $conta, string $fileId): string
     {
-        $drive = new Drive($this->clienteDaConta($conta));
-        $resposta = $drive->files->get($fileId, [
-            'alt' => 'media',
-            'supportsAllDrives' => true,
-        ]);
+        $arquivo = $this->streamArquivo($conta, $fileId);
+        $body = $arquivo['body'];
 
-        return $resposta->getBody()->getContents();
+        if (is_string($body)) {
+            return $body;
+        }
+
+        if (is_object($body) && method_exists($body, 'getContents')) {
+            return (string) $body->getContents();
+        }
+
+        $buffer = fopen('php://temp', 'w+b');
+        $this->copiarCorpo($body, $buffer);
+        rewind($buffer);
+        $conteudo = stream_get_contents($buffer) ?: '';
+        fclose($buffer);
+
+        return $conteudo;
+    }
+
+    private function copiarCorpo(mixed $body, $destino): void
+    {
+        if (is_string($body)) {
+            fwrite($destino, $body);
+
+            return;
+        }
+
+        if (is_object($body) && method_exists($body, 'eof') && method_exists($body, 'read')) {
+            if (method_exists($body, 'rewind')) {
+                try {
+                    $body->rewind();
+                } catch (\Throwable) {
+                }
+            }
+
+            while (! $body->eof()) {
+                fwrite($destino, $body->read(262144));
+            }
+
+            return;
+        }
+
+        fwrite($destino, (string) $body);
     }
 
     private function garantirSubpasta(
@@ -466,8 +570,6 @@ class GoogleDriveService
             $id = (string) $criada->getId();
             $link = $criada->getWebViewLink();
         }
-
-        $this->tornarAcessivelPorLink($conta, $id, $drive);
 
         return $this->persistirPasta(
             $empresa,
@@ -544,43 +646,6 @@ class GoogleDriveService
                 'google_folder_nome' => $nome,
                 'google_web_link' => $link,
             ],
-        );
-    }
-
-    /**
-     * Libera pastas e arquivos já enviados desta empresa (quem tem o link consegue abrir).
-     */
-    public function liberarLinksDaEmpresa(ContaGoogle $conta, Empresa $empresa): void
-    {
-        $drive = new Drive($this->clienteDaConta($conta));
-
-        $pastas = EmpresaPastaDrive::withoutGlobalScope('operadora')
-            ->where('empresa_id', $empresa->id)
-            ->pluck('google_folder_id');
-
-        foreach ($pastas as $folderId) {
-            $this->tornarAcessivelPorLink($conta, (string) $folderId, $drive);
-        }
-
-        $arquivos = DocumentoRecebido::withoutGlobalScope('operadora')
-            ->where('empresa_id', $empresa->id)
-            ->whereNotNull('drive_file_id')
-            ->where('drive_file_id', '!=', '')
-            ->pluck('drive_file_id');
-
-        foreach ($arquivos as $fileId) {
-            $this->tornarAcessivelPorLink($conta, (string) $fileId, $drive);
-        }
-    }
-
-    private function tornarAcessivelPorLink(ContaGoogle $conta, string $fileId, ?Drive $drive = null): void
-    {
-        $drive ??= new Drive($this->clienteDaConta($conta));
-
-        $this->acessoLink->garantir(
-            $drive,
-            $fileId,
-            $this->acessoLink->dominioWorkspace($conta->google_email),
         );
     }
 

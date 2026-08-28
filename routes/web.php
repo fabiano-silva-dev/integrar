@@ -111,6 +111,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/historicos-padrao-layout', App\Livewire\GerenciadorHistoricosPadraoLayout::class)->name('historicos-padrao-layout');
 
     Route::get('/documentos', App\Livewire\Documentos\ExploradorDocumentos::class)->name('documentos');
+    Route::get('/documentos/{documento}/download', [App\Http\Controllers\Documentos\DocumentoDriveArquivoController::class, 'download'])
+        ->whereNumber('documento')
+        ->name('documentos.download');
+    Route::get('/documentos/{documento}/visualizar', [App\Http\Controllers\Documentos\DocumentoDriveArquivoController::class, 'visualizar'])
+        ->whereNumber('documento')
+        ->name('documentos.visualizar');
 
     Route::middleware('role:admin,gerente')->group(function () {
         Route::redirect('/documentos/whatsapp', '/configuracoes/documentos/whatsapp');

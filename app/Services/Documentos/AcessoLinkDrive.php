@@ -3,58 +3,35 @@
 namespace App\Services\Documentos;
 
 use Google\Service\Drive;
-use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 use Illuminate\Support\Facades\Log;
 
 class AcessoLinkDrive
 {
     /**
-     * Qualquer pessoa com o link lê o item (não aparece em buscas públicas).
-     * Se o Google Workspace bloquear "anyone", tenta o domínio da conta do escritório.
-     */
-    public function garantir(Drive $drive, string $fileId, ?string $dominioWorkspace = null): void
-    {
-        if ($fileId === '' || $fileId === 'root') {
-            return;
-        }
-
-        try {
-            if ($this->jaLiberado($this->resumoPermissoes($drive, $fileId))) {
-                return;
-            }
-
-            $drive->permissions->create($fileId, $this->permissaoAnyone(), [
-                'fields' => 'id',
-                'supportsAllDrives' => true,
-            ]);
-        } catch (\Throwable $exception) {
-            if ($this->tentarDominio($drive, $fileId, $dominioWorkspace)) {
-                return;
-            }
-
-            Log::warning('Google: não foi possível liberar o acesso pelo link.', [
-                'file_id' => $fileId,
-                'erro' => $exception->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * @param  list<array{type?: string, role?: string}>  $permissoes
+     * @param  list<array{id?: string, type?: string, role?: string}>  $permissoes
      */
     public function jaLiberado(array $permissoes): bool
     {
         foreach ($permissoes as $perm) {
-            $tipo = (string) ($perm['type'] ?? '');
-            $papel = (string) ($perm['role'] ?? '');
-
-            if (in_array($tipo, ['anyone', 'domain'], true)
-                && in_array($papel, ['reader', 'commenter', 'writer', 'organizer', 'fileOrganizer'], true)) {
+            if ($this->ehPermissaoPublica($perm)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @param  array{id?: string, type?: string, role?: string}  $perm
+     */
+    public function ehPermissaoPublica(array $perm): bool
+    {
+        $tipo = (string) ($perm['type'] ?? '');
+        $papel = (string) ($perm['role'] ?? '');
+
+        return in_array($tipo, ['anyone', 'domain'], true)
+            && in_array($papel, ['reader', 'commenter', 'writer', 'organizer', 'fileOrganizer'], true);
     }
 
     public function dominioWorkspace(?string $email): ?string
@@ -76,20 +53,10 @@ class AcessoLinkDrive
         return $dominio;
     }
 
-    public function permissaoAnyone(): Permission
-    {
-        $perm = new Permission();
-        $perm->setType('anyone');
-        $perm->setRole('reader');
-        $perm->setAllowFileDiscovery(false);
-
-        return $perm;
-    }
-
     /**
-     * @return list<array{type: string, role: string}>
+     * @return list<array{id: string, type: string, role: string}>
      */
-    private function resumoPermissoes(Drive $drive, string $fileId): array
+    public function listarPermissoes(Drive $drive, string $fileId): array
     {
         $lista = $drive->permissions->listPermissions($fileId, [
             'fields' => 'permissions(id, type, role)',
@@ -100,6 +67,7 @@ class AcessoLinkDrive
 
         foreach ($lista->getPermissions() ?? [] as $perm) {
             $resumo[] = [
+                'id' => (string) $perm->getId(),
                 'type' => (string) $perm->getType(),
                 'role' => (string) $perm->getRole(),
             ];
@@ -108,28 +76,90 @@ class AcessoLinkDrive
         return $resumo;
     }
 
-    private function tentarDominio(Drive $drive, string $fileId, ?string $dominio): bool
+    /**
+     * Remove permissões `anyone` e `domain` criadas para acesso por link.
+     *
+     * @return array{file_id: string, removidas: int, pulado: bool, erro: ?string, permissoes: list<array{id: string, type: string, role: string}>}
+     */
+    public function removerPublicas(Drive $drive, string $fileId, bool $dryRun = false): array
     {
-        if ($dominio === null || $dominio === '') {
-            return false;
+        $vazio = [
+            'file_id' => $fileId,
+            'removidas' => 0,
+            'pulado' => false,
+            'erro' => null,
+            'permissoes' => [],
+        ];
+
+        if ($fileId === '' || $fileId === 'root') {
+            $vazio['pulado'] = true;
+
+            return $vazio;
         }
 
         try {
-            $perm = new Permission();
-            $perm->setType('domain');
-            $perm->setRole('reader');
-            $perm->setDomain($dominio);
-            $perm->setAllowFileDiscovery(false);
+            $permissoes = $this->listarPermissoes($drive, $fileId);
+        } catch (GoogleServiceException $exception) {
+            if ((int) $exception->getCode() === 404) {
+                $vazio['pulado'] = true;
+                $vazio['erro'] = 'Arquivo não encontrado no Google Drive.';
 
-            $drive->permissions->create($fileId, $perm, [
-                'fields' => 'id',
-                'supportsAllDrives' => true,
-                'sendNotificationEmail' => false,
+                return $vazio;
+            }
+
+            Log::warning('Google: falha ao listar permissões para remoção de link público.', [
+                'file_id' => $fileId,
+                'erro' => $exception->getMessage(),
             ]);
 
-            return true;
-        } catch (\Throwable) {
-            return false;
+            $vazio['erro'] = 'Falha ao listar permissões.';
+
+            return $vazio;
+        } catch (\Throwable $exception) {
+            Log::warning('Google: falha ao listar permissões para remoção de link público.', [
+                'file_id' => $fileId,
+                'erro' => $exception->getMessage(),
+            ]);
+
+            $vazio['erro'] = 'Falha ao listar permissões.';
+
+            return $vazio;
         }
+
+        $publicas = array_values(array_filter(
+            $permissoes,
+            fn (array $perm) => $this->ehPermissaoPublica($perm) && ($perm['id'] ?? '') !== '',
+        ));
+
+        $removidas = 0;
+
+        foreach ($publicas as $perm) {
+            if ($dryRun) {
+                $removidas++;
+
+                continue;
+            }
+
+            try {
+                $drive->permissions->delete($fileId, $perm['id'], [
+                    'supportsAllDrives' => true,
+                ]);
+                $removidas++;
+            } catch (\Throwable $exception) {
+                Log::warning('Google: não foi possível remover permissão pública.', [
+                    'file_id' => $fileId,
+                    'permission_id' => $perm['id'],
+                    'erro' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'file_id' => $fileId,
+            'removidas' => $removidas,
+            'pulado' => false,
+            'erro' => null,
+            'permissoes' => $publicas,
+        ];
     }
 }

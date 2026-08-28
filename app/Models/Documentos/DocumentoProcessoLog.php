@@ -46,6 +46,8 @@ class DocumentoProcessoLog extends Model
             'pendente' => 'Pendente',
             'drive' => 'Google Drive',
             'enviado_drive' => 'Enviado ao Drive',
+            'acesso' => 'Acesso',
+            'oauth' => 'OAuth',
             'mover' => 'Mover',
             'excluir' => 'Excluir',
             'erro' => 'Erro',
