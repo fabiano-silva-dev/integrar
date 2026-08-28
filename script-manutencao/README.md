@@ -64,6 +64,16 @@ sudo ./script-manutencao/instalar-deps-automacao-fiscal.sh --dry-run --yes
 
 Instala Node.js 24+, OpenSSL, deps de SO do Playwright/Chromium, `npm ci` + build do runner em `scripts/automacao-fiscal/runner`, cache em `/var/cache/integrar-playwright` e unit `integrar-queue-automacoes` (timeout 900s).
 
+Para **habilitar** (`.env`, seed dos portais, env do systemd, restart da fila) quando o `sudo` precisar de senha interativa:
+
+```bash
+# No servidor, na raiz do projeto:
+sudo ./habilitar-automacao-fiscal-producao.sh --yes
+
+# Primeira vez (também instala deps Node/Playwright):
+sudo ./habilitar-automacao-fiscal-producao.sh --yes --with-deps
+```
+
 O `./atualizar-producao.sh` **não** recompila o runner TypeScript. Depois de mudanças em `scripts/automacao-fiscal/runner/`, rode o instalador acima (ou `npm ci && npm run build` nesse diretório) e reinicie a fila de automações.
 
 Variáveis extras no `.env` (ver `.env.example`): `NFE_FAZENDA_ENTRY_URL`, `NFE_FAZENDA_CERT_ORIGINS`, `NFE_XML_TIMEOUT_MS` e, se o portal nacional exigir desafio de imagens, `CAPSOLVER_API_KEY`.
@@ -150,5 +160,6 @@ Teste do script: `tests/scripts/test_preparar_documentos_producao.sh`
 | `verificar-usuarios-ativos.sh` | Atalho — checa sessões/jobs antes do deploy |
 | `instalar-nativo-producao.sh` | Atalho para instalação |
 | `instalar-deps-automacao-fiscal.sh` | Atalho — deps do runner (Node/Playwright) |
+| `habilitar-automacao-fiscal-producao.sh` | Atalho — seed/env/restart da Automação Fiscal (sudo) |
 | `preparar-documentos-producao.sh` | Atalho — requisitos do módulo Documentos (pdftotext, fila, .env) |
 | `wait-for-it.sh` | Montado no `docker-compose.yml` |
