@@ -11,8 +11,6 @@
     "start": "node dist/server/index.js",
     "cli": "tsx src/cli.ts",
     "cli:dist": "node dist/cli.js",
-    "danfse": "tsx src/danfse/gerarDanfseCli.ts",
-    "danfse:dist": "node dist/danfse/gerarDanfseCli.js",
     "dev": "tsx watch src/server/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
