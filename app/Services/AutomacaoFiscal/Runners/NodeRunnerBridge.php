@@ -84,7 +84,11 @@ class NodeRunnerBridge
             'HOME' => getenv('HOME') ?: '/root',
             'LANG' => getenv('LANG') ?: 'C.UTF-8',
             'NODE_ENV' => 'production',
-            'PLAYWRIGHT_BROWSERS_PATH' => getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '',
+            'PLAYWRIGHT_BROWSERS_PATH' => (string) (
+                getenv('PLAYWRIGHT_BROWSERS_PATH')
+                ?: env('PLAYWRIGHT_BROWSERS_PATH', '')
+                ?: ''
+            ),
             'RUNNER_INTERNAL_TOKEN' => (string) (config('automacao_fiscal.runner_token') ?: Str::random(32)),
             'PLATFORM_BASE_URL' => config('app.url', 'http://localhost'),
             'AUTOMATION_FAKE_MODE' => $mode === 'fake' ? 'true' : 'false',
