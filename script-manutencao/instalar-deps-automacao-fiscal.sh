@@ -158,15 +158,22 @@ node_major() {
     node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0
 }
 
-# Ubuntu 24.04 (noble) renomeou vários pacotes com sufixo t64.
-# Em releases antigas o nome sem t64 ainda existe — escolhemos o disponível.
+# Ubuntu 24.04 (noble): vários pacotes viraram *t64 ou virtuais sem candidato
+# (ex.: libasound2). apt-cache show ainda retorna 0 para virtual — usar policy.
+apt_pkg_has_candidate() {
+    local pkg="$1"
+    local candidate
+    candidate="$(apt-cache policy "$pkg" 2>/dev/null | awk -F': ' '/^\s*Candidato:|^\s*Candidate:/{print $2; exit}')"
+    [[ -n "$candidate" && "$candidate" != "(nenhum)" && "$candidate" != "(none)" ]]
+}
+
 resolve_apt_pkg() {
     local pkg="$1"
-    if apt-cache show "$pkg" >/dev/null 2>&1; then
+    if apt_pkg_has_candidate "$pkg"; then
         printf '%s\n' "$pkg"
         return 0
     fi
-    if apt-cache show "${pkg}t64" >/dev/null 2>&1; then
+    if apt_pkg_has_candidate "${pkg}t64"; then
         printf '%s\n' "${pkg}t64"
         return 0
     fi
