@@ -23,7 +23,7 @@ Entregas já no repositório além do roteiro por fases abaixo:
 - **Download XML/PDF da NFS-e nacional** (misto: listagem por período no portal + XML na Sefin + DANFSe local):
   1. Após o extrato, enfileira `BaixarNfseXmlJob` só para notas sem XML (`NfseSefinNacionalClient` mTLS, A1 da empresa);
   2. XML persistido em `{operadora}/automacao-fiscal/nfse/{empresa}/{chave}.xml`;
-  3. DANFSe gerado localmente (`NfseDanfseGenerator` + CLI `scripts/automacao-fiscal/runner/src/danfse`);
+  3. DANFSe v2.0 gerado localmente com `cristianomzn/danfse-nacional` (`NfseDanfseGenerator`, layout NT 008/2026);
   4. Análise fiscal: XML/PDF por nota, ZIP do período; consulta avulsa `xml_nfse_por_chave`.
 - **Consultas avulsas** (`/automacao-fiscal/avulsas`) para testes pontuais (super_admin).
 - Variáveis: `NFE_DISTDFE_*`, `NFE_RECEPCAO_EVENTO_URL`, `NFE_CONTABILISTA_*`, `NFSE_SEFIN_*`; `DB_QUEUE_RETRY_AFTER` padrão 960 (maior que o timeout do worker).

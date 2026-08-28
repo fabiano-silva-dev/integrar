@@ -33,16 +33,9 @@ cd scripts/automacao-fiscal/runner
 npm run cli -- --input /tmp/input.json
 ```
 
-DANFSe local (PDF a partir do XML nacional, sem Chromium):
+As consultas de portal também podem ser disparadas pelo Laravel (`NodeRunnerBridge`) com `AUTOMACAO_FISCAL_FAKE_MODE=false` e certificado configurado.
 
-```bash
-cd scripts/automacao-fiscal/runner
-npm run danfse -- --input /tmp/nota.xml --output /tmp/nota.pdf
-# ou, após o build:
-npm run danfse:dist -- --input /tmp/nota.xml --output /tmp/nota.pdf
-```
-
-Ou via Laravel (`NodeRunnerBridge`) com `AUTOMACAO_FISCAL_FAKE_MODE=false` e certificado configurado.
+O DANFSe (PDF) é gerado no Laravel com `cristianomzn/danfse-nacional` a partir do XML da Sefin — não passa pelo runner Playwright.
 
 ## Portais
 
