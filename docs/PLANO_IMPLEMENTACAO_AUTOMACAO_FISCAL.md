@@ -8,7 +8,7 @@
 **Baseline consultada:** commit `a32da960d0e720378a95e27603e304a1eba60260`  
 **Nome sugerido no repositório:** `docs/PLANO_IMPLEMENTACAO_AUTOMACAO_FISCAL.md`
 
-### Status da implementação (atualizado em 24/07/2026)
+### Status da implementação (atualizado em 28/08/2026)
 
 Entregas já no repositório além do roteiro por fases abaixo:
 
@@ -19,8 +19,13 @@ Entregas já no repositório além do roteiro por fases abaixo:
   2. WS Contabilista SEFAZ-RS com A1 do escritório (fallback).
 - Serviço `NfeXmlDownloadService`, clients em `app/Services/AutomacaoFiscal/Sefaz/`, job na fila `automacoes`.
 - **Origem do download** exibida no painel (DistDFe × Contabilista) e **DANFE em PDF** após o XML (`/automacao-fiscal/xml-download/{token}/danfe`, pacote `nfephp-org/sped-da`).
+- **Download XML/PDF da NFS-e nacional** (misto: listagem por período no portal + XML na Sefin + DANFSe local):
+  1. Após o extrato, enfileira `BaixarNfseXmlJob` só para notas sem XML (`NfseSefinNacionalClient` mTLS, A1 da empresa);
+  2. XML persistido em `{operadora}/automacao-fiscal/nfse/{empresa}/{chave}.xml`;
+  3. DANFSe gerado localmente (`NfseDanfseGenerator` + CLI `scripts/automacao-fiscal/runner/src/danfse`);
+  4. Análise fiscal: XML/PDF por nota, ZIP do período; consulta avulsa `xml_nfse_por_chave`.
 - **Consultas avulsas** (`/automacao-fiscal/avulsas`) para testes pontuais (super_admin).
-- Variáveis: `NFE_DISTDFE_*`, `NFE_RECEPCAO_EVENTO_URL`, `NFE_CONTABILISTA_*`; `DB_QUEUE_RETRY_AFTER` padrão 960 (maior que o timeout do worker).
+- Variáveis: `NFE_DISTDFE_*`, `NFE_RECEPCAO_EVENTO_URL`, `NFE_CONTABILISTA_*`, `NFSE_SEFIN_*`; `DB_QUEUE_RETRY_AFTER` padrão 960 (maior que o timeout do worker).
 - Job de portal e-CAC/NFS-e com `WithoutOverlapping` por escritório; consulta e-CAC sem notas tratada como sucesso.
 
 Após `git pull` em produção: `./atualizar-producao.sh` (instala `sped-da` via composer e recompila assets). Reiniciar o worker da fila `automacoes` (systemd). Rebuild do runner Node só se houver mudança em `scripts/automacao-fiscal/runner` (`sudo ./instalar-deps-automacao-fiscal.sh --yes` ou `npm ci && npm run build` na pasta do runner).

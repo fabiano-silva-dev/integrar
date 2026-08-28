@@ -33,6 +33,15 @@ cd scripts/automacao-fiscal/runner
 npm run cli -- --input /tmp/input.json
 ```
 
+DANFSe local (PDF a partir do XML nacional, sem Chromium):
+
+```bash
+cd scripts/automacao-fiscal/runner
+npm run danfse -- --input /tmp/nota.xml --output /tmp/nota.pdf
+# ou, após o build:
+npm run danfse:dist -- --input /tmp/nota.xml --output /tmp/nota.pdf
+```
+
 Ou via Laravel (`NodeRunnerBridge`) com `AUTOMACAO_FISCAL_FAKE_MODE=false` e certificado configurado.
 
 ## Portais
