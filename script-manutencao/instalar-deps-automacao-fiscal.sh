@@ -419,14 +419,14 @@ run_diagnostics() {
 
     if ! $DRY_RUN && [[ -f "$PROJECT_DIR/scripts/automacao-fiscal/runner/dist/cli.js" ]]; then
         # Smoke: CLI com mode fake (não acessa portal).
-        # O input precisa ser legível pelo APP_USER (mktemp como root fica 0600).
-        local tmp_in tmp_out tmp_err
-        tmp_in="$(sudo -u "$APP_USER" mktemp)"
-        tmp_out="$(sudo -u "$APP_USER" mktemp)"
-        tmp_err="$(sudo -u "$APP_USER" mktemp)"
-        sudo -u "$APP_USER" tee "$tmp_in" >/dev/null <<'JSON'
+        # Input criado como root com 0644 (APP_USER precisa ler); stdout/stderr no /tmp do root.
+        local tmp_in
+        tmp_in="$(mktemp)"
+        chmod 0644 "$tmp_in"
+        cat >"$tmp_in" <<'JSON'
 {"runId":"diag-smoke-001","portal":"ecac-rs","operation":"validate-access","mode":"fake","params":{}}
 JSON
+        rm -f /tmp/integrar-runner-smoke.out /tmp/integrar-runner-smoke.err
         if sudo -u "$APP_USER" env \
             PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" \
             RUNNER_INTERNAL_TOKEN="integrar-diag-token-16" \
@@ -440,17 +440,14 @@ JSON
             NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES=nfse.gov.br \
             ECAC_A1_PFX_FILE=/tmp/missing.pfx \
             ECAC_A1_PASSWORD_FILE=/tmp/missing-password.txt \
-            node "$PROJECT_DIR/scripts/automacao-fiscal/runner/dist/cli.js" --input "$tmp_in" >"$tmp_out" 2>"$tmp_err"; then
+            node "$PROJECT_DIR/scripts/automacao-fiscal/runner/dist/cli.js" --input "$tmp_in" \
+            >/tmp/integrar-runner-smoke.out 2>/tmp/integrar-runner-smoke.err; then
             success "Teste: CLI runner (fake mode)"
-            cp -f "$tmp_out" /tmp/integrar-runner-smoke.out 2>/dev/null || true
-            cp -f "$tmp_err" /tmp/integrar-runner-smoke.err 2>/dev/null || true
         else
-            cp -f "$tmp_out" /tmp/integrar-runner-smoke.out 2>/dev/null || true
-            cp -f "$tmp_err" /tmp/integrar-runner-smoke.err 2>/dev/null || true
             warn "Falhou: CLI runner (fake mode). Veja /tmp/integrar-runner-smoke.err"
             failed=1
         fi
-        rm -f "$tmp_in" "$tmp_out" "$tmp_err"
+        rm -f "$tmp_in"
     fi
 
     (( failed == 0 )) || die "Diagnóstico encontrou falhas. Corrija e reexecute o script."
