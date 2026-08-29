@@ -167,6 +167,87 @@ class TenantAutomacaoFiscalAnaliseTest extends TestCase
         $this->assertSame('recebidas', $detalheRecebidas['tipo_listagem']);
         $this->assertSame(2, $detalheRecebidas['resumo']['quantidade']);
         $this->assertEquals(300.0, (float) $detalheRecebidas['resumo']['valor_total']);
+
+        $somenteRecebidas = $service->listar(
+            (int) $empresa->id,
+            (int) $portal->id,
+            null,
+            'recebidas'
+        );
+        $this->assertCount(1, $somenteRecebidas->items());
+        $this->assertSame('recebidas', $somenteRecebidas->items()[0]->tipo_listagem);
+        $this->assertSame(2, (int) $somenteRecebidas->items()[0]->quantidade_documentos);
+
+        $competenciaAgosto = $service->listar(
+            (int) $empresa->id,
+            (int) $portal->id,
+            '2026-08',
+            'emitidas'
+        );
+        $this->assertCount(1, $competenciaAgosto->items());
+        $this->assertSame('emitidas', $competenciaAgosto->items()[0]->tipo_listagem);
+    }
+
+    public function test_resumo_nfse_sem_listagem_usa_mesmo_filtro_da_tabela(): void
+    {
+        $this->seed(PortaisIntegracaoSeeder::class);
+
+        $operadora = EmpresasOperadora::factory()->create();
+        $user = User::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'role' => 'admin',
+        ]);
+        $empresa = Empresa::factory()->create([
+            'empresa_operadora_id' => $operadora->id,
+            'cnpj' => '39.706.780/0001-00',
+        ]);
+        $portal = PortalIntegracao::query()->where('codigo', 'nfse_nacional')->firstOrFail();
+
+        $this->actingAs($user);
+
+        $base = [
+            'empresa_operadora_id' => $operadora->id,
+            'empresa_id' => $empresa->id,
+            'portal_integracao_id' => $portal->id,
+            'tipo_documento' => 'nfse',
+            'competencia' => '2026-08',
+            'data_emissao' => '2026-08-10',
+            'origem' => 'nfse_nacional_extrato_txt',
+        ];
+
+        foreach ([1, 2] as $n) {
+            DocumentoFiscal::create(array_merge($base, [
+                'chave_acesso' => str_repeat((string) $n, 50),
+                'numero' => (string) $n,
+                'valor_total' => 100 * $n,
+                'dados_complementares' => ['tipo_listagem' => 'emitidas'],
+            ]));
+        }
+
+        foreach ([3, 4, 5] as $n) {
+            DocumentoFiscal::create(array_merge($base, [
+                'chave_acesso' => str_repeat((string) $n, 50),
+                'numero' => (string) $n,
+                'valor_total' => 50 * $n,
+                'dados_complementares' => ['tipo_listagem' => 'recebidas'],
+            ]));
+        }
+
+        $service = app(AnaliseFiscalService::class);
+
+        $semListagem = $service->carregar((int) $empresa->id, (int) $portal->id, '2026-08');
+        $this->assertSame('emitidas', $semListagem['tipo_listagem']);
+        $this->assertSame(2, $semListagem['resumo']['quantidade']);
+        $this->assertSame(2, $semListagem['documentos_query']->count());
+
+        $emitidas = $service->carregar((int) $empresa->id, (int) $portal->id, '2026-08', 'emitidas');
+        $this->assertSame(2, $emitidas['resumo']['quantidade']);
+        $this->assertSame(2, $emitidas['documentos_query']->count());
+
+        $recebidas = $service->carregar((int) $empresa->id, (int) $portal->id, '2026-08', 'recebidas');
+        $this->assertSame('recebidas', $recebidas['tipo_listagem']);
+        $this->assertSame(3, $recebidas['resumo']['quantidade']);
+        $this->assertSame(3, $recebidas['documentos_query']->count());
     }
 
     public function test_reimportacao_mesma_chave_nao_duplica_documento(): void

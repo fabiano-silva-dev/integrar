@@ -37,7 +37,7 @@
             </div>
         @elseif (!$emDetalhe)
             <div class="bg-white shadow-xl rounded-xl p-6 space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Empresa</label>
                         <select wire:model.live="filtro_empresa_id" class="mt-1 w-full border-gray-300 rounded-md">
@@ -57,11 +57,32 @@
                         </select>
                     </div>
                     <div>
+                        <label class="block text-sm font-medium text-gray-700">Tipo</label>
+                        <select wire:model.live="filtro_tipo" class="mt-1 w-full border-gray-300 rounded-md">
+                            <option value="">Todos</option>
+                            <option value="emitidas">Emitidas</option>
+                            <option value="recebidas">Recebidas</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">Competência</label>
-                        <input type="month" wire:model.live="filtro_competencia" class="mt-1 w-full border-gray-300 rounded-md">
+                        <div class="mt-1 grid grid-cols-2 gap-2">
+                            <select wire:model.live="filtro_competencia_mes" class="w-full border-gray-300 rounded-md" aria-label="Mês da competência">
+                                <option value="">Mês</option>
+                                @foreach($opcoesMeses as $valor => $rotulo)
+                                    <option value="{{ $valor }}">{{ $rotulo }}</option>
+                                @endforeach
+                            </select>
+                            <select wire:model.live="filtro_competencia_ano" class="w-full border-gray-300 rounded-md" aria-label="Ano da competência">
+                                <option value="">Ano</option>
+                                @foreach($opcoesAnos as $ano)
+                                    <option value="{{ $ano }}">{{ $ano }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
                 </div>
-                @if($filtro_empresa_id || $filtro_portal_id || $filtro_competencia !== '')
+                @if($this->temFiltrosAtivos())
                     <div class="flex justify-end">
                         <button type="button" wire:click="limparFiltros" class="text-sm text-indigo-600 hover:underline">
                             Limpar filtros

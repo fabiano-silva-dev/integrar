@@ -29,7 +29,9 @@ class ResumoFiscalDocumentos extends Component
 
     public $filtro_empresa_id = null;
     public $filtro_portal_id = null;
-    public string $filtro_competencia = '';
+    public string $filtro_tipo = '';
+    public string $filtro_competencia_mes = '';
+    public string $filtro_competencia_ano = '';
 
     public ?int $analiseEmpresaId = null;
     public ?int $analisePortalId = null;
@@ -80,9 +82,48 @@ class ResumoFiscalDocumentos extends Component
         $this->resetPage('listagemPage');
     }
 
-    public function updatedFiltroCompetencia(): void
+    public function updatedFiltroTipo(): void
+    {
+        $this->filtro_tipo = AnaliseFiscalService::normalizarTipoListagem($this->filtro_tipo) ?? '';
+        $this->resetPage('listagemPage');
+    }
+
+    public function updatedFiltroCompetenciaMes(): void
     {
         $this->resetPage('listagemPage');
+    }
+
+    public function updatedFiltroCompetenciaAno(): void
+    {
+        $this->resetPage('listagemPage');
+    }
+
+    /**
+     * Competência Y-m só quando mês e ano estão preenchidos.
+     */
+    public function filtroCompetencia(): ?string
+    {
+        if ($this->filtro_competencia_mes === '' || $this->filtro_competencia_ano === '') {
+            return null;
+        }
+
+        $mes = (int) $this->filtro_competencia_mes;
+        $ano = (int) $this->filtro_competencia_ano;
+
+        if ($mes < 1 || $mes > 12 || $ano < 2000 || $ano > 2100) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d', $ano, $mes);
+    }
+
+    public function temFiltrosAtivos(): bool
+    {
+        return $this->filtro_empresa_id
+            || $this->filtro_portal_id
+            || $this->filtro_tipo !== ''
+            || $this->filtro_competencia_mes !== ''
+            || $this->filtro_competencia_ano !== '';
     }
 
     public function carregarAnalise(
@@ -138,7 +179,9 @@ class ResumoFiscalDocumentos extends Component
     {
         $this->filtro_empresa_id = null;
         $this->filtro_portal_id = null;
-        $this->filtro_competencia = '';
+        $this->filtro_tipo = '';
+        $this->filtro_competencia_mes = '';
+        $this->filtro_competencia_ano = '';
         $this->resetPage('listagemPage');
     }
 
@@ -387,7 +430,8 @@ class ResumoFiscalDocumentos extends Component
             $analises = app(AnaliseFiscalService::class)->listar(
                 $this->filtro_empresa_id ? (int) $this->filtro_empresa_id : null,
                 $this->filtro_portal_id ? (int) $this->filtro_portal_id : null,
-                $this->filtro_competencia !== '' ? $this->filtro_competencia : null,
+                $this->filtroCompetencia(),
+                $this->filtro_tipo !== '' ? $this->filtro_tipo : null,
             );
         }
 
@@ -413,6 +457,8 @@ class ResumoFiscalDocumentos extends Component
             $xmlEtapaAtual = (string) ($this->xmlLogs[array_key_last($this->xmlLogs)]['eventType'] ?? '');
         }
 
+        $anoAtual = (int) now()->format('Y');
+
         return view('livewire.automacao-fiscal.resumo-fiscal-documentos', [
             'avisoFila' => app(FilaAutomacoesStatus::class)->avisoDesenvolvimento(),
             'empresas' => $empresas,
@@ -427,6 +473,21 @@ class ResumoFiscalDocumentos extends Component
             'xmlProgresso' => $progresso,
             'xmlPipeline' => $xmlPipeline,
             'xmlEtapaAtual' => $xmlEtapaAtual ?: ($this->xmlStatus === 'running' ? 'executando' : null),
+            'opcoesMeses' => [
+                '01' => 'Janeiro',
+                '02' => 'Fevereiro',
+                '03' => 'Março',
+                '04' => 'Abril',
+                '05' => 'Maio',
+                '06' => 'Junho',
+                '07' => 'Julho',
+                '08' => 'Agosto',
+                '09' => 'Setembro',
+                '10' => 'Outubro',
+                '11' => 'Novembro',
+                '12' => 'Dezembro',
+            ],
+            'opcoesAnos' => range($anoAtual, $anoAtual - 6),
         ]);
     }
 }

@@ -36,11 +36,13 @@ class AnaliseFiscalService
         ?int $empresaId = null,
         ?int $portalId = null,
         ?string $competencia = null,
+        ?string $tipoListagem = null,
         int $perPage = 20,
         string $pageName = 'listagemPage'
     ): LengthAwarePaginator {
         $competenciaExpr = $this->expressaoCompetencia();
         $tipoListagemExpr = $this->expressaoTipoListagem();
+        $tipoListagem = self::normalizarTipoListagem($tipoListagem);
 
         $query = DocumentoFiscal::query()
             ->select([
@@ -60,6 +62,10 @@ class AnaliseFiscalService
             ->when(
                 $competencia !== null && $competencia !== '',
                 fn (Builder $q) => $q->whereRaw("{$competenciaExpr} = ?", [$competencia])
+            )
+            ->when(
+                $tipoListagem !== null,
+                fn (Builder $q) => $q->whereRaw("{$tipoListagemExpr} = ?", [$tipoListagem])
             )
             ->groupBy([
                 'documentos_fiscais.empresa_id',
@@ -118,19 +124,26 @@ class AnaliseFiscalService
         $portal = PortalIntegracao::query()->find($portalId);
         $competencia = trim($competencia);
         $tipoListagem = self::normalizarTipoListagem($tipoListagem);
+        $ehNfse = $portal?->codigo === 'nfse_nacional';
+
+        if ($ehNfse && $tipoListagem === null) {
+            $tipoListagem = 'emitidas';
+        }
 
         $docs = $this->queryDocumentos($empresaId, $portalId, $competencia, $tipoListagem)
             ->orderBy('data_emissao')
             ->orderBy('numero')
             ->get();
 
-        $ehNfse = $docs->contains(fn (DocumentoFiscal $d) => $d->tipo_documento === 'nfse')
-            || ($portal?->codigo === 'nfse_nacional');
-
-        if ($ehNfse && $tipoListagem === null && $docs->isNotEmpty()) {
-            $tipoListagem = self::normalizarTipoListagem(
-                (string) data_get($docs->first()->dados_complementares, 'tipo_listagem', 'emitidas')
-            );
+        if (! $ehNfse) {
+            $ehNfse = $docs->contains(fn (DocumentoFiscal $d) => $d->tipo_documento === 'nfse');
+            if ($ehNfse && $tipoListagem === null) {
+                $tipoListagem = 'emitidas';
+                $docs = $this->queryDocumentos($empresaId, $portalId, $competencia, $tipoListagem)
+                    ->orderBy('data_emissao')
+                    ->orderBy('numero')
+                    ->get();
+            }
         }
 
         $arrays = $docs->map(function (DocumentoFiscal $d) use ($empresa, $ehNfse) {
