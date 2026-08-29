@@ -231,7 +231,13 @@ prepare_env() {
 
     local file app_url evo_url webhook
     file="$(env_file)"
-    [[ -f "$file" ]] || die "Arquivo .env não encontrado. Copie .env.example e configure o servidor antes."
+    if [[ ! -f "$file" ]]; then
+        if $DRY_RUN; then
+            warn "Arquivo .env não encontrado — dry-run não altera .env"
+            return 0
+        fi
+        die "Arquivo .env não encontrado. Copie .env.example e configure o servidor antes."
+    fi
 
     app_url="$(env_get APP_URL)"
     [[ -n "$app_url" ]] || app_url="https://localhost"

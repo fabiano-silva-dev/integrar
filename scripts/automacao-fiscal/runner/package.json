@@ -12,7 +12,7 @@
     "cli": "tsx src/cli.ts",
     "cli:dist": "node dist/cli.js",
     "dev": "tsx watch src/server/index.ts",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts",
     "test:all": "tsx --test tests/**/*.test.ts",

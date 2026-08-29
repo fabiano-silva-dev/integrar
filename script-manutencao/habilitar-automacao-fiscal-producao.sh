@@ -110,7 +110,13 @@ require_root() {
 validate_inputs() {
     [[ "$PROJECT_DIR" = /* ]] || die "--project-dir deve ser absoluto."
     [[ -f "$PROJECT_DIR/artisan" ]] || die "Laravel não encontrado em $PROJECT_DIR"
-    [[ -f "$PROJECT_DIR/.env" ]] || die ".env não encontrado em $PROJECT_DIR"
+    if [[ ! -f "$PROJECT_DIR/.env" ]]; then
+        if $DRY_RUN; then
+            warn ".env não encontrado em $PROJECT_DIR (dry-run)"
+        else
+            die ".env não encontrado em $PROJECT_DIR"
+        fi
+    fi
 
     if [[ -z "$APP_USER" ]]; then
         if id fabiano >/dev/null 2>&1; then
