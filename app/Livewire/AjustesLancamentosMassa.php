@@ -28,28 +28,43 @@ class AjustesLancamentosMassa extends Component
     public $importacaoId = '';
 
     public $filtroData = '';
+
     public $filtroHistorico = '';
+
     public $filtroContaAtual = '';
+
     public $filtroValor = '';
+
     public $filtroTerceiro = '';
+
     public $filtroTipo = 'todos'; // todos|debito|credito
 
     public bool $alterarConta = false;
+
     public bool $alterarHistorico = false;
+
     public bool $alterarTerceiro = false;
 
     public $novaConta = '';
+
     public $novoHistorico = '';
+
     public $novoTerceiroId = null;
+
     public $novoTerceiroNome = '';
+
     public $buscaTerceiro = '';
 
     public $sugestoesConta = [];
+
     public $sugestoesContaFiltro = [];
+
     public bool $confirmando = false;
+
     public $loteRevertendoId = null;
 
     public $perPage = 50;
+
     public $historicoPerPage = 20;
 
     protected $queryString = [
@@ -69,14 +84,14 @@ class AjustesLancamentosMassa extends Component
             $this->importacaoId = (string) request()->get('importacao');
         }
 
-        if (!in_array($this->aba, ['ajuste', 'historico'], true)) {
+        if (! in_array($this->aba, ['ajuste', 'historico'], true)) {
             $this->aba = 'ajuste';
         }
     }
 
     public function selecionarAba(string $aba): void
     {
-        if (!in_array($aba, ['ajuste', 'historico'], true)) {
+        if (! in_array($aba, ['ajuste', 'historico'], true)) {
             return;
         }
 
@@ -114,12 +129,13 @@ class AjustesLancamentosMassa extends Component
         $this->confirmando = false;
 
         $empresaId = $this->empresaIdImportacao();
-        if (!$empresaId) {
+        if (! $empresaId) {
             $this->sugestoesContaFiltro = [];
+
             return;
         }
 
-        $this->sugestoesContaFiltro = (new PlanoContaResolver())->buscar($empresaId, (string) $valor);
+        $this->sugestoesContaFiltro = (new PlanoContaResolver)->buscar($empresaId, (string) $valor);
     }
 
     public function updatedFiltroValor(): void
@@ -148,12 +164,13 @@ class AjustesLancamentosMassa extends Component
     public function updatedNovaConta($valor): void
     {
         $empresaId = $this->empresaIdImportacao();
-        if (!$empresaId) {
+        if (! $empresaId) {
             $this->sugestoesConta = [];
+
             return;
         }
 
-        $this->sugestoesConta = (new PlanoContaResolver())->buscar($empresaId, (string) $valor);
+        $this->sugestoesConta = (new PlanoContaResolver)->buscar($empresaId, (string) $valor);
     }
 
     public function selecionarConta(string $codigo): void
@@ -173,7 +190,7 @@ class AjustesLancamentosMassa extends Component
     public function selecionarTerceiro(int $terceiroId): void
     {
         $terceiro = Terceiro::find($terceiroId);
-        if (!$terceiro) {
+        if (! $terceiro) {
             return;
         }
 
@@ -215,8 +232,9 @@ class AjustesLancamentosMassa extends Component
 
     public function prepararConfirmacao(): void
     {
-        if (!$this->alterarConta && !$this->alterarHistorico && !$this->alterarTerceiro) {
+        if (! $this->alterarConta && ! $this->alterarHistorico && ! $this->alterarTerceiro) {
             session()->flash('error', 'Selecione ao menos um campo para alterar.');
+
             return;
         }
 
@@ -225,6 +243,7 @@ class AjustesLancamentosMassa extends Component
 
         if ($this->getLancamentosQuery()->count() === 0) {
             session()->flash('error', 'Nenhum lançamento corresponde aos filtros.');
+
             return;
         }
 
@@ -238,9 +257,10 @@ class AjustesLancamentosMassa extends Component
 
     public function aplicarAlteracoes(): void
     {
-        if (!$this->alterarConta && !$this->alterarHistorico && !$this->alterarTerceiro) {
+        if (! $this->alterarConta && ! $this->alterarHistorico && ! $this->alterarTerceiro) {
             session()->flash('error', 'Selecione ao menos um campo para alterar.');
             $this->confirmando = false;
+
             return;
         }
 
@@ -248,9 +268,10 @@ class AjustesLancamentosMassa extends Component
         $this->validate($this->regrasAlteracao(), $this->mensagensAlteracao());
 
         $importacao = $this->resolverImportacao();
-        if (!$importacao) {
+        if (! $importacao) {
             session()->flash('error', 'Selecione uma importação válida.');
             $this->confirmando = false;
+
             return;
         }
 
@@ -258,10 +279,11 @@ class AjustesLancamentosMassa extends Component
         if ($ids->isEmpty()) {
             session()->flash('error', 'Nenhum lançamento corresponde aos filtros.');
             $this->confirmando = false;
+
             return;
         }
 
-        $resolver = new PlanoContaResolver();
+        $resolver = new PlanoContaResolver;
         $novaConta = null;
         if ($this->alterarConta) {
             $novaConta = $resolver->resolverParaArmazenamento(
@@ -271,6 +293,7 @@ class AjustesLancamentosMassa extends Component
             if ($novaConta === '') {
                 session()->flash('error', 'Informe a nova conta.');
                 $this->confirmando = false;
+
                 return;
             }
         }
@@ -282,9 +305,10 @@ class AjustesLancamentosMassa extends Component
                 ->where('empresa_id', $importacao->empresa_id)
                 ->first();
 
-            if (!$terceiro) {
+            if (! $terceiro) {
                 session()->flash('error', 'Terceiro inválido para a empresa da importação.');
                 $this->confirmando = false;
+
                 return;
             }
         }
@@ -401,6 +425,7 @@ class AjustesLancamentosMassa extends Component
                 if ($atualizados === 0) {
                     $lote->delete();
                     $loteId = null;
+
                     return;
                 }
 
@@ -414,8 +439,9 @@ class AjustesLancamentosMassa extends Component
                 'importacao_id' => $importacao->id,
                 'erro' => $e->getMessage(),
             ]);
-            session()->flash('error', 'Erro ao aplicar alterações: ' . $e->getMessage());
+            session()->flash('error', 'Erro ao aplicar alterações: '.$e->getMessage());
             $this->confirmando = false;
+
             return;
         }
 
@@ -424,6 +450,7 @@ class AjustesLancamentosMassa extends Component
 
         if ($atualizados === 0) {
             session()->flash('error', 'Nenhuma alteração efetiva foi necessária nos lançamentos filtrados.');
+
             return;
         }
 
@@ -432,15 +459,16 @@ class AjustesLancamentosMassa extends Component
             ($atualizados === 1
                 ? '1 lançamento atualizado com sucesso.'
                 : "{$atualizados} lançamentos atualizados com sucesso.")
-            . ($loteId ? " Histórico #{$loteId} registrado." : '')
+            .($loteId ? " Histórico #{$loteId} registrado." : '')
         );
     }
 
     public function prepararReversao(int $loteId): void
     {
         $lote = $this->resolverLote($loteId);
-        if (!$lote || !$lote->estaAplicado()) {
+        if (! $lote || ! $lote->estaAplicado()) {
             session()->flash('error', 'Ajuste não encontrado ou já revertido.');
+
             return;
         }
 
@@ -455,14 +483,15 @@ class AjustesLancamentosMassa extends Component
     public function confirmarReversao(): void
     {
         $lote = $this->resolverLote((int) $this->loteRevertendoId);
-        if (!$lote) {
+        if (! $lote) {
             session()->flash('error', 'Ajuste não encontrado.');
             $this->loteRevertendoId = null;
+
             return;
         }
 
         try {
-            $resultado = (new AjusteLancamentoMassaService())->reverter($lote);
+            $resultado = (new AjusteLancamentoMassaService)->reverter($lote);
         } catch (\Throwable $e) {
             Log::error('Erro ao reverter ajuste em massa', [
                 'lote_id' => $lote->id,
@@ -470,6 +499,7 @@ class AjustesLancamentosMassa extends Component
             ]);
             session()->flash('error', $e->getMessage());
             $this->loteRevertendoId = null;
+
             return;
         }
 
@@ -502,7 +532,7 @@ class AjustesLancamentosMassa extends Component
                     continue;
                 }
 
-                $campoOriginal = $campo . '_original';
+                $campoOriginal = $campo.'_original';
                 if (in_array($campoOriginal, $lancamento->getFillable(), true)) {
                     $anteriorOriginal = $lancamento->{$campoOriginal};
                     $lancamento->{$campoOriginal} = $novaConta;
@@ -567,7 +597,6 @@ class AjustesLancamentosMassa extends Component
             return [];
         }
 
-        $lancamento->conferido = true;
         $lancamento->usuario = $usuario;
         $lancamento->save();
 
@@ -597,6 +626,7 @@ class AjustesLancamentosMassa extends Component
             if (self::normalizarConta((string) $lancamento->conta_credito) === $contaFiltro) {
                 $campos[] = 'conta_credito';
             }
+
             return $campos;
         }
 
@@ -682,7 +712,7 @@ class AjustesLancamentosMassa extends Component
     private function getLancamentosQuery()
     {
         $importacao = $this->resolverImportacao();
-        if (!$importacao) {
+        if (! $importacao) {
             return Lancamento::query()->whereRaw('1 = 0');
         }
 
@@ -696,15 +726,15 @@ class AjustesLancamentosMassa extends Component
         }
 
         if ($this->filtroHistorico !== '') {
-            $query->where('historico', 'like', '%' . $this->filtroHistorico . '%');
+            $query->where('historico', 'like', '%'.$this->filtroHistorico.'%');
         }
 
         if ($this->filtroTerceiro !== '') {
             $termo = $this->filtroTerceiro;
             $query->where(function ($q) use ($termo) {
-                $q->where('nome_empresa', 'like', '%' . $termo . '%')
+                $q->where('nome_empresa', 'like', '%'.$termo.'%')
                     ->orWhereHas('terceiro', function ($sub) use ($termo) {
-                        $sub->where('nome', 'like', '%' . $termo . '%');
+                        $sub->where('nome', 'like', '%'.$termo.'%');
                     });
             });
         }
@@ -764,7 +794,7 @@ class AjustesLancamentosMassa extends Component
         }
 
         $empresaId = $this->empresaIdImportacao() ?: session('empresa_selecionada_id');
-        if (!$empresaId) {
+        if (! $empresaId) {
             return [];
         }
 
@@ -772,8 +802,8 @@ class AjustesLancamentosMassa extends Component
             ->where('empresa_id', $empresaId)
             ->where('ativo', true)
             ->where(function ($query) use ($termo) {
-                $query->where('nome', 'like', '%' . $termo . '%')
-                    ->orWhere('cnpj_cpf', 'like', '%' . $termo . '%');
+                $query->where('nome', 'like', '%'.$termo.'%')
+                    ->orWhere('cnpj_cpf', 'like', '%'.$termo.'%');
             })
             ->orderBy('nome')
             ->limit(10)
@@ -841,7 +871,7 @@ class AjustesLancamentosMassa extends Component
             : Lancamento::query()->whereRaw('1 = 0')->paginate($this->perPage);
 
         $empresaImportacaoId = $this->empresaIdImportacao();
-        $resolver = new PlanoContaResolver();
+        $resolver = new PlanoContaResolver;
         $empresaTemPlano = $empresaImportacaoId
             ? $resolver->empresaTemPlanoAtivo($empresaImportacaoId)
             : false;
