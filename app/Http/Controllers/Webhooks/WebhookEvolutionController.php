@@ -13,14 +13,21 @@ class WebhookEvolutionController extends Controller
     public function __invoke(Request $request, WebhookEvolutionService $webhooks): JsonResponse
     {
         if (! $this->apikeyValida($request)) {
-            Log::warning('Webhook Evolution: apikey inválida ou ausente.');
+            $semChave = (string) config('evolution.api_key', '') === '';
+            Log::warning($semChave
+                ? 'Webhook Evolution: API key não configurada.'
+                : 'Webhook Evolution: apikey inválida ou ausente.');
             app(\App\Services\Documentos\DocumentoProcessoLogService::class)->registrar(
                 'erro',
                 'webhook',
-                'Webhook recusado: apikey inválida ou ausente.',
+                $semChave
+                    ? 'Webhook recusado: Evolution não configurada.'
+                    : 'Webhook recusado: apikey inválida ou ausente.',
             );
 
-            return response()->json(['mensagem' => 'Não autorizado.'], 401);
+            return response()->json([
+                'mensagem' => $semChave ? 'Evolution não configurada.' : 'Não autorizado.',
+            ], $semChave && app()->environment('production') ? 503 : 401);
         }
 
         $evento = $webhooks->receber($request->all(), $request);
@@ -36,7 +43,7 @@ class WebhookEvolutionController extends Controller
         $esperada = (string) config('evolution.api_key', '');
 
         if ($esperada === '') {
-            return true;
+            return ! app()->environment('production');
         }
 
         $recebida = $request->header('apikey')

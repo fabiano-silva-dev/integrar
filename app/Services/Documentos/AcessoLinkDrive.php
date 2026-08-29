@@ -25,13 +25,39 @@ class AcessoLinkDrive
     /**
      * @param  array{id?: string, type?: string, role?: string}  $perm
      */
+    public function ehPermissaoAnyone(array $perm): bool
+    {
+        return (string) ($perm['type'] ?? '') === 'anyone' && $this->ehPapelCompartilhado($perm);
+    }
+
+    public function ehPermissaoDomain(array $perm): bool
+    {
+        return (string) ($perm['type'] ?? '') === 'domain' && $this->ehPapelCompartilhado($perm);
+    }
+
     public function ehPermissaoPublica(array $perm): bool
     {
-        $tipo = (string) ($perm['type'] ?? '');
+        return $this->ehPermissaoAnyone($perm) || $this->ehPermissaoDomain($perm);
+    }
+
+    public function deveRemoverPermissao(array $perm, bool $removerDomain = false): bool
+    {
+        if (($perm['id'] ?? '') === '') {
+            return false;
+        }
+
+        if ($this->ehPermissaoAnyone($perm)) {
+            return true;
+        }
+
+        return $removerDomain && $this->ehPermissaoDomain($perm);
+    }
+
+    private function ehPapelCompartilhado(array $perm): bool
+    {
         $papel = (string) ($perm['role'] ?? '');
 
-        return in_array($tipo, ['anyone', 'domain'], true)
-            && in_array($papel, ['reader', 'commenter', 'writer', 'organizer', 'fileOrganizer'], true);
+        return in_array($papel, ['reader', 'commenter', 'writer', 'organizer', 'fileOrganizer'], true);
     }
 
     public function dominioWorkspace(?string $email): ?string
@@ -77,11 +103,11 @@ class AcessoLinkDrive
     }
 
     /**
-     * Remove permissões `anyone` e `domain` criadas para acesso por link.
+     * Remove permissões `anyone`. `domain` só é removida com `$removerDomain`.
      *
      * @return array{file_id: string, removidas: int, pulado: bool, erro: ?string, permissoes: list<array{id: string, type: string, role: string}>}
      */
-    public function removerPublicas(Drive $drive, string $fileId, bool $dryRun = false): array
+    public function removerPublicas(Drive $drive, string $fileId, bool $dryRun = false, bool $removerDomain = false): array
     {
         $vazio = [
             'file_id' => $fileId,
@@ -128,7 +154,7 @@ class AcessoLinkDrive
 
         $publicas = array_values(array_filter(
             $permissoes,
-            fn (array $perm) => $this->ehPermissaoPublica($perm) && ($perm['id'] ?? '') !== '',
+            fn (array $perm) => $this->deveRemoverPermissao($perm, $removerDomain),
         ));
 
         $removidas = 0;

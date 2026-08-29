@@ -589,7 +589,19 @@ install_evolution() {
     fi
 
     sync_evolution_apikey
+    assert_evolution_apikey
     success "Evolution no ar em http://127.0.0.1:${port} (não exponha essa porta no UFW)"
+}
+
+assert_evolution_apikey() {
+    $SKIP_ENV && return 0
+    $DRY_RUN && return 0
+
+    local chave
+    chave="$(env_get EVOLUTION_API_KEY)"
+    if [[ -z "$chave" ]]; then
+        die "EVOLUTION_API_KEY está vazia. Configure AUTHENTICATION_API_KEY em docker/evolution.env e reexecute."
+    fi
 }
 
 probe_https() {
@@ -640,6 +652,9 @@ run_diagnostics() {
     if ! $DRY_RUN && ! $SKIP_EVOLUTION; then
         check "Container integrar-evolution-api" docker ps --format '{{.Names}}' | grep -qx integrar-evolution-api
         check "Evolution responde em 127.0.0.1" bash -c "curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:${EVOLUTION_PORT_DEFAULT} | grep -vq '^000$'"
+        if ! $SKIP_ENV; then
+            check "EVOLUTION_API_KEY preenchida" bash -c "[[ -n $(printf %q "$(env_get EVOLUTION_API_KEY)") ]]"
+        fi
     fi
     probe_https "https://generativelanguage.googleapis.com" "Gemini"
     probe_https "https://api.groq.com" "Groq"

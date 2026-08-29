@@ -15,9 +15,10 @@ class RemoverLinksPublicosDocumentosCommand extends Command
 {
     protected $signature = 'documentos:remover-links-publicos
                             {--operadora= : ID do escritório (omita para todos)}
-                            {--dry-run : Lista as permissões públicas sem removê-las}';
+                            {--dry-run : Lista as permissões públicas sem removê-las}
+                            {--remover-domain : Também remove permissões de domínio Google Workspace}';
 
-    protected $description = 'Remove permissões públicas (anyone/domain) de arquivos e pastas do Google Drive do módulo Documentos';
+    protected $description = 'Remove permissões anyone (link público) de arquivos e pastas do Google Drive do módulo Documentos';
 
     public function handle(
         GoogleDriveService $driveService,
@@ -25,6 +26,7 @@ class RemoverLinksPublicosDocumentosCommand extends Command
         DocumentoProcessoLogService $logs,
     ): int {
         $dryRun = (bool) $this->option('dry-run');
+        $removerDomain = (bool) $this->option('remover-domain');
         $operadoraOpt = $this->option('operadora');
 
         $operadoras = EmpresasOperadora::query()
@@ -67,7 +69,7 @@ class RemoverLinksPublicosDocumentosCommand extends Command
 
             foreach ($ids as $fileId) {
                 $totalArquivos++;
-                $resultado = $acesso->removerPublicas($drive, $fileId, $dryRun);
+                $resultado = $acesso->removerPublicas($drive, $fileId, $dryRun, $removerDomain);
 
                 if ($resultado['erro'] !== null && ! $resultado['pulado']) {
                     $totalErros++;

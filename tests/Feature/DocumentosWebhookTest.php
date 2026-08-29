@@ -55,6 +55,28 @@ class TenantIsolationDocumentosWebhookTest extends TestCase
         $response->assertUnauthorized();
     }
 
+    public function test_webhook_apikey_correta_aceita_payload(): void
+    {
+        config(['evolution.api_key' => 'chave-secreta']);
+
+        $this->postJson('/webhooks/evolution', [
+            'event' => 'connection.update',
+            'instance' => 'integrar-op-999',
+            'data' => ['state' => 'open'],
+        ], ['apikey' => 'chave-secreta'])->assertOk();
+    }
+
+    public function test_webhook_sem_apikey_em_producao_retorna_503(): void
+    {
+        $this->app['env'] = 'production';
+        config(['evolution.api_key' => '']);
+
+        $this->postJson('/webhooks/evolution', [
+            'event' => 'connection.update',
+            'instance' => 'x',
+        ])->assertStatus(503);
+    }
+
     public function test_webhook_instancia_desconhecida_e_ignorado(): void
     {
         config(['evolution.api_key' => '']);

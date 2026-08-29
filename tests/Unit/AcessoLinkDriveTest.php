@@ -12,7 +12,7 @@ class AcessoLinkDriveTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->acesso = new AcessoLinkDrive();
+        $this->acesso = new AcessoLinkDrive;
     }
 
     public function test_nao_cria_permissao_anyone(): void
@@ -57,6 +57,23 @@ class AcessoLinkDriveTest extends TestCase
         $this->assertTrue($this->acesso->ehPermissaoPublica(['id' => 'd1', 'type' => 'domain', 'role' => 'reader']));
         $this->assertFalse($this->acesso->ehPermissaoPublica(['id' => 'u1', 'type' => 'user', 'role' => 'owner']));
         $this->assertFalse($this->acesso->ehPermissaoPublica(['id' => 'g1', 'type' => 'group', 'role' => 'reader']));
+    }
+
+    public function test_remocao_padrao_remove_anyone_e_preserva_domain(): void
+    {
+        $anyone = ['id' => 'anyoneWithLink', 'type' => 'anyone', 'role' => 'reader'];
+        $domain = ['id' => 'd1', 'type' => 'domain', 'role' => 'reader'];
+        $owner = ['id' => 'u1', 'type' => 'user', 'role' => 'owner'];
+        $group = ['id' => 'g1', 'type' => 'group', 'role' => 'reader'];
+
+        $this->assertTrue($this->acesso->deveRemoverPermissao($anyone, false));
+        $this->assertFalse($this->acesso->deveRemoverPermissao($domain, false));
+        $this->assertFalse($this->acesso->deveRemoverPermissao($owner, false));
+        $this->assertFalse($this->acesso->deveRemoverPermissao($group, false));
+
+        $this->assertTrue($this->acesso->deveRemoverPermissao($domain, true));
+        $this->assertFalse($this->acesso->deveRemoverPermissao($owner, true));
+        $this->assertFalse($this->acesso->deveRemoverPermissao($group, true));
     }
 
     public function test_upload_nao_publica_arquivo_como_anyone(): void
