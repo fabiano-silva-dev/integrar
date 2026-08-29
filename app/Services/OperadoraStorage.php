@@ -45,7 +45,7 @@ class OperadoraStorage
         $subdir = 'automacao-fiscal/artefatos';
 
         if ($execucaoUuid !== null && $execucaoUuid !== '') {
-            $subdir .= '/' . basename($execucaoUuid);
+            $subdir .= '/'.basename($execucaoUuid);
         }
 
         return Storage::path(self::ensureDirectory($subdir, $operadoraId));
@@ -61,7 +61,7 @@ class OperadoraStorage
         $subdir = 'automacao-fiscal/execucoes';
 
         if ($execucaoUuid !== null && $execucaoUuid !== '') {
-            $subdir .= '/' . basename($execucaoUuid);
+            $subdir .= '/'.basename($execucaoUuid);
         }
 
         return Storage::path(self::ensureDirectory($subdir, $operadoraId));
@@ -84,13 +84,13 @@ class OperadoraStorage
 
     public static function absolutePath(string $subdir, string $filename, ?int $operadoraId = null): string
     {
-        return Storage::path(self::diskPath($subdir, $operadoraId) . '/' . basename($filename));
+        return Storage::path(self::diskPath($subdir, $operadoraId).'/'.basename($filename));
     }
 
     public static function put(string $subdir, string $filename, mixed $contents, ?int $operadoraId = null): string
     {
         $dir = self::ensureDirectory($subdir, $operadoraId);
-        $relative = "{$dir}/" . basename($filename);
+        $relative = "{$dir}/".basename($filename);
         Storage::put($relative, $contents);
 
         return $relative;
@@ -98,7 +98,7 @@ class OperadoraStorage
 
     public static function exists(string $subdir, string $filename, ?int $operadoraId = null): bool
     {
-        return Storage::exists(self::diskPath($subdir, $operadoraId) . '/' . basename($filename));
+        return Storage::exists(self::diskPath($subdir, $operadoraId).'/'.basename($filename));
     }
 
     public static function download(string $subdir, string $filename, ?int $operadoraId = null)
@@ -125,6 +125,10 @@ class OperadoraStorage
         }
 
         $legacyPath = "{$subdir}/{$filename}";
+
+        if (! config('operadora.allow_legacy_global_storage', true)) {
+            return null;
+        }
 
         return Storage::exists($legacyPath) ? $legacyPath : null;
     }
