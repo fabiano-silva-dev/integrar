@@ -22,7 +22,7 @@ O model `User` **não** usa o trait (evita recursão com Auth); usa `scopeDoEscr
 O trait preenche `empresa_operadora_id` no evento `creating`, nesta ordem:
 
 1. Valor já informado no array/atributos
-2. `OperadoraContext::id()` (usuário logado ou sessão `operadora_context_id`)
+2. `OperadoraContext::id()` (usuário comum: `empresa_operadora_id`; super admin: sessão `operadora_context_id`)
 3. `empresa_id` → busca operadora da empresa
 4. `importacao_id` → busca operadora da importação
 
@@ -38,7 +38,7 @@ Ao montar arrays para batch insert, incluir sempre `empresa_id` e/ou `importacao
 ## Papel `super_admin`
 
 - `role = 'super_admin'`; `empresa_operadora_id` **null** (acesso global a escritórios).
-- Seletor de escritório no header (`partials` / `topbar`); contexto em `session('operadora_context_id')`.
+- Seletor de escritório no header (`partials` / `topbar`); contexto em `session('operadora_context_id')` — **somente** super admin (`/trocar-operadora` + `OperadoraContext::set()`). Usuário comum nunca usa essa sessão.
 - Telas administrativas (`GerenciadorUsuarios`, `/empresas-operadoras`, itens do menu com `roles: ['super_admin']`): **permitir** `super_admin` — não restringir só a `admin`/`gerente`.
 - Sem escritório selecionado: `OperadoraContext::superAdminPrecisaSelecionarEscritorio()` — bloquear **cadastros** que exigem tenant; listagens globais podem funcionar.
 - Usuários comuns (`admin`, `gerente`, `operador`): sempre vinculados a um escritório via `empresa_operadora_id`.

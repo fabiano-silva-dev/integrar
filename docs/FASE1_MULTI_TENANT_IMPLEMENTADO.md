@@ -100,9 +100,11 @@ app/
 
 | Tipo de usuário | `OperadoraContext::id()` retorna |
 |-----------------|----------------------------------|
-| `operador`, `gerente`, `admin` | `users.empresa_operadora_id` (fixo) |
+| `operador`, `gerente`, `admin` | `users.empresa_operadora_id` (a sessão `operadora_context_id` é **ignorada** e limpa pelo middleware) |
 | `super_admin` sem seletor | `null` → vê **todos** os dados |
 | `super_admin` com escritório selecionado | `session('operadora_context_id')` → vê **só aquele** escritório |
+
+A rota `/trocar-operadora/{id?}` exige `role:super_admin`. `OperadoraContext::set()` também recusa usuário comum.
 
 ---
 
@@ -177,7 +179,7 @@ Linha 1: [Logo/Nome do escritório]  [Menu]  [Avatar]
 Linha 2: [Seletor Escritório ▼]  [Seletor Empresa ▼]   ← só quando aplicável
 ```
 
-- **Seletor de escritório:** visível apenas para `super_admin`. Rota: `/trocar-operadora/{id?}`
+- **Seletor de escritório:** visível apenas para `super_admin`. Rota: `/trocar-operadora/{id?}` (`middleware role:super_admin`)
 - **Seletor de empresa:** visível para todos. Lista só empresas do escritório ativo. Rota: `/trocar-empresa/{id}`
 - **White-label:** se o escritório tem `logo` e/ou `nome_fantasia`, substituem o branding padrão "IntegraExpert"
 
