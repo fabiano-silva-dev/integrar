@@ -185,7 +185,7 @@ trait MenuTrait
                         'icon' => 'folder',
                         'url' => route('documentos'),
                         'active' => request()->routeIs('documentos'),
-                        'title' => 'Pastas e arquivos das empresas no Google Drive',
+                        'title' => 'Arquivos das empresas recebidos pelo WhatsApp',
                     ],
                 ],
             ],

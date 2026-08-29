@@ -156,7 +156,7 @@
                 <x-menu-icon name="folder" class="w-7 h-7 text-white" />
             </div>
             <h3 class="mt-5 text-xl font-bold">Drive contábil</h3>
-            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Abra e baixe os arquivos das empresas no Google Drive.</p>
+            <p class="mt-2 text-sm text-indigo-100 leading-relaxed flex-1">Arquivos das empresas recebidos pelo WhatsApp — abra e baixe quando precisar.</p>
             <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/90 group-hover:gap-2 transition-all">
                 Abrir
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
