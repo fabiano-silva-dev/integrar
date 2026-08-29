@@ -58,14 +58,14 @@ class NodeRunnerBridge
         ?int $timeoutMs = null
     ): array {
         $runnerDir = base_path('scripts/automacao-fiscal/runner');
-        if (!is_dir($runnerDir)) {
+        if (! is_dir($runnerDir)) {
             throw new RuntimeException('Runner de automação fiscal não encontrado em scripts/automacao-fiscal/runner.');
         }
 
-        $workDir = storage_path('app/automacao-fiscal-runner/' . $runId);
+        $workDir = storage_path('app/automacao-fiscal-runner/'.$runId);
         File::ensureDirectoryExists($workDir);
 
-        $inputPath = $workDir . '/input.json';
+        $inputPath = $workDir.'/input.json';
         $passwordFile = null;
         $timeoutMs = $timeoutMs ?? (int) config('automacao_fiscal.timeout_ms', 300000);
 
@@ -74,7 +74,7 @@ class NodeRunnerBridge
             'portal' => $portal,
             'operation' => $operation,
             'mode' => $mode,
-            'params' => $params === [] ? new \stdClass() : $params,
+            'params' => $params === [] ? new \stdClass : $params,
         ];
 
         File::put($inputPath, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
@@ -94,7 +94,7 @@ class NodeRunnerBridge
             'AUTOMATION_FAKE_MODE' => $mode === 'fake' ? 'true' : 'false',
             'AUTOMATION_HEADLESS' => 'true',
             'AUTOMATION_TIMEOUT_MS' => (string) $timeoutMs,
-            'AUTOMATION_ARTIFACT_DIR' => $workDir . '/artifacts',
+            'AUTOMATION_ARTIFACT_DIR' => $workDir.'/artifacts',
             'ECAC_RS_MODE' => $mode,
             'ECAC_RS_ENTRY_URL' => (string) config(
                 'automacao_fiscal.ecac_rs_entry_url',
@@ -111,98 +111,122 @@ class NodeRunnerBridge
             'NFSE_EMISSOR_ALLOWED_HOST_SUFFIXES' => 'nfse.gov.br',
         ];
 
-        if ($certificado && $mode === 'certificate') {
-            $abs = app(CertificadoDigitalService::class)->caminhoAbsoluto($certificado);
-            if (!$abs) {
-                throw new RuntimeException('Arquivo do certificado digital não encontrado no storage.');
+        try {
+            if ($certificado && $mode === 'certificate') {
+                $abs = app(CertificadoDigitalService::class)->caminhoAbsoluto($certificado);
+                if (! $abs) {
+                    throw new RuntimeException('Arquivo do certificado digital não encontrado no storage.');
+                }
+                $passwordFile = $workDir.'/cert-password.txt';
+                File::put($passwordFile, (string) $certificado->senha_criptografada);
+                @chmod($passwordFile, 0600);
+                $env['ECAC_A1_PFX_FILE'] = $abs;
+                $env['ECAC_A1_PASSWORD_FILE'] = $passwordFile;
+                $env['ECAC_RS_MODE'] = 'certificate';
+                $env['NFSE_EMISSOR_MODE'] = 'certificate';
+            } else {
+                $env['ECAC_A1_PFX_FILE'] = $workDir.'/missing.pfx';
+                $env['ECAC_A1_PASSWORD_FILE'] = $workDir.'/missing-password.txt';
             }
-            $passwordFile = $workDir . '/cert-password.txt';
-            File::put($passwordFile, (string) $certificado->senha_criptografada);
-            $env['ECAC_A1_PFX_FILE'] = $abs;
-            $env['ECAC_A1_PASSWORD_FILE'] = $passwordFile;
-            $env['ECAC_RS_MODE'] = 'certificate';
-            $env['NFSE_EMISSOR_MODE'] = 'certificate';
-        } else {
-            $env['ECAC_A1_PFX_FILE'] = $workDir . '/missing.pfx';
-            $env['ECAC_A1_PASSWORD_FILE'] = $workDir . '/missing-password.txt';
-        }
 
-        if ($env['PLAYWRIGHT_BROWSERS_PATH'] === '') {
-            unset($env['PLAYWRIGHT_BROWSERS_PATH']);
-        }
+            if ($env['PLAYWRIGHT_BROWSERS_PATH'] === '') {
+                unset($env['PLAYWRIGHT_BROWSERS_PATH']);
+            }
 
-        $command = $this->resolverComando($runnerDir, $inputPath);
-        $processEnv = array_merge(
-            array_filter($_ENV, static fn ($v) => is_string($v)),
-            $env
-        );
+            $command = $this->resolverComando($runnerDir, $inputPath);
+            $processEnv = array_merge(
+                array_filter($_ENV, static fn ($v) => is_string($v)),
+                $env
+            );
 
-        $process = new Process(
-            $command,
-            $runnerDir,
-            $processEnv,
-            null,
-            ($timeoutMs / 1000) + 30
-        );
+            $process = new Process(
+                $command,
+                $runnerDir,
+                $processEnv,
+                null,
+                ($timeoutMs / 1000) + 30
+            );
 
-        $stdout = '';
-        $stderr = '';
-        $stderrPending = '';
-        $events = [];
-        $artifacts = [];
+            $stdout = '';
+            $stderr = '';
+            $stderrPending = '';
+            $events = [];
+            $artifacts = [];
 
-        $process->start();
+            $process->start();
 
-        while ($process->isRunning()) {
+            while ($process->isRunning()) {
+                $stdout .= $process->getIncrementalOutput();
+                $chunk = $process->getIncrementalErrorOutput();
+                if ($chunk !== '') {
+                    $stderr .= $chunk;
+                    $stderrPending .= $chunk;
+                    $this->drenarNdjson($stderrPending, $events, $artifacts, $onEvent, $onArtifact);
+                }
+                usleep(150_000);
+            }
+
             $stdout .= $process->getIncrementalOutput();
             $chunk = $process->getIncrementalErrorOutput();
             if ($chunk !== '') {
                 $stderr .= $chunk;
                 $stderrPending .= $chunk;
-                $this->drenarNdjson($stderrPending, $events, $artifacts, $onEvent, $onArtifact);
             }
-            usleep(150_000);
-        }
+            $this->drenarNdjson($stderrPending, $events, $artifacts, $onEvent, $onArtifact, true);
 
-        $stdout .= $process->getIncrementalOutput();
-        $chunk = $process->getIncrementalErrorOutput();
-        if ($chunk !== '') {
-            $stderr .= $chunk;
-            $stderrPending .= $chunk;
-        }
-        $this->drenarNdjson($stderrPending, $events, $artifacts, $onEvent, $onArtifact, true);
+            $stdout = trim($stdout);
+            $stderr = trim($stderr);
 
-        if ($passwordFile && File::exists($passwordFile)) {
-            File::delete($passwordFile);
-        }
+            File::put($workDir.'/stdout.log', $stdout);
+            File::put($workDir.'/stderr.log', $stderr);
 
-        $stdout = trim($stdout);
-        $stderr = trim($stderr);
+            $result = $this->parseStdoutResult($stdout, $stderr, $process->getExitCode(), $workDir);
 
-        File::put($workDir . '/stdout.log', $stdout);
-        File::put($workDir . '/stderr.log', $stderr);
-
-        $result = $this->parseStdoutResult($stdout, $stderr, $process->getExitCode(), $workDir);
-
-        // Garante persistência mesmo quando o NDJSON do stderr truncou artefatos grandes.
-        $artifactsDir = $workDir . '/artifacts/' . $runId;
-        if (is_dir($artifactsDir)) {
-            $fromDisk = $this->listarArtefatosDoDisco($artifactsDir);
-            foreach ($fromDisk as $artifact) {
-                $artifacts[] = $artifact;
-                if ($onArtifact) {
-                    $onArtifact($artifact);
+            $artifactsDir = $workDir.'/artifacts/'.$runId;
+            if (is_dir($artifactsDir)) {
+                $fromDisk = $this->listarArtefatosDoDisco($artifactsDir);
+                foreach ($fromDisk as $artifact) {
+                    $artifacts[] = $artifact;
+                    if ($onArtifact) {
+                        $onArtifact($artifact);
+                    }
                 }
             }
-        }
 
-        return [
-            'status' => $result['status'] ?? ($process->isSuccessful() ? 'succeeded' : 'failed'),
-            'result' => $result,
-            'events' => $events,
-            'artifacts' => $artifacts,
-            'exit_code' => $process->getExitCode() ?? 1,
-        ];
+            return [
+                'status' => $result['status'] ?? ($process->isSuccessful() ? 'succeeded' : 'failed'),
+                'result' => $result,
+                'events' => $events,
+                'artifacts' => $artifacts,
+                'exit_code' => $process->getExitCode() ?? 1,
+            ];
+        } finally {
+            if ($passwordFile && File::exists($passwordFile)) {
+                File::delete($passwordFile);
+            }
+        }
+    }
+
+    /**
+     * Grava a senha do A1 com permissão restrita e garante a remoção ao final.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $acao
+     * @return T
+     */
+    public static function comSenhaTemporaria(string $path, string $conteudo, callable $acao): mixed
+    {
+        File::put($path, $conteudo);
+        @chmod($path, 0600);
+
+        try {
+            return $acao();
+        } finally {
+            if (File::exists($path)) {
+                File::delete($path);
+            }
+        }
     }
 
     /**
@@ -295,7 +319,7 @@ class NodeRunnerBridge
         }
 
         $decoded = json_decode($line, true);
-        if (!is_array($decoded)) {
+        if (! is_array($decoded)) {
             return;
         }
 
@@ -318,9 +342,9 @@ class NodeRunnerBridge
      */
     private function resolverComando(string $runnerDir, string $inputPath): array
     {
-        $tsx = $runnerDir . '/node_modules/.bin/tsx';
-        $cliTs = $runnerDir . '/src/cli.ts';
-        $cliJs = $runnerDir . '/dist/cli.js';
+        $tsx = $runnerDir.'/node_modules/.bin/tsx';
+        $cliTs = $runnerDir.'/src/cli.ts';
+        $cliJs = $runnerDir.'/dist/cli.js';
 
         if (is_file($tsx) && is_file($cliTs)) {
             return [$tsx, $cliTs, '--input', $inputPath];
@@ -404,7 +428,7 @@ class NodeRunnerBridge
         return [
             'status' => 'failed',
             'errorMessage' => 'Runner não retornou resultado'
-                . ($exitCode !== null ? " (exit {$exitCode})" : ''),
+                .($exitCode !== null ? " (exit {$exitCode})" : ''),
         ];
     }
 
@@ -420,13 +444,13 @@ class NodeRunnerBridge
                 continue;
             }
             $decoded = json_decode($line, true);
-            if (!is_array($decoded)) {
+            if (! is_array($decoded)) {
                 continue;
             }
-            if (($decoded['type'] ?? null) === 'error' && !empty($decoded['message'])) {
+            if (($decoded['type'] ?? null) === 'error' && ! empty($decoded['message'])) {
                 return (string) $decoded['message'];
             }
-            if (!empty($decoded['errorMessage'])) {
+            if (! empty($decoded['errorMessage'])) {
                 return (string) $decoded['errorMessage'];
             }
         }

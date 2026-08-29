@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('automacoes:despachar')->everyFiveMinutes();
+Schedule::command('automacao-fiscal:limpar-temporarios')->dailyAt('03:15');
