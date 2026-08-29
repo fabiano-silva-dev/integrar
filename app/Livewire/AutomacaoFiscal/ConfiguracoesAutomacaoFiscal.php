@@ -26,32 +26,54 @@ class ConfiguracoesAutomacaoFiscal extends Component
     public string $aba = 'geral';
 
     public string $timezone = 'America/Sao_Paulo';
+
     /** @var int|string */
     public $periodo_padrao_dias = 31;
+
     /** @var int|string */
     public $max_execucoes_simultaneas = 1;
+
     /** @var int|string */
     public $politica_tentativas = 3;
+
     /** @var int|string */
     public $retencao_logs_dias = 90;
+
     /** @var int|string */
     public $retencao_artefatos_dias = 30;
+
     /** @var int|string */
     public $aviso_certificado_dias = 30;
 
     public $certificadoArquivo = null;
+
     public string $certificadoNome = '';
+
     public string $certificadoSenha = '';
+
     public $certificadoEmpresaId = null;
 
     public string $agendaNome = '';
+
     public string $agendaFrequencia = 'diaria';
+
     public string $agendaHorario = '06:00';
+
+    /** @var list<int|string> */
+    public array $agendaDiasSemana = [];
+
+    public string $agendaDiasMes = '';
+
+    /** @var int|string */
+    public $agendaIntervalo = 60;
+
     /** @var bool|string|int */
     public $agendaAtiva = true;
+
     public $agendaId = null;
 
     public $confirmandoExclusaoCertificado = null;
+
     public $confirmandoExclusaoAgenda = null;
 
     protected $queryString = [
@@ -61,7 +83,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
     public function mount(?string $aba = null): void
     {
         $user = Auth::user();
-        if (!$user || (!$user->isSuperAdmin() && !in_array($user->role, ['admin', 'gerente'], true))) {
+        if (! $user || (! $user->isSuperAdmin() && ! in_array($user->role, ['admin', 'gerente'], true))) {
             abort(403, 'Sem permissão para configurações da automação fiscal.');
         }
 
@@ -80,7 +102,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function setAba(string $aba): void
     {
-        if ($aba === 'logs' && !$this->podeVerLogsTecnicos()) {
+        if ($aba === 'logs' && ! $this->podeVerLogsTecnicos()) {
             return;
         }
 
@@ -90,7 +112,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function salvarGeral(): void
     {
-        if (!$this->garantirContexto()) {
+        if (! $this->garantirContexto()) {
             return;
         }
 
@@ -120,7 +142,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function uploadCertificado(CertificadoDigitalService $service): void
     {
-        if (!$this->garantirContexto()) {
+        if (! $this->garantirContexto()) {
             return;
         }
 
@@ -162,7 +184,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function desativarCertificado(CertificadoDigitalService $service): void
     {
-        if (!$this->confirmandoExclusaoCertificado) {
+        if (! $this->confirmandoExclusaoCertificado) {
             return;
         }
 
@@ -174,7 +196,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function salvarAgenda(): void
     {
-        if (!$this->garantirContexto()) {
+        if (! $this->garantirContexto()) {
             return;
         }
 
@@ -183,7 +205,22 @@ class ConfiguracoesAutomacaoFiscal extends Component
             'agendaFrequencia' => 'required|in:diaria,semanal,mensal,intervalo,manual',
             'agendaHorario' => 'required|date_format:H:i',
             'agendaAtiva' => 'boolean',
+            'agendaDiasSemana' => $this->agendaFrequencia === 'semanal' ? 'required|array|min:1' : 'nullable|array',
+            'agendaDiasMes' => $this->agendaFrequencia === 'mensal' ? 'required|string' : 'nullable|string',
+            'agendaIntervalo' => $this->agendaFrequencia === 'intervalo' ? 'required|integer|min:5|max:10080' : 'nullable',
         ]);
+
+        if ($this->agendaFrequencia === 'semanal' && $this->normalizarDiasSemana($this->agendaDiasSemana) === []) {
+            $this->addError('agendaDiasSemana', 'Selecione ao menos um dia da semana.');
+
+            return;
+        }
+
+        if ($this->agendaFrequencia === 'mensal' && $this->normalizarDiasMes($this->agendaDiasMes) === []) {
+            $this->addError('agendaDiasMes', 'Informe ao menos um dia do mês.');
+
+            return;
+        }
 
         $payload = [
             'empresa_operadora_id' => OperadoraContext::requireId(),
@@ -192,6 +229,9 @@ class ConfiguracoesAutomacaoFiscal extends Component
             'horarios' => [$this->agendaHorario],
             'ativo' => filter_var($this->agendaAtiva, FILTER_VALIDATE_BOOLEAN),
             'timezone' => $this->timezone ?: 'America/Sao_Paulo',
+            'dias_semana' => $this->agendaFrequencia === 'semanal' ? $this->normalizarDiasSemana($this->agendaDiasSemana) : null,
+            'dias_mes' => $this->agendaFrequencia === 'mensal' ? $this->normalizarDiasMes($this->agendaDiasMes) : null,
+            'intervalo' => $this->agendaFrequencia === 'intervalo' ? (int) $this->agendaIntervalo : null,
         ];
 
         if ($this->agendaId) {
@@ -205,6 +245,9 @@ class ConfiguracoesAutomacaoFiscal extends Component
         $this->reset(['agendaNome', 'agendaId']);
         $this->agendaFrequencia = 'diaria';
         $this->agendaHorario = '06:00';
+        $this->agendaDiasSemana = [];
+        $this->agendaDiasMes = '';
+        $this->agendaIntervalo = 60;
         $this->agendaAtiva = true;
         $this->aba = 'agendas';
     }
@@ -216,6 +259,9 @@ class ConfiguracoesAutomacaoFiscal extends Component
         $this->agendaNome = $agenda->nome;
         $this->agendaFrequencia = $agenda->frequencia;
         $this->agendaHorario = ($agenda->horarios[0] ?? '06:00');
+        $this->agendaDiasSemana = array_map('intval', $agenda->dias_semana ?? []);
+        $this->agendaDiasMes = implode(', ', $agenda->dias_mes ?? []);
+        $this->agendaIntervalo = $agenda->intervalo ?: 60;
         $this->agendaAtiva = (bool) $agenda->ativo;
         $this->aba = 'agendas';
     }
@@ -227,7 +273,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
     public function excluirAgenda(): void
     {
-        if (!$this->confirmandoExclusaoAgenda) {
+        if (! $this->confirmandoExclusaoAgenda) {
             return;
         }
 
@@ -240,10 +286,46 @@ class ConfiguracoesAutomacaoFiscal extends Component
     {
         $agenda = AgendaAutomacao::findOrFail($id);
         $copia = $agenda->replicate(['nome']);
-        $copia->nome = $agenda->nome . ' (cópia)';
+        $copia->nome = $agenda->nome.' (cópia)';
         $copia->empresa_operadora_id = $agenda->empresa_operadora_id;
         $copia->save();
         session()->flash('message', 'Agenda duplicada.');
+    }
+
+    /**
+     * @param  list<int|string>  $dias
+     * @return list<int>
+     */
+    private function normalizarDiasSemana(array $dias): array
+    {
+        $validos = [];
+        foreach ($dias as $dia) {
+            $n = (int) $dia;
+            if ($n >= 1 && $n <= 7) {
+                $validos[] = $n;
+            }
+        }
+
+        return array_values(array_unique($validos));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function normalizarDiasMes(string $texto): array
+    {
+        $dias = [];
+        foreach (preg_split('/[,\s]+/', $texto) ?: [] as $parte) {
+            if ($parte === '') {
+                continue;
+            }
+            $n = (int) $parte;
+            if ($n >= 1 && $n <= 31) {
+                $dias[] = $n;
+            }
+        }
+
+        return array_values(array_unique($dias));
     }
 
     private function carregarConfiguracao(): void
@@ -287,7 +369,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
         $logs = collect();
         $empresas = collect();
 
-        if (!$precisaSelecionar && OperadoraContext::id()) {
+        if (! $precisaSelecionar && OperadoraContext::id()) {
             $certificados = CertificadoDigital::query()->with('empresa')->orderByDesc('id')->paginate(10, pageName: 'certsPage');
             $agendas = AgendaAutomacao::query()->orderBy('nome')->get();
             $execucoes = AutomacaoExecucao::query()

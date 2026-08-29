@@ -5,8 +5,8 @@ namespace App\Console\Commands;
 use App\Jobs\AutomacaoFiscal\ExecutarAutomacaoPortalJob;
 use App\Models\AutomacaoExecucao;
 use App\Models\EmpresaIntegracaoRecurso;
+use App\Services\AutomacaoFiscal\AgendaAutomacaoProximaExecucaoService;
 use App\Services\OperadoraContext;
-use Carbon\Carbon;
 use Illuminate\Console\Command;
 
 class AutomacoesDespacharCommand extends Command
@@ -15,7 +15,7 @@ class AutomacoesDespacharCommand extends Command
 
     protected $description = 'Despacha execuções de automação fiscal vencidas para a fila';
 
-    public function handle(): int
+    public function handle(AgendaAutomacaoProximaExecucaoService $proximas): int
     {
         OperadoraContext::disableScope();
 
@@ -37,8 +37,15 @@ class AutomacoesDespacharCommand extends Command
             $despachadas = 0;
 
             foreach ($vinculos as $vinculo) {
-                $periodoFim = $agora->copy()->startOfDay();
-                $periodoInicio = $periodoFim->copy()->subDays(30);
+                $agenda = $vinculo->agenda;
+                if (! $agenda) {
+                    continue;
+                }
+
+                [$periodoInicio, $periodoFim] = $proximas->periodoConsulta(
+                    (int) $vinculo->empresa_operadora_id,
+                    $agora
+                );
 
                 $idempotency = sprintf(
                     'agenda:%d:%s',
@@ -75,7 +82,7 @@ class AutomacoesDespacharCommand extends Command
 
                 $vinculo->update([
                     'last_run_at' => $agora,
-                    'next_run_at' => $this->calcularProxima($agora, $vinculo->agenda?->frequencia, $vinculo->agenda?->horarios[0] ?? '06:00'),
+                    'next_run_at' => $proximas->calcular($agenda, $agora),
                 ]);
 
                 $despachadas++;
@@ -87,21 +94,5 @@ class AutomacoesDespacharCommand extends Command
         } finally {
             OperadoraContext::enableScope();
         }
-    }
-
-    private function calcularProxima(Carbon $agora, ?string $frequencia, string $horario): Carbon
-    {
-        [$h, $m] = array_pad(explode(':', $horario), 2, '0');
-        $proxima = $agora->copy()->setTime((int) $h, (int) $m, 0);
-
-        if ($proxima->lessThanOrEqualTo($agora)) {
-            $proxima->addDay();
-        }
-
-        return match ($frequencia) {
-            'semanal' => $proxima->addWeek()->subDay(),
-            'mensal' => $agora->copy()->addMonth()->setTime((int) $h, (int) $m),
-            default => $proxima,
-        };
     }
 }

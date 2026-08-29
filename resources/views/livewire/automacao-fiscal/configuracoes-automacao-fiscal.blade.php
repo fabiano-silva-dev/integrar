@@ -182,7 +182,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Frequência</label>
-                            <select wire:model="agendaFrequencia" class="mt-1 w-full border-gray-300 rounded-md">
+                            <select wire:model.live="agendaFrequencia" class="mt-1 w-full border-gray-300 rounded-md">
                                 <option value="diaria">Diária</option>
                                 <option value="semanal">Semanal</option>
                                 <option value="mensal">Mensal</option>
@@ -190,6 +190,34 @@
                                 <option value="manual">Manual</option>
                             </select>
                         </div>
+                        @if ($agendaFrequencia === 'semanal')
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Dias da semana</label>
+                                <div class="mt-1 flex flex-wrap gap-3 text-sm">
+                                    @foreach ([1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'] as $dia => $label)
+                                        <label class="inline-flex items-center gap-1">
+                                            <input type="checkbox" wire:model="agendaDiasSemana" value="{{ $dia }}" class="rounded border-gray-300 text-indigo-600">
+                                            {{ $label }}
+                                        </label>
+                                    @endforeach
+                                </div>
+                                @error('agendaDiasSemana') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
+                        @if ($agendaFrequencia === 'mensal')
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Dias do mês</label>
+                                <input type="text" wire:model="agendaDiasMes" placeholder="1, 15, 31" class="mt-1 w-full border-gray-300 rounded-md">
+                                @error('agendaDiasMes') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
+                        @if ($agendaFrequencia === 'intervalo')
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Intervalo (minutos)</label>
+                                <input type="number" wire:model="agendaIntervalo" min="5" class="mt-1 w-full border-gray-300 rounded-md">
+                                @error('agendaIntervalo') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Horário</label>
                             <input type="time" wire:model="agendaHorario" class="mt-1 w-full border-gray-300 rounded-md">

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\EmpresaIntegracaoRecurso;
+use App\Services\AutomacaoFiscal\AgendaAutomacaoProximaExecucaoService;
 use App\Services\OperadoraContext;
 use Illuminate\Console\Command;
 
@@ -12,7 +13,7 @@ class AutomacoesRecalcularProximasCommand extends Command
 
     protected $description = 'Recalcula next_run_at dos recursos com agenda ativa';
 
-    public function handle(): int
+    public function handle(AgendaAutomacaoProximaExecucaoService $proximas): int
     {
         OperadoraContext::disableScope();
 
@@ -25,18 +26,13 @@ class AutomacoesRecalcularProximasCommand extends Command
                 ->get();
 
             foreach ($vinculos as $vinculo) {
-                if (!$vinculo->agenda || !$vinculo->agenda->ativo) {
+                if (! $vinculo->agenda || ! $vinculo->agenda->ativo) {
                     continue;
                 }
 
-                $horario = $vinculo->agenda->horarios[0] ?? '06:00';
-                [$h, $m] = array_pad(explode(':', $horario), 2, '0');
-                $proxima = now()->copy()->setTime((int) $h, (int) $m);
-                if ($proxima->lessThanOrEqualTo(now())) {
-                    $proxima->addDay();
-                }
-
-                $vinculo->update(['next_run_at' => $proxima]);
+                $vinculo->update([
+                    'next_run_at' => $proximas->calcular($vinculo->agenda, now()),
+                ]);
                 $atualizados++;
             }
 
