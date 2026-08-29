@@ -17,6 +17,10 @@ class SeletorOperadoraGlobal extends Component
 
     public function updatedOperadoraSelecionada($value): void
     {
+        if (! auth()->user()?->isSuperAdmin()) {
+            abort(403, 'Apenas super admin pode trocar de escritório.');
+        }
+
         if ($value) {
             OperadoraContext::set((int) $value);
         } else {

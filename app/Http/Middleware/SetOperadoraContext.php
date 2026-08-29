@@ -16,18 +16,22 @@ class SetOperadoraContext
     {
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             return $next($request);
         }
 
-        if (!$user->isSuperAdmin() && !$user->empresa_operadora_id) {
+        if (! $user->isSuperAdmin() && ! $user->empresa_operadora_id) {
             abort(403, 'Usuário sem escritório vinculado.');
+        }
+
+        if (! $user->isSuperAdmin()) {
+            session()->forget('operadora_context_id');
         }
 
         if ($user->isSuperAdmin() && session()->has('operadora_context_id')) {
             $operadora = EmpresasOperadora::find(session('operadora_context_id'));
 
-            if (!$operadora || !($operadora->ativo ?? true)) {
+            if (! $operadora || ! ($operadora->ativo ?? true)) {
                 OperadoraContext::clear();
                 session()->forget('empresa_selecionada_id');
             }
@@ -42,7 +46,7 @@ class SetOperadoraContext
     {
         $empresaId = session('empresa_selecionada_id');
 
-        if (!$empresaId) {
+        if (! $empresaId) {
             return;
         }
 
@@ -52,13 +56,13 @@ class SetOperadoraContext
 
         if ($operadoraId !== null) {
             $query->where('empresa_operadora_id', $operadoraId);
-        } elseif (!$user->isSuperAdmin()) {
+        } elseif (! $user->isSuperAdmin()) {
             session()->forget('empresa_selecionada_id');
 
             return;
         }
 
-        if (!$query->exists()) {
+        if (! $query->exists()) {
             session()->forget('empresa_selecionada_id');
         }
     }

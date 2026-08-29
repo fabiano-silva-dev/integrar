@@ -159,7 +159,7 @@ Route::middleware(['auth'])->group(function () {
         }
         session()->save();
         return redirect()->to(request()->query('redirect', url()->previous()));
-    })->name('trocar-operadora');
+    })->middleware('role:super_admin')->name('trocar-operadora');
 });
 
 // Rotas de download protegidas por autenticação

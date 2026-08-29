@@ -24,11 +24,17 @@ class TenantAutomacaoFiscalTest extends TestCase
     use DatabaseTransactions;
 
     private EmpresasOperadora $operadoraA;
+
     private EmpresasOperadora $operadoraB;
+
     private User $userA;
+
     private Empresa $empresaA;
+
     private Empresa $empresaB;
+
     private PortalIntegracao $portal;
+
     private PortalRecurso $recurso;
 
     protected function setUp(): void
@@ -214,7 +220,112 @@ class TenantAutomacaoFiscalTest extends TestCase
 
         OperadoraStorage::put('automacao-fiscal/artefatos/exec-1', 'saida.txt', 'conteudo', $this->operadoraA->id);
 
-        $this->assertTrue(Storage::exists($this->operadoraA->id . '/automacao-fiscal/artefatos/exec-1/saida.txt'));
-        $this->assertFalse(Storage::exists($this->operadoraB->id . '/automacao-fiscal/artefatos/exec-1/saida.txt'));
+        $this->assertTrue(Storage::exists($this->operadoraA->id.'/automacao-fiscal/artefatos/exec-1/saida.txt'));
+        $this->assertFalse(Storage::exists($this->operadoraB->id.'/automacao-fiscal/artefatos/exec-1/saida.txt'));
+    }
+
+    public function test_nao_vincula_certificado_de_outro_escritorio(): void
+    {
+        $this->actingAs($this->userA);
+
+        $certificadoB = CertificadoDigital::create([
+            'empresa_operadora_id' => $this->operadoraB->id,
+            'nome' => 'Certificado B',
+            'tipo' => 'A1',
+            'arquivo_path' => 'fake.pfx',
+            'senha_criptografada' => 'x',
+            'ativo' => true,
+        ]);
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        app(\App\Services\AutomacaoFiscal\EmpresaIntegracaoService::class)->sincronizar($this->empresaA, [
+            [
+                'portal_codigo' => 'ecac_rs',
+                'ativo' => true,
+                'certificado_digital_id' => $certificadoB->id,
+                'recursos' => [
+                    'nfe_emitidas' => ['ativo' => true],
+                ],
+            ],
+        ]);
+    }
+
+    public function test_nao_vincula_agenda_de_outro_escritorio(): void
+    {
+        $this->actingAs($this->userA);
+
+        $agendaB = AgendaAutomacao::create([
+            'empresa_operadora_id' => $this->operadoraB->id,
+            'nome' => 'Agenda B',
+            'ativo' => true,
+            'frequencia' => 'diaria',
+            'horarios' => ['06:00'],
+        ]);
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        app(\App\Services\AutomacaoFiscal\EmpresaIntegracaoService::class)->sincronizar($this->empresaA, [
+            [
+                'portal_codigo' => 'ecac_rs',
+                'ativo' => true,
+                'recursos' => [
+                    'nfe_emitidas' => [
+                        'ativo' => true,
+                        'agenda_automacao_id' => $agendaB->id,
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    public function test_vincula_certificado_e_agenda_do_mesmo_escritorio(): void
+    {
+        $this->actingAs($this->userA);
+
+        $certificado = CertificadoDigital::create([
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'nome' => 'Certificado A',
+            'tipo' => 'A1',
+            'arquivo_path' => 'fake-a.pfx',
+            'senha_criptografada' => 'x',
+            'ativo' => true,
+        ]);
+
+        $agenda = AgendaAutomacao::create([
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'nome' => 'Agenda A',
+            'ativo' => true,
+            'frequencia' => 'diaria',
+            'horarios' => ['06:00'],
+        ]);
+
+        app(\App\Services\AutomacaoFiscal\EmpresaIntegracaoService::class)->sincronizar($this->empresaA, [
+            [
+                'portal_codigo' => 'ecac_rs',
+                'ativo' => true,
+                'certificado_digital_id' => $certificado->id,
+                'recursos' => [
+                    'nfe_emitidas' => [
+                        'ativo' => true,
+                        'agenda_automacao_id' => $agenda->id,
+                    ],
+                ],
+            ],
+        ]);
+
+        $integracao = EmpresaIntegracao::query()
+            ->where('empresa_id', $this->empresaA->id)
+            ->where('portal_integracao_id', $this->portal->id)
+            ->firstOrFail();
+
+        $this->assertSame($certificado->id, $integracao->certificado_digital_id);
+
+        $vinculo = EmpresaIntegracaoRecurso::query()
+            ->where('empresa_integracao_id', $integracao->id)
+            ->where('portal_recurso_id', $this->recurso->id)
+            ->firstOrFail();
+
+        $this->assertSame($agenda->id, $vinculo->agenda_automacao_id);
     }
 }

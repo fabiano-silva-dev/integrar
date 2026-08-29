@@ -2,11 +2,14 @@
 
 namespace App\Services\AutomacaoFiscal;
 
+use App\Models\AgendaAutomacao;
+use App\Models\CertificadoDigital;
 use App\Models\Empresa;
 use App\Models\EmpresaIntegracao;
 use App\Models\EmpresaIntegracaoRecurso;
 use App\Models\PortalIntegracao;
 use App\Models\PortalRecurso;
+use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\DB;
 
 class EmpresaIntegracaoService
@@ -16,14 +19,21 @@ class EmpresaIntegracaoService
      */
     public function sincronizar(Empresa $empresa, array $portais): void
     {
-        DB::transaction(function () use ($empresa, $portais) {
+        $operadoraId = (int) $empresa->empresa_operadora_id;
+        $contextoId = OperadoraContext::id();
+
+        if ($contextoId !== null && $operadoraId !== (int) $contextoId) {
+            abort(403, 'Empresa fora do escritório atual.');
+        }
+
+        DB::transaction(function () use ($empresa, $portais, $operadoraId) {
             foreach ($portais as $portalConfig) {
                 $portal = PortalIntegracao::query()
                     ->where('codigo', $portalConfig['portal_codigo'])
                     ->where('ativo', true)
                     ->first();
 
-                if (!$portal) {
+                if (! $portal) {
                     continue;
                 }
 
@@ -36,7 +46,10 @@ class EmpresaIntegracaoService
                     [
                         'ativo' => (bool) ($portalConfig['ativo'] ?? false),
                         'modo_autenticacao' => 'certificado_a1',
-                        'certificado_digital_id' => $portalConfig['certificado_digital_id'] ?? null,
+                        'certificado_digital_id' => $this->resolverCertificadoId(
+                            $portalConfig['certificado_digital_id'] ?? null,
+                            $operadoraId
+                        ),
                         'status_configuracao' => ($portalConfig['ativo'] ?? false) ? 'configurado' : 'pendente',
                     ]
                 );
@@ -59,12 +72,39 @@ class EmpresaIntegracaoService
                         [
                             'empresa_operadora_id' => $empresa->empresa_operadora_id,
                             'ativo' => (bool) ($cfg['ativo'] ?? false),
-                            'agenda_automacao_id' => $cfg['agenda_automacao_id'] ?? null,
+                            'agenda_automacao_id' => $this->resolverAgendaId(
+                                $cfg['agenda_automacao_id'] ?? null,
+                                $operadoraId
+                            ),
                             'parametros' => $cfg['parametros'] ?? null,
                         ]
                     );
                 }
             }
         });
+    }
+
+    private function resolverCertificadoId(mixed $id, int $operadoraId): ?int
+    {
+        if ($id === null || $id === '' || $id === false) {
+            return null;
+        }
+
+        return CertificadoDigital::query()
+            ->where('empresa_operadora_id', $operadoraId)
+            ->findOrFail((int) $id)
+            ->id;
+    }
+
+    private function resolverAgendaId(mixed $id, int $operadoraId): ?int
+    {
+        if ($id === null || $id === '' || $id === false) {
+            return null;
+        }
+
+        return AgendaAutomacao::query()
+            ->where('empresa_operadora_id', $operadoraId)
+            ->findOrFail((int) $id)
+            ->id;
     }
 }

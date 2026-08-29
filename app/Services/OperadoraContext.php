@@ -27,25 +27,31 @@ class OperadoraContext
 
     public static function id(): ?int
     {
+        $user = Auth::user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if (! $user->isSuperAdmin()) {
+            return $user->empresa_operadora_id;
+        }
+
         if (session()->has('operadora_context_id')) {
             return (int) session('operadora_context_id');
         }
 
-        $user = Auth::user();
-
-        if (!$user) {
-            return null;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return null;
-        }
-
-        return $user->empresa_operadora_id;
+        return null;
     }
 
     public static function set(?int $operadoraId): void
     {
+        $user = Auth::user();
+
+        if (! $user || ! $user->isSuperAdmin()) {
+            abort(403, 'Apenas super admin pode trocar de escritório.');
+        }
+
         if ($operadoraId === null) {
             session()->forget('operadora_context_id');
             session()->forget('empresa_selecionada_id');
@@ -91,18 +97,18 @@ class OperadoraContext
 
     public static function superAdminPrecisaSelecionarEscritorio(): bool
     {
-        return self::isSuperAdmin() && !self::hasOperadoraContext();
+        return self::isSuperAdmin() && ! self::hasOperadoraContext();
     }
 
     public static function resolveEmpresa(?int $empresaId): Empresa
     {
-        if (!$empresaId) {
+        if (! $empresaId) {
             abort(422, 'Selecione uma empresa.');
         }
 
         $empresa = Empresa::find($empresaId);
 
-        if (!$empresa) {
+        if (! $empresa) {
             abort(404, 'Empresa não encontrada.');
         }
 

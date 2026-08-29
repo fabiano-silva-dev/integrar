@@ -20,9 +20,13 @@ class TenantIsolationTest extends TestCase
     use DatabaseTransactions;
 
     private EmpresasOperadora $operadoraA;
+
     private EmpresasOperadora $operadoraB;
+
     private User $userA;
+
     private Empresa $empresaA;
+
     private Empresa $empresaB;
 
     protected function setUp(): void
@@ -287,5 +291,43 @@ class TenantIsolationTest extends TestCase
         $conversao = app(ConversaoPdfOfxService::class)->criarRegistro('sicredi', 'extrato.pdf');
 
         $this->assertSame($this->operadoraA->id, $conversao->empresa_operadora_id);
+    }
+
+    public function test_usuario_comum_nao_acessa_trocar_operadora(): void
+    {
+        $this->actingAs($this->userA);
+
+        $this->get(route('trocar-operadora', ['id' => $this->operadoraB->id]))
+            ->assertForbidden();
+
+        $this->assertNull(session('operadora_context_id'));
+        $this->assertSame($this->operadoraA->id, OperadoraContext::id());
+    }
+
+    public function test_sessao_adulterada_nao_altera_tenant_de_usuario_comum(): void
+    {
+        $this->actingAs($this->userA)
+            ->withSession(['operadora_context_id' => $this->operadoraB->id])
+            ->get(route('home'))
+            ->assertOk();
+
+        $this->assertNull(session('operadora_context_id'));
+        $this->assertSame($this->operadoraA->id, OperadoraContext::id());
+
+        $empresas = Empresa::whereIn('id', [$this->empresaA->id, $this->empresaB->id])->get();
+        $this->assertCount(1, $empresas);
+        $this->assertEquals($this->empresaA->id, $empresas->first()->id);
+    }
+
+    public function test_super_admin_troca_operadora_pela_rota(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($superAdmin)
+            ->get(route('trocar-operadora', ['id' => $this->operadoraB->id]))
+            ->assertRedirect();
+
+        $this->assertSame($this->operadoraB->id, session('operadora_context_id'));
+        $this->assertSame($this->operadoraB->id, OperadoraContext::id());
     }
 }
