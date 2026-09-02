@@ -328,8 +328,8 @@ class ImportacaoEmpresasService
                         'agenda_automacao_id' => $agendaId,
                     ],
                     'nfse_recebidas' => [
-                        'ativo' => false,
-                        'agenda_automacao_id' => null,
+                        'ativo' => (bool) ($dados['habilitar_nfse'] || $dados['habilitar_nfse_nacional']),
+                        'agenda_automacao_id' => $agendaId,
                     ],
                 ],
             ],

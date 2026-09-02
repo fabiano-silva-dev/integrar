@@ -336,10 +336,17 @@ class GerenciadorEmpresas extends Component
         foreach ($this->integracoesForm as $portalCodigo => $cfg) {
             $recursos = [];
             foreach (($cfg['recursos'] ?? []) as $recursoCodigo => $recursoCfg) {
-                $recursos[$recursoCodigo] = [
+                $recursoPayload = [
                     'ativo' => (bool) ($recursoCfg['ativo'] ?? false),
                     'agenda_automacao_id' => $recursoCfg['agenda_automacao_id'] ?: null,
                 ];
+
+                $parametros = $this->parametrosRecursoParaSalvar($recursoCodigo, $recursoCfg);
+                if ($parametros !== null) {
+                    $recursoPayload['parametros'] = $parametros;
+                }
+
+                $recursos[$recursoCodigo] = $recursoPayload;
             }
 
             $payload[] = [
@@ -441,6 +448,7 @@ class GerenciadorEmpresas extends Component
                 $recursosForm[$recurso->codigo] = [
                     'ativo' => (bool) ($vinculo?->ativo ?? false),
                     'agenda_automacao_id' => $vinculo?->agenda_automacao_id,
+                    'parametros' => $this->parametrosRecursoParaForm($recurso->codigo, $vinculo?->parametros),
                 ];
             }
 
@@ -452,6 +460,70 @@ class GerenciadorEmpresas extends Component
         }
 
         $this->integracoesForm = $form;
+    }
+
+    /**
+     * @param  array<string, mixed>  $recursoCfg
+     * @return array<string, mixed>|null
+     */
+    private function parametrosRecursoParaSalvar(string $recursoCodigo, array $recursoCfg): ?array
+    {
+        if ($recursoCodigo !== 'nfe_emitidas' && $recursoCodigo !== 'nfce_emitidas') {
+            return null;
+        }
+
+        $p = (array) ($recursoCfg['parametros'] ?? []);
+        $modelo = (string) ($p['modelo'] ?? 'nfe');
+        if (! in_array($modelo, ['nfe', 'nfce', 'ambos'], true)) {
+            $modelo = 'nfe';
+        }
+
+        $operacao = (string) ($p['operacao'] ?? 'saida-consulente');
+        $operacoesValidas = [
+            'saida-consulente',
+            'saida-terceiros',
+            'entrada-consulente',
+            'entrada-terceiros',
+        ];
+        if (! in_array($operacao, $operacoesValidas, true)) {
+            $operacao = 'saida-consulente';
+        }
+
+        return [
+            'modelo' => $modelo,
+            'operacao' => $operacao,
+            'situacao_normal' => filter_var($p['situacao_normal'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'situacao_cancelada' => filter_var($p['situacao_cancelada'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'totalizado_por_mes' => filter_var($p['totalizado_por_mes'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'excluir_venda_fora_estabelecimento' => filter_var(
+                $p['excluir_venda_fora_estabelecimento'] ?? false,
+                FILTER_VALIDATE_BOOLEAN
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $parametros
+     * @return array<string, mixed>
+     */
+    private function parametrosRecursoParaForm(string $recursoCodigo, ?array $parametros): array
+    {
+        if ($recursoCodigo !== 'nfe_emitidas' && $recursoCodigo !== 'nfce_emitidas') {
+            return is_array($parametros) ? $parametros : [];
+        }
+
+        $p = is_array($parametros) ? $parametros : [];
+
+        return [
+            'modelo' => $p['modelo'] ?? 'nfe',
+            'operacao' => $p['operacao'] ?? 'saida-consulente',
+            'situacao_normal' => array_key_exists('situacao_normal', $p)
+                ? (bool) $p['situacao_normal']
+                : true,
+            'situacao_cancelada' => (bool) ($p['situacao_cancelada'] ?? false),
+            'totalizado_por_mes' => (bool) ($p['totalizado_por_mes'] ?? false),
+            'excluir_venda_fora_estabelecimento' => (bool) ($p['excluir_venda_fora_estabelecimento'] ?? false),
+        ];
     }
 
     private function limparFormulario()

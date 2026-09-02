@@ -208,28 +208,75 @@
                                                 Escritório = entrada como contador; certificado da empresa = responsável legal.
                                             </p>
 
-                                            <div class="mt-4 space-y-2">
+                                            <div class="mt-4 space-y-3">
                                                 @foreach($portal->recursos->where('codigo', '!=', 'validar_acesso') as $recurso)
-                                                    <div class="flex flex-wrap items-center gap-3 bg-gray-50 rounded-lg p-3">
-                                                        <label class="flex items-center gap-2 min-w-[180px]">
-                                                            <input type="checkbox"
-                                                                   wire:model.live="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.ativo"
-                                                                   class="rounded border-gray-300 text-indigo-600">
-                                                            <span class="text-sm text-gray-800">{{ $recurso->nome }}</span>
-                                                        </label>
-                                                        <select wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.agenda_automacao_id"
-                                                                class="border-gray-300 rounded-md text-sm">
-                                                            <option value="">Sem agenda</option>
-                                                            @foreach($agendas as $agenda)
-                                                                <option value="{{ $agenda->id }}">{{ $agenda->nome }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                        @if(filter_var($integracoesForm[$codigo]['recursos'][$recurso->codigo]['ativo'] ?? false, FILTER_VALIDATE_BOOLEAN))
-                                                            <button type="button"
-                                                                    wire:click="executarAgora({{ $recurso->id }})"
-                                                                    class="text-xs text-indigo-600 hover:underline">
-                                                                Executar agora
-                                                            </button>
+                                                    @php
+                                                        $recursoAtivo = filter_var($integracoesForm[$codigo]['recursos'][$recurso->codigo]['ativo'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                                                        $ehExtratoEcac = in_array($recurso->codigo, ['nfe_emitidas', 'nfce_emitidas'], true);
+                                                    @endphp
+                                                    <div class="bg-gray-50 rounded-lg p-3 space-y-3">
+                                                        <div class="flex flex-wrap items-center gap-3">
+                                                            <label class="flex items-center gap-2 min-w-[180px]">
+                                                                <input type="checkbox"
+                                                                       wire:model.live="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.ativo"
+                                                                       class="rounded border-gray-300 text-indigo-600">
+                                                                <span class="text-sm text-gray-800">{{ $recurso->nome }}</span>
+                                                            </label>
+                                                            <select wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.agenda_automacao_id"
+                                                                    class="border-gray-300 rounded-md text-sm">
+                                                                <option value="">Sem agenda</option>
+                                                                @foreach($agendas as $agenda)
+                                                                    <option value="{{ $agenda->id }}">{{ $agenda->nome }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                            @if($recursoAtivo)
+                                                                <button type="button"
+                                                                        wire:click="executarAgora({{ $recurso->id }})"
+                                                                        class="text-xs text-indigo-600 hover:underline">
+                                                                    Executar agora
+                                                                </button>
+                                                            @endif
+                                                        </div>
+
+                                                        @if($ehExtratoEcac && $recursoAtivo)
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-gray-200 pt-3">
+                                                                <div>
+                                                                    <label class="block text-xs font-medium text-gray-600">Modelo (agenda)</label>
+                                                                    <select wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.parametros.modelo"
+                                                                            class="mt-1 w-full border-gray-300 rounded-md text-sm">
+                                                                        <option value="nfe">NF-e</option>
+                                                                        <option value="nfce">NFC-e</option>
+                                                                        <option value="ambos">NF-e e NFC-e</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="block text-xs font-medium text-gray-600">Operação (agenda)</label>
+                                                                    <select wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.parametros.operacao"
+                                                                            class="mt-1 w-full border-gray-300 rounded-md text-sm">
+                                                                        <option value="saida-consulente">Saída emitidas pelo consulente</option>
+                                                                        <option value="saida-terceiros">Saída emitidas por terceiros</option>
+                                                                        <option value="entrada-consulente">Entrada emitidas pelo consulente</option>
+                                                                        <option value="entrada-terceiros">Entrada emitidas por terceiros</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="md:col-span-2 flex flex-wrap gap-4 text-sm text-gray-700">
+                                                                    <label class="inline-flex items-center gap-2">
+                                                                        <input type="checkbox"
+                                                                               wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.parametros.situacao_normal"
+                                                                               class="rounded border-gray-300 text-indigo-600">
+                                                                        Situação normal
+                                                                    </label>
+                                                                    <label class="inline-flex items-center gap-2">
+                                                                        <input type="checkbox"
+                                                                               wire:model="integracoesForm.{{ $codigo }}.recursos.{{ $recurso->codigo }}.parametros.situacao_cancelada"
+                                                                               class="rounded border-gray-300 text-indigo-600">
+                                                                        Situação cancelada
+                                                                    </label>
+                                                                </div>
+                                                                <p class="md:col-span-2 text-xs text-gray-500">
+                                                                    Usados nas execuções agendadas deste recurso. O período continua vindo da configuração geral do escritório.
+                                                                </p>
+                                                            </div>
                                                         @endif
                                                     </div>
                                                 @endforeach

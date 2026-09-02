@@ -50,7 +50,8 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Período padrão (dias)</label>
-                            <input type="number" wire:model="periodo_padrao_dias" class="mt-1 w-full border-gray-300 rounded-md">
+                            <input type="number" wire:model="periodo_padrao_dias" min="1" max="30" class="mt-1 w-full border-gray-300 rounded-md">
+                            <p class="mt-1 text-xs text-gray-500">Máx. 30 dias (limite do Portal Nacional da NFS-e).</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Execuções simultâneas</label>

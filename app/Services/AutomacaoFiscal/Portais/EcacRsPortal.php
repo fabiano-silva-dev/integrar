@@ -166,16 +166,21 @@ class EcacRsPortal implements PortalAutomacao
 
         $ie = $this->somenteDigitos($p['ie'] ?? $empresa?->inscricao_estadual);
         $cnpj = $this->somenteDigitos($p['cnpj'] ?? $empresa?->cnpj);
+        $usarPeriodoExecucao = $execucao->gatilho === 'agendado';
 
         return [
             'loginPapel' => $loginPapel,
             'ie' => $ie !== '' ? $ie : null,
             'cnpj' => $cnpj !== '' ? $cnpj : null,
             'modelo' => $modelo,
-            'periodoInicial' => $p['periodo_inicial']
-                ?? optional($execucao->periodo_inicio)->format('Y-m-d'),
-            'periodoFinal' => $p['periodo_final']
-                ?? optional($execucao->periodo_fim)->format('Y-m-d'),
+            'periodoInicial' => $usarPeriodoExecucao
+                ? optional($execucao->periodo_inicio)->format('Y-m-d')
+                : ($p['periodo_inicial']
+                    ?? optional($execucao->periodo_inicio)->format('Y-m-d')),
+            'periodoFinal' => $usarPeriodoExecucao
+                ? optional($execucao->periodo_fim)->format('Y-m-d')
+                : ($p['periodo_final']
+                    ?? optional($execucao->periodo_fim)->format('Y-m-d')),
             'operacao' => $p['operacao'] ?? 'saida-consulente',
             'situacaoNormal' => array_key_exists('situacao_normal', $p)
                 ? (bool) $p['situacao_normal']

@@ -15,7 +15,7 @@ return new class extends Migration
                 ->constrained('empresas_operadoras')
                 ->cascadeOnDelete();
             $table->string('timezone', 64)->default('America/Sao_Paulo');
-            $table->unsignedInteger('periodo_padrao_dias')->default(31);
+            $table->unsignedInteger('periodo_padrao_dias')->default(30);
             $table->unsignedInteger('max_execucoes_simultaneas')->default(1);
             $table->unsignedInteger('politica_tentativas')->default(3);
             $table->unsignedInteger('retencao_logs_dias')->default(90);

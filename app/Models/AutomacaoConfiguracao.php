@@ -35,7 +35,7 @@ class AutomacaoConfiguracao extends Model
     {
         return [
             'timezone' => 'America/Sao_Paulo',
-            'periodo_padrao_dias' => 31,
+            'periodo_padrao_dias' => 30,
             'max_execucoes_simultaneas' => 1,
             'politica_tentativas' => 3,
             'retencao_logs_dias' => 90,

@@ -8,7 +8,9 @@ use App\Models\AutomacaoExecucao;
 use App\Models\AutomacaoExecucaoLog;
 use App\Models\CertificadoDigital;
 use App\Models\Empresa;
+use App\Models\EmpresaIntegracaoRecurso;
 use App\Models\PortalIntegracao;
+use App\Services\AutomacaoFiscal\AgendaAutomacaoProximaExecucaoService;
 use App\Services\AutomacaoFiscal\CertificadoDigitalService;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Auth;
@@ -28,7 +30,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
     public string $timezone = 'America/Sao_Paulo';
 
     /** @var int|string */
-    public $periodo_padrao_dias = 31;
+    public $periodo_padrao_dias = 30;
 
     /** @var int|string */
     public $max_execucoes_simultaneas = 1;
@@ -118,7 +120,7 @@ class ConfiguracoesAutomacaoFiscal extends Component
 
         $this->validate([
             'timezone' => 'required|string|max:64',
-            'periodo_padrao_dias' => 'required|integer|min:1|max:31',
+            'periodo_padrao_dias' => 'required|integer|min:1|max:30',
             'max_execucoes_simultaneas' => 'required|integer|min:1|max:20',
             'politica_tentativas' => 'required|integer|min:1|max:10',
             'retencao_logs_dias' => 'required|integer|min:1|max:3650',
@@ -235,7 +237,9 @@ class ConfiguracoesAutomacaoFiscal extends Component
         ];
 
         if ($this->agendaId) {
-            AgendaAutomacao::findOrFail($this->agendaId)->update($payload);
+            $agenda = AgendaAutomacao::findOrFail($this->agendaId);
+            $agenda->update($payload);
+            $this->recalcularProximasDaAgenda($agenda->fresh());
             session()->flash('message', 'Agenda atualizada.');
         } else {
             AgendaAutomacao::create($payload);
@@ -326,6 +330,22 @@ class ConfiguracoesAutomacaoFiscal extends Component
         }
 
         return array_values(array_unique($dias));
+    }
+
+    private function recalcularProximasDaAgenda(AgendaAutomacao $agenda): void
+    {
+        $proximas = app(AgendaAutomacaoProximaExecucaoService::class);
+        $agora = now();
+
+        EmpresaIntegracaoRecurso::query()
+            ->where('agenda_automacao_id', $agenda->id)
+            ->where('ativo', true)
+            ->get()
+            ->each(function (EmpresaIntegracaoRecurso $vinculo) use ($agenda, $proximas, $agora) {
+                $vinculo->update([
+                    'next_run_at' => $proximas->calcular($agenda, $agora),
+                ]);
+            });
     }
 
     private function carregarConfiguracao(): void

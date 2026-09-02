@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\DB;
 
 class EmpresaIntegracaoService
 {
+    public function __construct(
+        private readonly AgendaAutomacaoProximaExecucaoService $proximas
+    ) {
+    }
+
     /**
      * @param  array<int, array{portal_codigo: string, ativo: bool, certificado_digital_id?: int|null, recursos: array<string, array{ativo: bool, agenda_automacao_id?: int|null, parametros?: array<string, mixed>}>}>  $portais
      */
@@ -63,25 +68,61 @@ class EmpresaIntegracaoService
                     }
 
                     $cfg = $recursosInput[$recurso->codigo] ?? ['ativo' => false];
+                    $ativo = (bool) ($cfg['ativo'] ?? false);
+                    $agendaId = $this->resolverAgendaId(
+                        $cfg['agenda_automacao_id'] ?? null,
+                        $operadoraId
+                    );
+
+                    $existente = EmpresaIntegracaoRecurso::query()
+                        ->where('empresa_integracao_id', $integracao->id)
+                        ->where('portal_recurso_id', $recurso->id)
+                        ->first();
+
+                    $payload = [
+                        'empresa_operadora_id' => $empresa->empresa_operadora_id,
+                        'ativo' => $ativo,
+                        'agenda_automacao_id' => $agendaId,
+                        'parametros' => array_key_exists('parametros', $cfg)
+                            ? $cfg['parametros']
+                            : ($existente?->parametros),
+                    ];
+
+                    $payload['next_run_at'] = $this->resolverNextRunAt(
+                        $ativo,
+                        $agendaId,
+                        $existente
+                    );
 
                     EmpresaIntegracaoRecurso::query()->updateOrCreate(
                         [
                             'empresa_integracao_id' => $integracao->id,
                             'portal_recurso_id' => $recurso->id,
                         ],
-                        [
-                            'empresa_operadora_id' => $empresa->empresa_operadora_id,
-                            'ativo' => (bool) ($cfg['ativo'] ?? false),
-                            'agenda_automacao_id' => $this->resolverAgendaId(
-                                $cfg['agenda_automacao_id'] ?? null,
-                                $operadoraId
-                            ),
-                            'parametros' => $cfg['parametros'] ?? null,
-                        ]
+                        $payload
                     );
                 }
             }
         });
+    }
+
+    private function resolverNextRunAt(bool $ativo, ?int $agendaId, ?EmpresaIntegracaoRecurso $existente): ?\Carbon\Carbon
+    {
+        if (! $ativo || $agendaId === null) {
+            return null;
+        }
+
+        $agendaMudou = ! $existente || (int) $existente->agenda_automacao_id !== $agendaId;
+        if (! $agendaMudou && $existente->next_run_at !== null) {
+            return $existente->next_run_at;
+        }
+
+        $agenda = AgendaAutomacao::query()->find($agendaId);
+        if (! $agenda) {
+            return null;
+        }
+
+        return $this->proximas->calcular($agenda, now());
     }
 
     private function resolverCertificadoId(mixed $id, int $operadoraId): ?int

@@ -150,14 +150,20 @@ class NfseNacionalPortal implements PortalAutomacao
             default => 'emitidas',
         };
 
+        $usarPeriodoExecucao = $execucao->gatilho === 'agendado';
+
         return [
             'tipo' => $p['tipo'] ?? $tipo,
-            'periodoInicial' => $p['periodo_inicial']
-                ?? $p['periodo_inicio']
-                ?? optional($execucao->periodo_inicio)->format('Y-m-d'),
-            'periodoFinal' => $p['periodo_final']
-                ?? $p['periodo_fim']
-                ?? optional($execucao->periodo_fim)->format('Y-m-d'),
+            'periodoInicial' => $usarPeriodoExecucao
+                ? optional($execucao->periodo_inicio)->format('Y-m-d')
+                : ($p['periodo_inicial']
+                    ?? $p['periodo_inicio']
+                    ?? optional($execucao->periodo_inicio)->format('Y-m-d')),
+            'periodoFinal' => $usarPeriodoExecucao
+                ? optional($execucao->periodo_fim)->format('Y-m-d')
+                : ($p['periodo_final']
+                    ?? $p['periodo_fim']
+                    ?? optional($execucao->periodo_fim)->format('Y-m-d')),
             'busca' => trim((string) ($p['busca'] ?? '')),
         ];
     }

@@ -34,7 +34,8 @@ class AgendaAutomacaoProximaExecucaoService
             ->where('empresa_operadora_id', $operadoraId)
             ->first();
 
-        $dias = max(1, (int) ($config?->periodo_padrao_dias ?? 31));
+        // NFS-e rejeita > 30 dias; e-CAC aceita até 31 — 30 atende ambos.
+        $dias = min(30, max(1, (int) ($config?->periodo_padrao_dias ?? 30)));
         $tz = $config?->timezone ?: 'America/Sao_Paulo';
         $fim = $referencia->copy()->timezone($tz)->startOfDay();
         $inicio = $fim->copy()->subDays($dias);
