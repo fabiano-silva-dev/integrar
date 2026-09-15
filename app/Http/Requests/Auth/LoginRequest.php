@@ -49,6 +49,17 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $user = Auth::user();
+
+        if ($user && ! $user->podeAcessarSistema()) {
+            $mensagem = $user->mensagemBloqueioAcesso();
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => $mensagem,
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

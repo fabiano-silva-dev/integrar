@@ -56,6 +56,12 @@ class OperadoraContext
             session()->forget('operadora_context_id');
             session()->forget('empresa_selecionada_id');
         } else {
+            $operadora = EmpresasOperadora::find($operadoraId);
+
+            if (! $operadora || ! $operadora->estaAtiva()) {
+                abort(403, 'Escritório inexistente ou desativado.');
+            }
+
             session(['operadora_context_id' => $operadoraId]);
         }
     }

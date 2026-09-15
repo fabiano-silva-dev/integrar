@@ -75,6 +75,11 @@
                     <input type="text" wire:model.defer="subdominio" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-500 shadow-sm" placeholder="ex: dalongaro">
                     @error('subdominio') <span class="text-red-600 text-sm">{{ $message }}</span> @enderror
                 </div>
+                <div class="flex items-center gap-2 md:col-span-2">
+                    <input id="escritorio-ativo" type="checkbox" wire:model="ativo" class="rounded border-gray-300 text-indigo-600">
+                    <label for="escritorio-ativo" class="font-semibold text-gray-700">Escritório ativo</label>
+                    <span class="text-sm text-gray-500">Desmarcado, os usuários deste escritório não entram no sistema.</span>
+                </div>
             </div>
             <div class="mt-8 flex justify-end gap-2">
                 <button type="submit" class="bg-blue-700 text-white px-8 py-2 rounded-lg font-semibold hover:bg-blue-800 shadow">{{ $modoEdicao ? 'Atualizar' : 'Cadastrar' }}</button>
@@ -151,12 +156,13 @@
                             <th class="px-4 py-3 font-bold">Telefone</th>
                             <th class="px-4 py-3 font-bold">E-mail</th>
                             <th class="px-4 py-3 font-bold">Plano</th>
+                            <th class="px-4 py-3 font-bold">Status</th>
                             <th class="px-4 py-3 font-bold">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($empresas as $empresa)
-                            <tr class="border-b even:bg-gray-50 hover:bg-blue-50 transition-colors">
+                            <tr class="border-b even:bg-gray-50 hover:bg-blue-50 transition-colors {{ $empresa->ativo ? '' : 'opacity-70' }}">
                                 <td class="px-4 py-2">
                                     @if($empresa->logo)
                                         <img src="{{ Storage::url($empresa->logo) }}" class="h-8 rounded">
@@ -167,13 +173,24 @@
                                 <td class="px-4 py-2">{{ $empresa->telefone }}</td>
                                 <td class="px-4 py-2">{{ $empresa->email }}</td>
                                 <td class="px-4 py-2 capitalize">{{ $empresa->plano ?? 'basico' }}</td>
-                                <td class="px-4 py-2 flex gap-2">
+                                <td class="px-4 py-2">
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {{ $empresa->ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                        {{ $empresa->ativo ? 'Ativo' : 'Desativado' }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2 flex flex-wrap gap-2">
                                     <button wire:click="editarEmpresa({{ $empresa->id }})" class="text-blue-700 hover:underline font-semibold">Editar</button>
+                                    <button
+                                        wire:click="toggleAtivo({{ $empresa->id }})"
+                                        wire:confirm="{{ $empresa->ativo ? 'Desativar este escritório? Os usuários não poderão entrar até reativá-lo.' : 'Ativar este escritório novamente?' }}"
+                                        class="{{ $empresa->ativo ? 'text-amber-700' : 'text-green-700' }} hover:underline font-semibold">
+                                        {{ $empresa->ativo ? 'Desativar' : 'Ativar' }}
+                                    </button>
                                     <button wire:click="excluirEmpresa({{ $empresa->id }})" class="text-red-600 hover:underline font-semibold" onclick="return confirm('Tem certeza que deseja excluir?')">Excluir</button>
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="text-center text-gray-400 py-6">Nenhuma empresa cadastrada.</td></tr>
+                            <tr><td colspan="8" class="text-center text-gray-400 py-6">Nenhuma empresa cadastrada.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

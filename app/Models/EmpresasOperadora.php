@@ -41,4 +41,9 @@ class EmpresasOperadora extends Model
     {
         return $this->hasMany(Empresa::class, 'empresa_operadora_id');
     }
+
+    public function estaAtiva(): bool
+    {
+        return (bool) ($this->ativo ?? true);
+    }
 }

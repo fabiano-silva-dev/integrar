@@ -94,6 +94,16 @@
                                     <p class="mt-1 text-xs text-gray-500">{{ $niveisAcesso[$role]['resumo'] }}</p>
                                 @endif
                             </div>
+
+                            <div class="flex items-center gap-2 md:col-span-2 lg:col-span-4">
+                                <input id="usuario-ativo" type="checkbox" wire:model="ativo" class="rounded border-gray-300 text-indigo-600" @disabled($modoEdicao && ! $podeAlterarStatus)>
+                                <label for="usuario-ativo" class="text-sm font-medium text-gray-700">Usuário ativo</label>
+                                @if ($modoEdicao && ! $podeAlterarStatus)
+                                    <span class="text-xs text-gray-500">Você não pode inativar o próprio usuário.</span>
+                                @else
+                                    <span class="text-xs text-gray-500">Desmarcado, a pessoa não entra no sistema.</span>
+                                @endif
+                            </div>
                             
                             <div class="flex items-end space-x-3">
                                 <button type="submit" 
@@ -199,12 +209,13 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">E-mail</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nível</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             @foreach($usuarios as $usuario)
-                                <tr class="hover:bg-gray-50 transition duration-200">
+                                <tr class="hover:bg-gray-50 transition duration-200 {{ $usuario->ativo ? '' : 'bg-gray-50 opacity-80' }}">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         #{{ $usuario->id }}
                                     </td>
@@ -232,12 +243,24 @@
                                             </span>
                                         @endif
                                     </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $usuario->ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                            {{ $usuario->ativo ? 'Ativo' : 'Inativo' }}
+                                        </span>
+                                    </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <div class="flex space-x-2">
                                             @if (auth()->user()?->podeEditarUsuario($usuario))
                                                 <button class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-md transition duration-200"
                                                         wire:click="editarUsuario({{ $usuario->id }})">
                                                     ✏️ Editar
+                                                </button>
+                                            @endif
+                                            @if (auth()->user()?->podeAlterarStatusUsuario($usuario))
+                                                <button class="{{ $usuario->ativo ? 'text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100' : 'text-green-700 hover:text-green-900 bg-green-50 hover:bg-green-100' }} px-3 py-1 rounded-md transition duration-200"
+                                                        wire:click="toggleAtivo({{ $usuario->id }})"
+                                                        wire:confirm="{{ $usuario->ativo ? 'Inativar este usuário? Ele não poderá entrar no sistema.' : 'Ativar este usuário novamente?' }}">
+                                                    {{ $usuario->ativo ? 'Inativar' : 'Ativar' }}
                                                 </button>
                                             @endif
                                             @if (auth()->user()?->podeExcluirUsuario($usuario))

@@ -6,6 +6,7 @@ use App\Models\CertificadoDigital;
 use App\Models\EmpresasOperadora;
 use App\Rules\CnpjValido;
 use App\Services\AutomacaoFiscal\CertificadoDigitalService;
+use App\Services\OperadoraContext;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -32,6 +33,7 @@ class EmpresasOperadorasForm extends Component
     public $limite_empresas;
     public $limite_usuarios;
     public $subdominio;
+    public $ativo = true;
     public $modoEdicao = false;
 
     /** Upload A1 do escritório (contador) — só em edição. */
@@ -67,6 +69,7 @@ class EmpresasOperadorasForm extends Component
                 'alpha_dash',
                 Rule::unique('empresas_operadoras', 'subdominio')->ignore($this->empresa_id),
             ],
+            'ativo' => 'boolean',
         ];
     }
 
@@ -101,6 +104,7 @@ class EmpresasOperadorasForm extends Component
         $this->limite_empresas = null;
         $this->limite_usuarios = null;
         $this->subdominio = null;
+        $this->ativo = true;
         $this->modoEdicao = false;
         $this->certificadoArquivo = null;
         $this->certificadoNome = '';
@@ -112,6 +116,7 @@ class EmpresasOperadorasForm extends Component
     {
         $dados = $this->validate();
         $dados['cnpj'] = CnpjValido::format($dados['cnpj']);
+        $dados['ativo'] = (bool) $this->ativo;
         if ($this->logo) {
             $dados['logo'] = $this->logo->store('logos', 'public');
         } elseif ($this->logo_atual) {
@@ -204,6 +209,7 @@ class EmpresasOperadorasForm extends Component
         $this->limite_empresas = $empresa->limite_empresas;
         $this->limite_usuarios = $empresa->limite_usuarios;
         $this->subdominio = $empresa->subdominio;
+        $this->ativo = (bool) $empresa->ativo;
         $this->modoEdicao = true;
     }
 
@@ -227,6 +233,36 @@ class EmpresasOperadorasForm extends Component
         $this->resetarCampos();
         $this->carregarEmpresas();
         session()->flash('message', 'Escritório excluído com sucesso.');
+    }
+
+    public function toggleAtivo(int $id): void
+    {
+        $empresa = EmpresasOperadora::find($id);
+
+        if (! $empresa) {
+            return;
+        }
+
+        $empresa->ativo = ! $empresa->ativo;
+        $empresa->save();
+
+        if (! $empresa->ativo && (int) session('operadora_context_id') === (int) $empresa->id) {
+            OperadoraContext::clear();
+            session()->forget('empresa_selecionada_id');
+        }
+
+        session()->flash(
+            'message',
+            $empresa->ativo
+                ? 'Escritório ativado.'
+                : 'Escritório desativado. Os usuários deste escritório não poderão entrar.'
+        );
+
+        $this->carregarEmpresas();
+
+        if ((int) $this->empresa_id === (int) $empresa->id) {
+            $this->ativo = (bool) $empresa->ativo;
+        }
     }
 
     public function render()

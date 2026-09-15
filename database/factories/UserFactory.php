@@ -24,6 +24,7 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'role' => 'operador',
             'empresa_operadora_id' => EmpresasOperadora::factory(),
+            'ativo' => true,
         ];
     }
 

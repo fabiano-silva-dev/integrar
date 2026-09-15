@@ -17,6 +17,7 @@ class GerenciadorUsuarios extends Component
     public $email;
     public $password;
     public $role = 'operador';
+    public $ativo = true;
     public $modoEdicao = false;
 
     protected function rules()
@@ -26,6 +27,7 @@ class GerenciadorUsuarios extends Component
             'email' => 'required|email|max:255|unique:users,email,' . ($this->usuario_id ?? 'NULL'),
             'password' => $this->usuario_id ? 'nullable|min:6' : 'required|min:6',
             'role' => ['required', Rule::in($this->niveisValidosNoFormulario())],
+            'ativo' => 'boolean',
         ];
     }
 
@@ -61,6 +63,8 @@ class GerenciadorUsuarios extends Component
 
         $this->usuarios = User::doEscritorio()
             ->where('role', '!=', 'super_admin')
+            ->orderByDesc('ativo')
+            ->orderBy('name')
             ->get();
     }
 
@@ -71,6 +75,7 @@ class GerenciadorUsuarios extends Component
         $this->email = '';
         $this->password = '';
         $this->role = 'operador';
+        $this->ativo = true;
         $this->modoEdicao = false;
     }
 
@@ -200,6 +205,9 @@ class GerenciadorUsuarios extends Component
 
                 $usuario->name = $this->name;
                 $usuario->email = $this->email;
+                if ($ator->podeAlterarStatusUsuario($usuario)) {
+                    $usuario->ativo = (bool) $this->ativo;
+                }
                 if ($ator->podeAlterarNivelDe($usuario)) {
                     if (! $ator->podeAtribuirNivel($this->role)) {
                         session()->flash('error', 'Você não pode atribuir este nível de acesso.');
@@ -219,6 +227,7 @@ class GerenciadorUsuarios extends Component
                 }
 
                 $dados['password'] = Hash::make($this->password);
+                $dados['ativo'] = (bool) $this->ativo;
                 User::create($dados);
                 session()->flash('message', 'Usuário cadastrado com sucesso!');
             }
@@ -244,6 +253,7 @@ class GerenciadorUsuarios extends Component
         $this->name = $usuario->name;
         $this->email = $usuario->email;
         $this->role = $usuario->role;
+        $this->ativo = (bool) $usuario->ativo;
         $this->password = '';
         $this->modoEdicao = true;
     }
@@ -270,18 +280,53 @@ class GerenciadorUsuarios extends Component
         }
     }
 
+    public function toggleAtivo(int $id): void
+    {
+        try {
+            $ator = Auth::user();
+            $usuario = User::doEscritorio()->findOrFail($id);
+
+            if (! $ator || ! $ator->podeAlterarStatusUsuario($usuario)) {
+                session()->flash('error', $usuario->id === Auth::id()
+                    ? 'Você não pode inativar o próprio usuário.'
+                    : 'Você não pode alterar o status deste usuário.');
+                return;
+            }
+
+            $usuario->ativo = ! $usuario->ativo;
+            $usuario->save();
+
+            session()->flash(
+                'message',
+                $usuario->ativo
+                    ? 'Usuário ativado.'
+                    : 'Usuário inativado. Ele não poderá entrar no sistema.'
+            );
+
+            if ((int) $this->usuario_id === (int) $usuario->id) {
+                $this->ativo = (bool) $usuario->ativo;
+            }
+
+            $this->carregarUsuarios();
+        } catch (\Exception $e) {
+            session()->flash('error', 'Erro ao alterar status do usuário: ' . $e->getMessage());
+        }
+    }
+
     public function render()
     {
         $ator = Auth::user();
         $alvo = $this->usuario_id ? User::doEscritorio()->find($this->usuario_id) : null;
         $niveisAtribuiveis = $ator ? $ator->niveisQuePodeAtribuir() : [];
         $podeAlterarNivel = $alvo ? ($ator?->podeAlterarNivelDe($alvo) ?? false) : true;
+        $podeAlterarStatus = $alvo ? ($ator?->podeAlterarStatusUsuario($alvo) ?? false) : true;
 
         return view('livewire.gerenciador-usuarios', [
             'precisaSelecionarEscritorio' => OperadoraContext::superAdminPrecisaSelecionarEscritorio(),
             'niveisAcesso' => $this->niveisAcesso(),
             'niveisAtribuiveis' => $niveisAtribuiveis,
             'podeAlterarNivel' => $podeAlterarNivel,
+            'podeAlterarStatus' => $podeAlterarStatus,
         ]);
     }
 }

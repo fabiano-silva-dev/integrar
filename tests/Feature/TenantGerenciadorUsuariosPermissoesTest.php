@@ -155,4 +155,45 @@ class TenantGerenciadorUsuariosPermissoesTest extends TestCase
             'role' => 'gerente',
         ]);
     }
+
+    public function test_admin_inativa_operador(): void
+    {
+        $this->actingAs($this->admin);
+
+        Livewire::test(GerenciadorUsuarios::class)
+            ->call('toggleAtivo', $this->operador->id)
+            ->assertHasNoErrors();
+
+        $this->assertFalse($this->operador->fresh()->ativo);
+    }
+
+    public function test_admin_nao_inativa_o_proprio_usuario(): void
+    {
+        $this->actingAs($this->admin);
+
+        Livewire::test(GerenciadorUsuarios::class)
+            ->call('toggleAtivo', $this->admin->id);
+
+        $this->assertTrue($this->admin->fresh()->ativo);
+    }
+
+    public function test_gerente_nao_inativa_administrador(): void
+    {
+        $this->actingAs($this->gerente);
+
+        Livewire::test(GerenciadorUsuarios::class)
+            ->call('toggleAtivo', $this->admin->id);
+
+        $this->assertTrue($this->admin->fresh()->ativo);
+    }
+
+    public function test_gerente_inativa_operador(): void
+    {
+        $this->actingAs($this->gerente);
+
+        Livewire::test(GerenciadorUsuarios::class)
+            ->call('toggleAtivo', $this->operador->id);
+
+        $this->assertFalse($this->operador->fresh()->ativo);
+    }
 }

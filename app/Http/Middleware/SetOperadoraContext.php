@@ -24,6 +24,21 @@ class SetOperadoraContext
             abort(403, 'Usuário sem escritório vinculado.');
         }
 
+        if (! $user->podeAcessarSistema()) {
+            $mensagem = $user->mensagemBloqueioAcesso();
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            if ($request->expectsJson()) {
+                abort(403, $mensagem);
+            }
+
+            return redirect()
+                ->route('login')
+                ->withErrors(['email' => $mensagem]);
+        }
+
         if (! $user->isSuperAdmin()) {
             session()->forget('operadora_context_id');
         }

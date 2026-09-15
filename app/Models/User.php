@@ -20,6 +20,7 @@ class User extends Authenticatable
         'password',
         'role',
         'empresa_operadora_id',
+        'ativo',
     ];
 
     protected $hidden = [
@@ -41,6 +42,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'ativo' => 'boolean',
         ];
     }
 
@@ -60,6 +62,11 @@ class User extends Authenticatable
     }
 
     public function podeVerLogDocumentos(): bool
+    {
+        return $this->isSuperAdmin() || $this->isEscritorioAdmin();
+    }
+
+    public function podeGerenciarPdfConversaoErro(): bool
     {
         return $this->isSuperAdmin() || $this->isEscritorioAdmin();
     }
@@ -105,6 +112,49 @@ class User extends Authenticatable
         }
 
         return false;
+    }
+
+    public function estaAtivo(): bool
+    {
+        return (bool) ($this->ativo ?? true);
+    }
+
+    public function escritorioPermiteAcesso(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $operadora = $this->empresaOperadora;
+
+        return $operadora !== null && (bool) $operadora->ativo;
+    }
+
+    public function podeAcessarSistema(): bool
+    {
+        return $this->estaAtivo() && $this->escritorioPermiteAcesso();
+    }
+
+    public function mensagemBloqueioAcesso(): string
+    {
+        if (! $this->estaAtivo()) {
+            return 'Este usuário está inativo.';
+        }
+
+        if (! $this->escritorioPermiteAcesso()) {
+            return 'Este escritório está desativado.';
+        }
+
+        return 'Acesso não autorizado.';
+    }
+
+    public function podeAlterarStatusUsuario(self $alvo): bool
+    {
+        if ((int) $alvo->id === (int) $this->id) {
+            return false;
+        }
+
+        return $this->podeEditarUsuario($alvo);
     }
 
     public function podeExcluirUsuario(self $alvo): bool
