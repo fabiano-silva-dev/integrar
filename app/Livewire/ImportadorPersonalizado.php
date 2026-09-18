@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Services\ConversorExcelService;
+use App\Services\DetectorTabelaPlanilhaService;
 use App\Services\ExtratorTabelaPdfService;
 use App\Services\OperadoraStorage;
 
@@ -72,6 +73,10 @@ class ImportadorPersonalizado extends Component
     public $pdfAnalise = null;
     public $pdfTabelaEscolhida = 0;
     public $pdfIgnorarTotais = true;
+
+    public $excelAnalise = null;
+    public $excelAbaEscolhida = '';
+    public $excelTabelaEscolhida = 0;
 
     protected $listeners = ['atualizarPrevia'];
 
@@ -488,6 +493,9 @@ class ImportadorPersonalizado extends Component
             $this->dadosPrevia = [];
             $this->pdfAnalise = null;
             $this->pdfTabelaEscolhida = 0;
+            $this->excelAnalise = null;
+            $this->excelAbaEscolhida = '';
+            $this->excelTabelaEscolhida = 0;
 
             $extensao = strtolower($this->arquivo->getClientOriginalExtension());
             $this->tipoArquivo = $extensao;
@@ -498,6 +506,11 @@ class ImportadorPersonalizado extends Component
 
             if ($extensao === 'pdf') {
                 $this->analisarPdf();
+                return;
+            }
+
+            if (in_array($extensao, ['xls', 'xlsx'], true)) {
+                $this->analisarExcel();
                 return;
             }
 
@@ -627,6 +640,190 @@ class ImportadorPersonalizado extends Component
         return $tabelas[$this->pdfTabelaEscolhida] ?? $tabelas[0] ?? null;
     }
 
+    public function analisarExcel(): void
+    {
+        $this->processando = true;
+        try {
+            $detector = new DetectorTabelaPlanilhaService();
+            $resultado = $detector->analisar($this->arquivo->getRealPath());
+
+            if (!($resultado['sucesso'] ?? false)) {
+                $this->excelAnalise = null;
+                session()->flash('error', $resultado['erro'] ?? 'Não foi possível identificar uma tabela nesta planilha.');
+                return;
+            }
+
+            $this->excelAnalise = $resultado;
+            $this->delimitador = ',';
+            $this->temCabecalho = true;
+            $this->linhaCabecalho = 1;
+            $this->step = 1;
+
+            $abasComTabela = $this->abasExcelComTabela();
+            if ($abasComTabela === []) {
+                $this->excelAnalise = null;
+                session()->flash('error', 'Nenhuma aba com estrutura de tabela foi identificada.');
+                return;
+            }
+
+            if ($resultado['escolha_automatica'] ?? false) {
+                $this->excelAbaEscolhida = (string) ($resultado['aba_escolhida'] ?? $abasComTabela[0]['nome']);
+                $this->excelTabelaEscolhida = (int) ($resultado['tabela_escolhida'] ?? 0);
+                $this->aplicarCabecalhoExcel();
+                return;
+            }
+
+            $abaPadrao = (string) ($resultado['aba_escolhida'] ?? $abasComTabela[0]['nome']);
+            $this->excelAbaEscolhida = $abaPadrao;
+            $this->excelTabelaEscolhida = $this->indiceTabelaPadraoDaAba($abaPadrao);
+        } finally {
+            $this->processando = false;
+        }
+    }
+
+    public function selecionarAbaExcel(string $aba): void
+    {
+        $nomes = array_column($this->abasExcelComTabela(), 'nome');
+        if (!in_array($aba, $nomes, true)) {
+            return;
+        }
+
+        $this->excelAbaEscolhida = $aba;
+        $this->excelTabelaEscolhida = $this->indiceTabelaPadraoDaAba($aba);
+    }
+
+    public function selecionarTabelaExcel(int $indice): void
+    {
+        foreach ($this->tabelasExcelDaAba() as $tabela) {
+            if ((int) ($tabela['indice'] ?? -1) === $indice) {
+                $this->excelTabelaEscolhida = $indice;
+                $this->excelAbaEscolhida = (string) ($tabela['aba'] ?? $this->excelAbaEscolhida);
+                return;
+            }
+        }
+    }
+
+    public function confirmarTabelaExcel(): void
+    {
+        if (!in_array($this->tipoArquivo, ['xls', 'xlsx'], true) || empty($this->excelAnalise['tabelas'])) {
+            session()->flash('error', 'Analise a planilha antes de continuar.');
+            return;
+        }
+
+        if ($this->tabelaExcelSelecionada() === null) {
+            session()->flash('error', 'Selecione uma tabela para importar.');
+            return;
+        }
+
+        $this->aplicarCabecalhoExcel();
+    }
+
+    private function aplicarCabecalhoExcel(): void
+    {
+        $resultado = $this->extrairExcelParaCsv();
+        if (!($resultado['sucesso'] ?? false)) {
+            session()->flash('error', $resultado['erro'] ?? 'Não foi possível extrair a tabela da planilha.');
+            return;
+        }
+
+        $handle = fopen($resultado['arquivo_csv'], 'r');
+        $cabecalho = $this->lerLinhaCabecalhoCsv($handle);
+        fclose($handle);
+
+        if ($this->temCabecalho && $cabecalho) {
+            $this->colunasArquivo = array_map('trim', $cabecalho);
+        } else {
+            $this->colunasArquivo = array_map(function ($i) {
+                return 'Coluna ' . ($i + 1);
+            }, range(0, count($cabecalho) - 1));
+        }
+
+        $this->carregarPreviaAutomaticaCsvConvertido($resultado['arquivo_csv']);
+
+        if (file_exists($resultado['arquivo_csv'])) {
+            unlink($resultado['arquivo_csv']);
+        }
+
+        $this->step = 2;
+    }
+
+    private function extrairExcelParaCsv(): array
+    {
+        $detector = new DetectorTabelaPlanilhaService();
+
+        return $detector->extrair(
+            $this->arquivo->getRealPath(),
+            $this->excelAbaEscolhida !== '' ? $this->excelAbaEscolhida : null,
+            (int) $this->excelTabelaEscolhida
+        );
+    }
+
+    public function abasExcelComTabela(): array
+    {
+        $abas = [];
+        foreach ($this->excelAnalise['abas'] ?? [] as $aba) {
+            if (!empty($aba['tem_tabela'])) {
+                $abas[] = $aba;
+            }
+        }
+
+        return $abas;
+    }
+
+    public function tabelasExcelDaAba(): array
+    {
+        $tabelas = [];
+        foreach ($this->excelAnalise['tabelas'] ?? [] as $tabela) {
+            if (($tabela['aba'] ?? '') === $this->excelAbaEscolhida) {
+                $tabelas[] = $tabela;
+            }
+        }
+
+        return $tabelas;
+    }
+
+    public function tabelaExcelSelecionada(): ?array
+    {
+        foreach ($this->excelAnalise['tabelas'] ?? [] as $tabela) {
+            if ((int) ($tabela['indice'] ?? -1) === (int) $this->excelTabelaEscolhida) {
+                return $tabela;
+            }
+        }
+
+        $daAba = $this->tabelasExcelDaAba();
+
+        return $daAba[0] ?? null;
+    }
+
+    public function abaExcelSelecionada(): ?array
+    {
+        foreach ($this->abasExcelComTabela() as $aba) {
+            if (($aba['nome'] ?? '') === $this->excelAbaEscolhida) {
+                return $aba;
+            }
+        }
+
+        return $this->abasExcelComTabela()[0] ?? null;
+    }
+
+    private function indiceTabelaPadraoDaAba(string $aba): int
+    {
+        $melhor = null;
+        $melhorScore = -1;
+        foreach ($this->excelAnalise['tabelas'] ?? [] as $tabela) {
+            if (($tabela['aba'] ?? '') !== $aba) {
+                continue;
+            }
+            $score = ((int) ($tabela['linhas_dados'] ?? 0) * 10) + ((int) ($tabela['colunas'] ?? 0));
+            if ($score > $melhorScore) {
+                $melhor = $tabela;
+                $melhorScore = $score;
+            }
+        }
+
+        return (int) ($melhor['indice'] ?? 0);
+    }
+
     public function detectarDelimitador()
     {
         $conteudo = file_get_contents($this->arquivo->getRealPath());
@@ -672,6 +869,11 @@ class ImportadorPersonalizado extends Component
     {
         if ($this->tipoArquivo === 'pdf') {
             $this->aplicarCabecalhoPdf();
+            return;
+        }
+
+        if (in_array($this->tipoArquivo, ['xls', 'xlsx'], true) && !empty($this->excelAnalise['tabelas'])) {
+            $this->aplicarCabecalhoExcel();
             return;
         }
 
@@ -958,6 +1160,8 @@ class ImportadorPersonalizado extends Component
         $this->linhaCabecalho = $layout->configuracoes['linha_cabecalho'] ?? ($layout->configuracoes['linhas_pular_cabecalho'] ?? 0) + 1;
         $this->pdfTabelaEscolhida = (int) ($layout->configuracoes['pdf_indice_tabela'] ?? 0);
         $this->pdfIgnorarTotais = (bool) ($layout->configuracoes['pdf_ignorar_totais'] ?? true);
+        $this->excelAbaEscolhida = (string) ($layout->configuracoes['excel_aba'] ?? '');
+        $this->excelTabelaEscolhida = (int) ($layout->configuracoes['excel_indice_tabela'] ?? 0);
 
         // Carregar mapeamento de colunas
         $this->mapeamentoColunas = $layout->getMapeamentoColunas();
@@ -1160,6 +1364,22 @@ class ImportadorPersonalizado extends Component
 
     public function gerarPreviaExcel()
     {
+        if (!empty($this->excelAnalise['tabelas'])) {
+            $resultado = $this->extrairExcelParaCsv();
+            if (!($resultado['sucesso'] ?? false)) {
+                session()->flash('error', $resultado['erro'] ?? 'Não foi possível extrair a tabela da planilha.');
+                return;
+            }
+
+            $this->gerarPreviaCsvConvertido($resultado['arquivo_csv']);
+
+            if (file_exists($resultado['arquivo_csv'])) {
+                unlink($resultado['arquivo_csv']);
+            }
+
+            return;
+        }
+
         try {
             // Usar o conversor Python para gerar prévia
             $conversor = new ConversorExcelService();
@@ -1537,6 +1757,15 @@ class ImportadorPersonalizado extends Component
             $configuracoes['pdf_ignorar_totais'] = (bool) $this->pdfIgnorarTotais;
         }
 
+        if (in_array($this->tipoArquivo, ['xls', 'xlsx'], true)) {
+            $tabela = $this->tabelaExcelSelecionada();
+            $configuracoes['excel_aba'] = $this->excelAbaEscolhida;
+            $configuracoes['excel_indice_tabela'] = (int) $this->excelTabelaEscolhida;
+            $configuracoes['excel_linha_cabecalho'] = (int) ($tabela['linha_cabecalho'] ?? $this->linhaCabecalho);
+            $configuracoes['excel_linha_inicio'] = (int) ($tabela['linha_inicio'] ?? 0);
+            $configuracoes['excel_linha_fim'] = (int) ($tabela['linha_fim'] ?? 0);
+        }
+
         if ($layoutExistente) {
             // Se existe, usar o layout existente e atualizar as colunas
             $layout = $layoutExistente;
@@ -1638,6 +1867,21 @@ class ImportadorPersonalizado extends Component
 
     public function processarExcelCompleto($importacao)
     {
+        if (!empty($this->excelAnalise['tabelas'])) {
+            $resultado = $this->extrairExcelParaCsv();
+            if (!($resultado['sucesso'] ?? false)) {
+                throw new \Exception($resultado['erro'] ?? 'Não foi possível extrair a tabela da planilha.');
+            }
+
+            $linhasProcessadas = $this->processarCsvConvertido($resultado['arquivo_csv'], $importacao);
+
+            if (file_exists($resultado['arquivo_csv'])) {
+                unlink($resultado['arquivo_csv']);
+            }
+
+            return $linhasProcessadas;
+        }
+
         try {
             // Usar o conversor Python para processar arquivo completo
             $conversor = new ConversorExcelService();

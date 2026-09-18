@@ -249,6 +249,161 @@
                             </div>
                             @endif
                         @endif
+                        @if(in_array($tipoArquivo, ['xls', 'xlsx']) && !empty($excelAnalise['tabelas'] ?? []))
+                            @php
+                                $abaExcel = $this->abaExcelSelecionada();
+                                $tabelaExcel = $this->tabelaExcelSelecionada();
+                                $abasExcel = $this->abasExcelComTabela();
+                                $tabelasAbaExcel = $this->tabelasExcelDaAba();
+                            @endphp
+                            @if($abaExcel && $tabelaExcel)
+                            <div class="mt-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                                @if(count($abasExcel) > 1)
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Qual aba usar</h3>
+                                        <p class="mt-1 text-sm text-gray-600">Só entram abas com tabela identificada.</p>
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @foreach($abasExcel as $abaOpcao)
+                                                <button type="button" wire:click="selecionarAbaExcel({{ json_encode($abaOpcao['nome']) }})"
+                                                    @class([
+                                                        'px-3 py-2 rounded-lg text-sm font-medium border transition',
+                                                        'bg-blue-600 text-white border-blue-600' => ($abaOpcao['nome'] ?? '') === $excelAbaEscolhida,
+                                                        'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' => ($abaOpcao['nome'] ?? '') !== $excelAbaEscolhida,
+                                                    ])>
+                                                    {{ $abaOpcao['nome'] }}
+                                                    <span class="block text-xs font-normal {{ ($abaOpcao['nome'] ?? '') === $excelAbaEscolhida ? 'text-blue-100' : 'text-gray-500' }}">
+                                                        {{ count($abaOpcao['tabelas'] ?? []) }} tabela(s)
+                                                    </span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @else
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Aba identificada</h3>
+                                        <p class="mt-1 text-sm text-gray-600">{{ $abaExcel['nome'] }}</p>
+                                    </div>
+                                @endif
+
+                                @if(count($tabelasAbaExcel) > 1)
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Qual tabela importar</h3>
+                                        <p class="mt-1 text-sm text-gray-600">A planilha tem mais de uma tabela. Confira o início, o fim e o cabeçalho na prévia.</p>
+                                        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            @foreach($tabelasAbaExcel as $tabelaOpcao)
+                                                <button type="button" wire:click="selecionarTabelaExcel({{ (int) $tabelaOpcao['indice'] }})"
+                                                    @class([
+                                                        'text-left rounded-lg border p-3 transition',
+                                                        'border-blue-500 bg-blue-50 ring-1 ring-blue-500' => (int) $tabelaOpcao['indice'] === (int) $excelTabelaEscolhida,
+                                                        'border-gray-200 bg-white hover:border-blue-300' => (int) $tabelaOpcao['indice'] !== (int) $excelTabelaEscolhida,
+                                                    ])>
+                                                    <div class="text-sm font-medium text-gray-900">{{ $tabelaOpcao['nome'] }}</div>
+                                                    <div class="mt-1 text-xs text-gray-600">
+                                                        Cabeçalho na linha {{ $tabelaOpcao['linha_cabecalho'] }}
+                                                        · dados {{ $tabelaOpcao['linha_inicio'] }}–{{ $tabelaOpcao['linha_fim'] }}
+                                                    </div>
+                                                    <div class="mt-1 text-xs text-gray-500">
+                                                        {{ $tabelaOpcao['linhas_dados'] }} linha(s)
+                                                        · {{ $tabelaOpcao['colunas'] }} colunas
+                                                    </div>
+                                                    <div class="mt-2 text-xs text-gray-500 truncate">
+                                                        {{ implode(', ', array_slice($tabelaOpcao['cabecalho'] ?? [], 0, 6)) }}
+                                                    </div>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @else
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Tabela identificada</h3>
+                                        <p class="mt-1 text-sm text-gray-600">
+                                            {{ $tabelaExcel['linhas_dados'] }} linhas · {{ count($tabelaExcel['cabecalho'] ?? []) }} colunas
+                                            · cabeçalho na linha {{ $tabelaExcel['linha_cabecalho'] }}
+                                        </p>
+                                    </div>
+                                @endif
+
+                                @if(!empty($abaExcel['previa']['linhas']))
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-800 mb-2">Prévia da planilha</h4>
+                                        <div class="overflow-x-auto border border-gray-200 rounded-md max-h-80">
+                                            <table class="min-w-full text-xs">
+                                                <thead class="bg-gray-50 sticky top-0">
+                                                    <tr>
+                                                        <th class="px-2 py-1 text-left font-medium text-gray-400 w-10">#</th>
+                                                        @for($c = 0; $c < (int) ($abaExcel['previa']['colunas_exibidas'] ?? 0); $c++)
+                                                            <th class="px-2 py-1 text-left font-medium text-gray-500 whitespace-nowrap">
+                                                                {{ \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c + 1) }}
+                                                            </th>
+                                                        @endfor
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($abaExcel['previa']['linhas'] as $linhaPrevia)
+                                                        @php
+                                                            $numeroLinha = (int) $linhaPrevia['numero'];
+                                                            $ehCabecalho = $numeroLinha === (int) $tabelaExcel['linha_cabecalho'];
+                                                            $ehDados = $numeroLinha >= (int) $tabelaExcel['linha_inicio'] && $numeroLinha <= (int) $tabelaExcel['linha_fim'];
+                                                            $tabelaDaLinha = null;
+                                                            foreach ($tabelasAbaExcel as $tabelaFaixa) {
+                                                                if ($numeroLinha >= (int) $tabelaFaixa['linha_cabecalho'] && $numeroLinha <= (int) $tabelaFaixa['linha_fim']) {
+                                                                    $tabelaDaLinha = $tabelaFaixa;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        @endphp
+                                                        <tr
+                                                            @if($tabelaDaLinha)
+                                                                wire:click="selecionarTabelaExcel({{ (int) $tabelaDaLinha['indice'] }})"
+                                                                class="cursor-pointer {{ $ehCabecalho ? 'bg-blue-100 font-medium' : ($ehDados ? 'bg-blue-50' : 'bg-amber-50') }}"
+                                                            @elseif(!empty($linhaPrevia['vazia']))
+                                                                class="bg-gray-50"
+                                                            @endif
+                                                        >
+                                                            <td class="px-2 py-1 text-gray-400 whitespace-nowrap">{{ $numeroLinha }}</td>
+                                                            @foreach(($linhaPrevia['celulas'] ?? []) as $celula)
+                                                                <td class="px-2 py-1 text-gray-800 whitespace-nowrap {{ $ehCabecalho ? 'text-blue-900' : '' }}">
+                                                                    {{ \Illuminate\Support\Str::limit((string) $celula, 28) }}
+                                                                </td>
+                                                            @endforeach
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        @if((int) ($abaExcel['previa']['total_linhas'] ?? 0) > count($abaExcel['previa']['linhas']))
+                                            <p class="mt-1 text-xs text-gray-500">Mostrando as primeiras {{ count($abaExcel['previa']['linhas']) }} linhas da aba.</p>
+                                        @endif
+                                    </div>
+                                @endif
+
+                                <div class="overflow-x-auto border border-gray-200 rounded-md">
+                                    <table class="min-w-full text-sm">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                @foreach(($tabelaExcel['cabecalho'] ?? []) as $coluna)
+                                                    <th class="px-3 py-2 text-left font-medium text-gray-700 whitespace-nowrap">{{ $coluna }}</th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach(($tabelaExcel['amostra'] ?? []) as $linha)
+                                                <tr class="border-t border-gray-100">
+                                                    @foreach($linha as $celula)
+                                                        <td class="px-3 py-2 text-gray-800 whitespace-nowrap">{{ \Illuminate\Support\Str::limit((string) $celula, 40) }}</td>
+                                                    @endforeach
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <button type="button" wire:click="confirmarTabelaExcel" class="w-full h-14 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium">
+                                    Continuar para mapeamento
+                                </button>
+                            </div>
+                            @endif
+                        @endif
                         @endif
                     @endif
                 </div>
