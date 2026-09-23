@@ -672,35 +672,69 @@
                                         </button>
                                     </div>
                                     @foreach($regra['colunas_valores'] as $valorIndice => $valor)
-                                    <div class="grid grid-cols-1 md:grid-cols-6 gap-2 mb-2">
-                                        <div>
-                                            <label class="block text-xs text-gray-600">Coluna Valor</label>
-                                            <select wire:model="regrasAmarracao.{{ $indice }}.colunas_valores.{{ $valorIndice }}" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                                <option value="">Selecione</option>
-                                                @foreach($colunasArquivo as $coluna)
-                                                    <option value="{{ $coluna }}">{{ $coluna }}</option>
-                                                @endforeach
-                                            </select>
+                                    @php $origemValor = is_array($valor) ? ($valor['origem'] ?? '') : $valor; @endphp
+                                    <div class="mb-3">
+                                        <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                                            <div>
+                                                <label class="block text-xs text-gray-600">Coluna Valor</label>
+                                                <select wire:model.live="regrasAmarracao.{{ $indice }}.colunas_valores.{{ $valorIndice }}.origem" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                    <option value="">Selecione</option>
+                                                    <option value="__diferenca__">Calcular diferença entre duas colunas</option>
+                                                    @foreach($colunasArquivo as $coluna)
+                                                        <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-600">Conta Débito</label>
+                                                <input wire:model="regrasAmarracao.{{ $indice }}.contas_debito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-600">Conta Crédito</label>
+                                                <input wire:model="regrasAmarracao.{{ $indice }}.contas_credito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <label class="block text-xs text-gray-600">Histórico</label>
+                                                <input wire:model="regrasAmarracao.{{ $indice }}.historicos.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div class="flex items-end">
+                                                <button wire:click="removerValorMultiplo({{ $valorIndice }}, {{ $indice }})" type="button" class="text-red-600 hover:text-red-800 text-sm">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs text-gray-600">Conta Débito</label>
-                                            <input wire:model="regrasAmarracao.{{ $indice }}.contas_debito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs text-gray-600">Conta Crédito</label>
-                                            <input wire:model="regrasAmarracao.{{ $indice }}.contas_credito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div class="md:col-span-2">
-                                            <label class="block text-xs text-gray-600">Histórico</label>
-                                            <input wire:model="regrasAmarracao.{{ $indice }}.historicos.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div class="flex items-end">
-                                            <button wire:click="removerValorMultiplo({{ $valorIndice }}, {{ $indice }})" type="button" class="text-red-600 hover:text-red-800 text-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
+                                        @if($origemValor === '__diferenca__')
+                                            <div class="mt-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                                                    <div>
+                                                        <label class="block text-xs text-gray-600">Primeira coluna</label>
+                                                        <select wire:model.live="regrasAmarracao.{{ $indice }}.colunas_valores.{{ $valorIndice }}.coluna_inicial" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                            <option value="">Selecione</option>
+                                                            @foreach($colunasArquivo as $coluna)
+                                                                <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                    <div class="flex items-center justify-center pb-2 text-xl font-semibold text-gray-600">−</div>
+                                                    <div>
+                                                        <label class="block text-xs text-gray-600">Coluna a subtrair</label>
+                                                        <select wire:model.live="regrasAmarracao.{{ $indice }}.colunas_valores.{{ $valorIndice }}.coluna_subtrair" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                            <option value="">Selecione</option>
+                                                            @foreach($colunasArquivo as $coluna)
+                                                                <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                @if($exemplo = $this->exemploDiferencaValor($valor))
+                                                    <p class="mt-2 text-xs text-blue-700">Exemplo: {{ $exemplo }}</p>
+                                                @else
+                                                    <p class="mt-2 text-xs text-gray-500">O valor será calculado como primeira coluna menos a segunda coluna.</p>
+                                                @endif
+                                            </div>
+                                        @endif
                                     </div>
                                     @endforeach
                                 </div>
@@ -786,35 +820,69 @@
                                         </button>
                                     </div>
                                     @foreach($regraAtual['colunas_valores'] as $valorIndice => $valor)
-                                    <div class="multiples-valores-row">
-                                        <div class="multiples-valores-coluna">
-                                            <label class="block text-xs text-gray-600">Coluna Valor</label>
-                                            <select wire:model="regraAtual.colunas_valores.{{ $valorIndice }}" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                                <option value="">Selecione</option>
-                                                @foreach($colunasArquivo as $coluna)
-                                                    <option value="{{ $coluna }}">{{ $coluna }}</option>
-                                                @endforeach
-                                            </select>
+                                    @php $origemValor = is_array($valor) ? ($valor['origem'] ?? '') : $valor; @endphp
+                                    <div class="mb-3">
+                                        <div class="multiples-valores-row">
+                                            <div class="multiples-valores-coluna">
+                                                <label class="block text-xs text-gray-600">Coluna Valor</label>
+                                                <select wire:model.live="regraAtual.colunas_valores.{{ $valorIndice }}.origem" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                    <option value="">Selecione</option>
+                                                    <option value="__diferenca__">Calcular diferença entre duas colunas</option>
+                                                    @foreach($colunasArquivo as $coluna)
+                                                        <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="multiples-valores-conta">
+                                                <label class="block text-xs text-gray-600">Conta Débito</label>
+                                                <input wire:model="regraAtual.contas_debito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div class="multiples-valores-conta">
+                                                <label class="block text-xs text-gray-600">Conta Crédito</label>
+                                                <input wire:model="regraAtual.contas_credito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div class="multiples-valores-historico">
+                                                <label class="block text-xs text-gray-600">Histórico</label>
+                                                <input wire:model="regraAtual.historicos.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                            </div>
+                                            <div class="multiples-valores-botao">
+                                                <button wire:click="removerValorMultiplo({{ $valorIndice }})" type="button" class="text-red-600 hover:text-red-800 text-sm">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div class="multiples-valores-conta">
-                                            <label class="block text-xs text-gray-600">Conta Débito</label>
-                                            <input wire:model="regraAtual.contas_debito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div class="multiples-valores-conta">
-                                            <label class="block text-xs text-gray-600">Conta Crédito</label>
-                                            <input wire:model="regraAtual.contas_credito.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div class="multiples-valores-historico">
-                                            <label class="block text-xs text-gray-600">Histórico</label>
-                                            <input wire:model="regraAtual.historicos.{{ $valorIndice }}" type="text" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        </div>
-                                        <div class="multiples-valores-botao">
-                                            <button wire:click="removerValorMultiplo({{ $valorIndice }})" type="button" class="text-red-600 hover:text-red-800 text-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
+                                        @if($origemValor === '__diferenca__')
+                                            <div class="mt-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                                                    <div>
+                                                        <label class="block text-xs text-gray-600">Primeira coluna</label>
+                                                        <select wire:model.live="regraAtual.colunas_valores.{{ $valorIndice }}.coluna_inicial" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                            <option value="">Selecione</option>
+                                                            @foreach($colunasArquivo as $coluna)
+                                                                <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                    <div class="flex items-center justify-center pb-2 text-xl font-semibold text-gray-600">−</div>
+                                                    <div>
+                                                        <label class="block text-xs text-gray-600">Coluna a subtrair</label>
+                                                        <select wire:model.live="regraAtual.colunas_valores.{{ $valorIndice }}.coluna_subtrair" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                                            <option value="">Selecione</option>
+                                                            @foreach($colunasArquivo as $coluna)
+                                                                <option value="{{ $coluna }}">{{ $coluna }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                @if($exemplo = $this->exemploDiferencaValor($valor))
+                                                    <p class="mt-2 text-xs text-blue-700">Exemplo: {{ $exemplo }}</p>
+                                                @else
+                                                    <p class="mt-2 text-xs text-gray-500">O valor será calculado como primeira coluna menos a segunda coluna.</p>
+                                                @endif
+                                            </div>
+                                        @endif
                                     </div>
                                     @endforeach
                                 </div>

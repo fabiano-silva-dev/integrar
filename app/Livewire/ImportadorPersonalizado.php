@@ -59,7 +59,11 @@ class ImportadorPersonalizado extends Component
         'conta_credito_fixa' => '',
         'historico_fixo' => '',
         'centro_custo_fixo' => '',
-        'colunas_valores' => [''],
+        'colunas_valores' => [[
+            'origem' => '',
+            'coluna_inicial' => '',
+            'coluna_subtrair' => '',
+        ]],
         'contas_debito' => [''],
         'contas_credito' => [''],
         'historicos' => [''],
@@ -148,7 +152,11 @@ class ImportadorPersonalizado extends Component
             'conta_credito_fixa' => '',
             'historico_fixo' => '',
             'centro_custo_fixo' => '',
-            'colunas_valores' => [''],
+            'colunas_valores' => [[
+            'origem' => '',
+            'coluna_inicial' => '',
+            'coluna_subtrair' => '',
+        ]],
             'contas_debito' => [''],
             'contas_credito' => [''],
             'historicos' => [''],
@@ -159,13 +167,13 @@ class ImportadorPersonalizado extends Component
     {
         if ($indiceRegra !== null) {
             // Adicionar valor a uma regra específica
-            $this->regrasAmarracao[$indiceRegra]['colunas_valores'][] = '';
+            $this->regrasAmarracao[$indiceRegra]['colunas_valores'][] = $this->novaConfiguracaoValor();
             $this->regrasAmarracao[$indiceRegra]['contas_debito'][] = '';
             $this->regrasAmarracao[$indiceRegra]['contas_credito'][] = '';
             $this->regrasAmarracao[$indiceRegra]['historicos'][] = '';
         } else {
             // Adicionar valor à regra atual (para quando ainda não foi salva)
-            $this->regraAtual['colunas_valores'][] = '';
+            $this->regraAtual['colunas_valores'][] = $this->novaConfiguracaoValor();
             $this->regraAtual['contas_debito'][] = '';
             $this->regraAtual['contas_credito'][] = '';
             $this->regraAtual['historicos'][] = '';
@@ -256,7 +264,7 @@ class ImportadorPersonalizado extends Component
                 'conta_credito_fixa' => $regra->conta_credito_fixa,
                 'historico_fixo' => $regra->historico_fixo,
                 'centro_custo_fixo' => $regra->centro_custo_fixo,
-                'colunas_valores' => $regra->colunas_valores ?? [''],
+                'colunas_valores' => $this->normalizarColunasValoresParaEdicao($regra->colunas_valores ?? []),
                 'contas_debito' => $regra->contas_debito ?? [''],
                 'contas_credito' => $regra->contas_credito ?? [''],
                 'historicos' => $regra->historicos ?? [''],
@@ -297,10 +305,12 @@ class ImportadorPersonalizado extends Component
         if ($regra->coluna_descricao) $colunas[] = $regra->coluna_descricao;
         if ($regra->coluna_documento) $colunas[] = $regra->coluna_documento;
         
-        // Colunas de valores múltiplos
+        // Colunas de valores múltiplos, incluindo valores calculados.
         if ($regra->colunas_valores) {
-            foreach ($regra->colunas_valores as $coluna) {
-                if ($coluna) $colunas[] = $coluna;
+            foreach ($regra->colunas_valores as $valor) {
+                foreach ($this->colunasReferenciadasNoValor($valor) as $coluna) {
+                    $colunas[] = $coluna;
+                }
             }
         }
         
@@ -389,7 +399,7 @@ class ImportadorPersonalizado extends Component
                 'conta_credito_fixa' => $regra->conta_credito_fixa,
                 'historico_fixo' => $regra->historico_fixo,
                 'centro_custo_fixo' => $regra->centro_custo_fixo,
-                'colunas_valores' => $regra->colunas_valores ?? [''],
+                'colunas_valores' => $this->normalizarColunasValoresParaEdicao($regra->colunas_valores ?? []),
                 'contas_debito' => $regra->contas_debito ?? [''],
                 'contas_credito' => $regra->contas_credito ?? [''],
                 'historicos' => $regra->historicos ?? [''],
@@ -441,14 +451,85 @@ class ImportadorPersonalizado extends Component
     private function filtrarColunasValores($colunasValores, $colunasCompatíveis)
     {
         $colunasFiltradas = [];
-        foreach ($colunasValores as $coluna) {
-            if (in_array($coluna, $colunasCompatíveis['colunas_encontradas'])) {
-                $colunasFiltradas[] = $coluna;
-            } else {
-                $colunasFiltradas[] = ''; // Manter estrutura, mas sem valor
+
+        foreach ($this->normalizarColunasValoresParaEdicao($colunasValores) as $valor) {
+            if ($valor['origem'] === '__diferenca__') {
+                if (!in_array($valor['coluna_inicial'], $colunasCompatíveis['colunas_encontradas'], true)) {
+                    $valor['coluna_inicial'] = '';
+                }
+                if (!in_array($valor['coluna_subtrair'], $colunasCompatíveis['colunas_encontradas'], true)) {
+                    $valor['coluna_subtrair'] = '';
+                }
+            } elseif (!in_array($valor['origem'], $colunasCompatíveis['colunas_encontradas'], true)) {
+                $valor['origem'] = '';
+            }
+
+            $colunasFiltradas[] = $valor;
+        }
+
+        return $colunasFiltradas;
+    }
+
+    private function novaConfiguracaoValor(): array
+    {
+        return [
+            'origem' => '',
+            'coluna_inicial' => '',
+            'coluna_subtrair' => '',
+        ];
+    }
+
+    private function normalizarConfiguracaoValor($valor): array
+    {
+        if (is_array($valor)) {
+            return [
+                'origem' => (string) ($valor['origem'] ?? ''),
+                'coluna_inicial' => (string) ($valor['coluna_inicial'] ?? ''),
+                'coluna_subtrair' => (string) ($valor['coluna_subtrair'] ?? ''),
+            ];
+        }
+
+        $configuracao = $this->novaConfiguracaoValor();
+        $configuracao['origem'] = (string) ($valor ?? '');
+
+        return $configuracao;
+    }
+
+    private function normalizarColunasValoresParaEdicao($colunasValores): array
+    {
+        if (!is_array($colunasValores) || $colunasValores === []) {
+            return [$this->novaConfiguracaoValor()];
+        }
+
+        return array_map(
+            fn ($valor) => $this->normalizarConfiguracaoValor($valor),
+            array_values($colunasValores)
+        );
+    }
+
+    private function colunasReferenciadasNoValor($valor): array
+    {
+        $configuracao = $this->normalizarConfiguracaoValor($valor);
+
+        if ($configuracao['origem'] === '__diferenca__') {
+            return array_values(array_filter([
+                $configuracao['coluna_inicial'],
+                $configuracao['coluna_subtrair'],
+            ], fn ($coluna) => $coluna !== ''));
+        }
+
+        return $configuracao['origem'] !== '' ? [$configuracao['origem']] : [];
+    }
+
+    private function temValorConfigurado($colunasValores): bool
+    {
+        foreach ((array) $colunasValores as $valor) {
+            if ($this->normalizarConfiguracaoValor($valor)['origem'] !== '') {
+                return true;
             }
         }
-        return $colunasFiltradas;
+
+        return false;
     }
 
     public function updatedArquivo()
@@ -1567,20 +1648,28 @@ class ImportadorPersonalizado extends Component
                 }
             }
             
-            // Processar múltiplos valores se configurado
-            if (!empty($regra['colunas_valores'][0])) {
+            // Processar múltiplos valores se configurado.
+            // Cada valor pode vir diretamente de uma coluna ou da diferença entre duas colunas.
+            if ($this->temValorConfigurado($regra['colunas_valores'] ?? [])) {
                 $dados['valores_multiplos'] = [];
-                foreach ($regra['colunas_valores'] as $i => $coluna) {
-                    if ($coluna) {
-                        $indice = $this->encontrarIndiceColuna($coluna);
-                        $valor = $indice !== false ? ($linha[$indice] ?? '') : '';
-                        $dados['valores_multiplos'][] = [
-                            'valor' => $valor,
-                            'conta_debito' => $regra['contas_debito'][$i] ?? '',
-                            'conta_credito' => $regra['contas_credito'][$i] ?? '',
-                            'historico' => $regra['historicos'][$i] ?? '',
-                        ];
+
+                foreach ($regra['colunas_valores'] as $i => $configuracaoValor) {
+                    $configuracaoValor = $this->normalizarConfiguracaoValor($configuracaoValor);
+                    if ($configuracaoValor['origem'] === '') {
+                        continue;
                     }
+
+                    $valor = $this->resolverValorConfigurado($linha, $configuracaoValor);
+                    if ($valor === null) {
+                        continue;
+                    }
+
+                    $dados['valores_multiplos'][] = [
+                        'valor' => $valor,
+                        'conta_debito' => $regra['contas_debito'][$i] ?? '',
+                        'conta_credito' => $regra['contas_credito'][$i] ?? '',
+                        'historico' => $regra['historicos'][$i] ?? '',
+                    ];
                 }
             }
         } else {
@@ -1600,6 +1689,71 @@ class ImportadorPersonalizado extends Component
         }
         
         return $dados;
+    }
+
+    private function resolverValorConfigurado(array $linha, array $configuracao)
+    {
+        if ($configuracao['origem'] !== '__diferenca__') {
+            $indice = $this->encontrarIndiceColuna($configuracao['origem']);
+
+            return $indice !== false ? ($linha[$indice] ?? '') : '';
+        }
+
+        if ($configuracao['coluna_inicial'] === '' || $configuracao['coluna_subtrair'] === '') {
+            return null;
+        }
+
+        $indiceInicial = $this->encontrarIndiceColuna($configuracao['coluna_inicial']);
+        $indiceSubtrair = $this->encontrarIndiceColuna($configuracao['coluna_subtrair']);
+
+        if ($indiceInicial === false || $indiceSubtrair === false) {
+            return null;
+        }
+
+        $valorInicial = (float) $this->formatarValor($linha[$indiceInicial] ?? '');
+        $valorSubtrair = (float) $this->formatarValor($linha[$indiceSubtrair] ?? '');
+
+        return number_format($valorInicial - $valorSubtrair, 2, '.', '');
+    }
+
+    public function exemploDiferencaValor($configuracao): ?string
+    {
+        $configuracao = $this->normalizarConfiguracaoValor($configuracao);
+
+        if (
+            $configuracao['origem'] !== '__diferenca__'
+            || $configuracao['coluna_inicial'] === ''
+            || $configuracao['coluna_subtrair'] === ''
+        ) {
+            return null;
+        }
+
+        $linha = $this->dadosPrevia[0] ?? null;
+        if (!is_array($linha) || (isset($linha[0]) && is_array($linha[0]))) {
+            return null;
+        }
+
+        $indiceInicial = $this->encontrarIndiceColuna($configuracao['coluna_inicial']);
+        $indiceSubtrair = $this->encontrarIndiceColuna($configuracao['coluna_subtrair']);
+        if ($indiceInicial === false || $indiceSubtrair === false) {
+            return null;
+        }
+
+        $valorInicial = (float) $this->formatarValor($linha[$indiceInicial] ?? '');
+        $valorSubtrair = (float) $this->formatarValor($linha[$indiceSubtrair] ?? '');
+        $resultado = $valorInicial - $valorSubtrair;
+
+        return sprintf(
+            'R$ %s − R$ %s = R$ %s',
+            $this->formatarValorExemplo($valorInicial),
+            $this->formatarValorExemplo($valorSubtrair),
+            $this->formatarValorExemplo($resultado)
+        );
+    }
+
+    private function formatarValorExemplo(float $valor): string
+    {
+        return number_format($valor, 2, ',', '.');
     }
 
     private function encontrarIndiceColuna($coluna)

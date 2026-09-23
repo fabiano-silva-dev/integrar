@@ -81,6 +81,52 @@ class TenantImportadorPersonalizadoPlanilhaTest extends TestCase
             ->assertSet('colunasArquivo.2', 'Valor Bruto');
     }
 
+    public function test_calcula_diferenca_entre_duas_colunas_no_valor_do_lancamento(): void
+    {
+        $componente = new ImportadorPersonalizado();
+        $componente->colunasArquivo = ['Data', 'Valor Bruto', 'Valor Líquido'];
+        $componente->regrasAmarracao = [[
+            'tipo' => 'automatica',
+            'coluna_data' => 'Data',
+            'coluna_descricao' => '',
+            'coluna_documento' => '',
+            'colunas_valores' => [[
+                'origem' => '__diferenca__',
+                'coluna_inicial' => 'Valor Bruto',
+                'coluna_subtrair' => 'Valor Líquido',
+            ]],
+            'contas_debito' => ['1.1.1'],
+            'contas_credito' => ['3.1.1'],
+            'historicos' => ['Taxa da operação'],
+        ]];
+
+        $resultado = $componente->processarLinha(['01/09/2026', 'R$ 150,00', 'R$ 142,50']);
+
+        $this->assertSame('7.50', $resultado[0]['valores_multiplos'][0]['valor']);
+        $this->assertSame('1.1.1', $resultado[0]['valores_multiplos'][0]['conta_debito']);
+        $this->assertSame('3.1.1', $resultado[0]['valores_multiplos'][0]['conta_credito']);
+    }
+
+    public function test_mantem_compatibilidade_com_regra_antiga_de_coluna_direta(): void
+    {
+        $componente = new ImportadorPersonalizado();
+        $componente->colunasArquivo = ['Data', 'Valor'];
+        $componente->regrasAmarracao = [[
+            'tipo' => 'automatica',
+            'coluna_data' => 'Data',
+            'coluna_descricao' => '',
+            'coluna_documento' => '',
+            'colunas_valores' => ['Valor'],
+            'contas_debito' => ['1.1.1'],
+            'contas_credito' => ['3.1.1'],
+            'historicos' => ['Venda'],
+        ]];
+
+        $resultado = $componente->processarLinha(['01/09/2026', 'R$ 99,90']);
+
+        $this->assertSame('R$ 99,90', $resultado[0]['valores_multiplos'][0]['valor']);
+    }
+
     private function uploaded(string $caminho, string $nome): UploadedFile
     {
         return UploadedFile::fake()->createWithContent($nome, file_get_contents($caminho));
