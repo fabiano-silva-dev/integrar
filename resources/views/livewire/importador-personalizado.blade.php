@@ -117,27 +117,6 @@
                     </div>
                 </div>
                     
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold text-blue-800 mb-2">Layouts Disponíveis</h3>
-                        @if($empresa_id)
-                            @if($layoutsDisponiveis->count() > 0)
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                                    @foreach($layoutsDisponiveis as $layout)
-                                        <div class="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer" wire:click="carregarLayout({{ $layout->id }})">
-                                            <div class="font-medium">{{ $layout->nome }}</div>
-                                            <div class="text-sm text-gray-600">{{ strtoupper($layout->tipo_arquivo) }}</div>
-                                            <div class="text-xs text-gray-500">{{ $layout->colunas->count() }} colunas mapeadas</div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @else
-                                <p class="text-gray-600">Nenhum layout salvo encontrado para esta empresa.</p>
-                            @endif
-                        @else
-                            <p class="text-gray-600">Selecione uma empresa para ver os layouts disponíveis.</p>
-                        @endif
-                    </div>
-
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                         <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -190,7 +169,7 @@
                                 </div>
                             </div>
                         </div>
-                        @if($tipoArquivo === 'pdf' && !empty($pdfAnalise['tabelas'] ?? []))
+                        @if(!$aguardandoEscolhaLayout && $tipoArquivo === 'pdf' && !empty($pdfAnalise['tabelas'] ?? []))
                             @php $tabelaPdf = $this->tabelaPdfSelecionada(); @endphp
                             @if($tabelaPdf)
                             <div class="mt-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
@@ -249,7 +228,7 @@
                             </div>
                             @endif
                         @endif
-                        @if(in_array($tipoArquivo, ['xls', 'xlsx']) && !empty($excelAnalise['tabelas'] ?? []))
+                        @if(!$aguardandoEscolhaLayout && in_array($tipoArquivo, ['xls', 'xlsx']) && !empty($excelAnalise['tabelas'] ?? []))
                             @php
                                 $abaExcel = $this->abaExcelSelecionada();
                                 $tabelaExcel = $this->tabelaExcelSelecionada();
@@ -406,6 +385,8 @@
                         @endif
                         @endif
                     @endif
+
+                    @include('livewire.partials.layouts-disponiveis-importacao')
                 </div>
                 @endif
 
@@ -593,7 +574,7 @@
                         <div class="space-y-4">
                             <div class="flex justify-between items-center">
                                 <div class="flex items-start gap-2">
-                                    <p class="text-sm text-gray-600">Configure regras para mapeamento automático ou manual</p>
+                                    <p class="text-sm text-gray-600">Inclua as regras desta importação. Elas ficam salvas ao confirmar.</p>
                                     <div class="group relative flex-shrink-0">
                                         <svg class="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
@@ -607,11 +588,6 @@
                                     </div>
                                 </div>
                                 <div class="flex gap-2">
-                                    @if(!empty($regraAtual['nome_regra']) || !empty($regraAtual['coluna_data']) || !empty($regraAtual['conta_debito_fixa']))
-                                        <button wire:click="salvarRegra" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
-                                            Salvar Regra
-                                        </button>
-                                    @endif
                                     <button wire:click="adicionarRegra" type="button" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
                                         + Adicionar Regra
                                     </button>
@@ -770,7 +746,7 @@
                                     <h4 class="font-medium text-blue-800">Nova Regra</h4>
                                     <div class="space-x-2">
                                         <button wire:click="adicionarRegra" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
-                                            Salvar Regra
+                                            Incluir nesta importação
                                         </button>
                                         <button wire:click="resetarRegraAtual" type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-md transition duration-200">
                                             Cancelar
@@ -1157,6 +1133,22 @@
                         </div>
                     </div>
                     @endif
+
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-blue-800">O que fica salvo</h3>
+                        <p class="mt-1 text-sm text-blue-800">
+                            Layout {{ $nomeLayout !== '' ? $nomeLayout : 'sem nome' }} ({{ strtoupper($tipoArquivo) }})
+                        </p>
+                        @if(count($this->regrasQueSeraoSalvas()) > 0)
+                            <ul class="mt-2 text-sm text-blue-800 list-disc list-inside">
+                                @foreach($this->regrasQueSeraoSalvas() as $regraResumo)
+                                    <li>{{ $regraResumo['nome_regra'] }}</li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-2 text-sm text-blue-800">Os lançamentos e o mapeamento de colunas deste layout.</p>
+                        @endif
+                    </div>
 
                     <div class="flex justify-end space-x-3">
                         <button wire:click="$set('step', 2)" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-md transition duration-200">

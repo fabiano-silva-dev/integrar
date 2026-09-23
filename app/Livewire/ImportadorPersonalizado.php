@@ -73,6 +73,7 @@ class ImportadorPersonalizado extends Component
     public $totalLinhas = 0;
     public $linhasProcessadas = 0;
     public $processando = false; // Controla o estado de processamento
+    public $aguardandoEscolhaLayout = false;
 
     public $pdfAnalise = null;
     public $pdfTabelaEscolhida = 0;
@@ -99,13 +100,21 @@ class ImportadorPersonalizado extends Component
 
     public function carregarLayoutsDisponiveis()
     {
-        if ($this->empresa_id) {
-            $this->layoutsDisponiveis = LayoutImportacao::where('empresa_id', $this->empresa_id)
-                ->orderBy('nome')
-                ->get();
-        } else {
+        if (!$this->empresa_id || $this->tipoArquivo === '' || $this->tipoArquivo === null) {
             $this->layoutsDisponiveis = collect();
+
+            return;
         }
+
+        $this->layoutsDisponiveis = LayoutImportacao::query()
+            ->where('empresa_id', $this->empresa_id)
+            ->where('tipo_arquivo', $this->tipoArquivo)
+            ->with([
+                'colunas',
+                'regrasAmarracao' => fn ($query) => $query->where('ativo', true)->orderBy('ordem'),
+            ])
+            ->orderBy('nome')
+            ->get();
     }
 
     public function carregarRegrasDisponiveis()
@@ -205,48 +214,6 @@ class ImportadorPersonalizado extends Component
             $this->regraAtual['contas_credito'] = array_values($this->regraAtual['contas_credito']);
             $this->regraAtual['historicos'] = array_values($this->regraAtual['historicos']);
         }
-    }
-
-    // Métodos para salvar e selecionar regras
-    public function salvarRegra()
-    {
-        $this->validate([
-            'regraAtual.nome_regra' => 'required|string|max:255',
-            'regraAtual.tipo' => 'required|in:automatica,manual',
-        ]);
-
-        // Criar nova regra
-        $regra = new RegraAmarracaoImportacao();
-        $regra->nome_regra = $this->regraAtual['nome_regra'];
-        $regra->tipo = $this->regraAtual['tipo'];
-        $regra->coluna_data = $this->regraAtual['coluna_data'];
-        $regra->coluna_descricao = $this->regraAtual['coluna_descricao'];
-        $regra->coluna_documento = $this->regraAtual['coluna_documento'];
-        $regra->conta_debito_fixa = $this->regraAtual['conta_debito_fixa'];
-        $regra->conta_credito_fixa = $this->regraAtual['conta_credito_fixa'];
-        $regra->historico_fixo = $this->regraAtual['historico_fixo'];
-        $regra->centro_custo_fixo = $this->regraAtual['centro_custo_fixo'];
-        $regra->colunas_valores = $this->regraAtual['colunas_valores'];
-        $regra->contas_debito = $this->regraAtual['contas_debito'];
-        $regra->contas_credito = $this->regraAtual['contas_credito'];
-        $regra->historicos = $this->regraAtual['historicos'];
-        $regra->ativo = true;
-        $regra->ordem = 1;
-
-        // Associar ao layout se houver um selecionado
-        if ($this->layoutSelecionado) {
-            $regra->layout_importacao_id = $this->layoutSelecionado;
-        }
-
-        $regra->save();
-
-        // Recarregar regras disponíveis
-        $this->carregarRegrasDisponiveis();
-
-        // Resetar regra atual
-        $this->resetarRegraAtual();
-
-        session()->flash('message', 'Regra salva com sucesso!');
     }
 
     public function selecionarRegra($regraId)
@@ -569,6 +536,7 @@ class ImportadorPersonalizado extends Component
             $this->processando = true; // Ativar indicador de processamento
             
             $this->step = 1;
+            $this->aguardandoEscolhaLayout = false;
             $this->colunasArquivo = [];
             $this->mapeamentoColunas = [];
             $this->dadosPrevia = [];
@@ -613,7 +581,8 @@ class ImportadorPersonalizado extends Component
             
             session()->flash('error', 'Erro ao processar arquivo: ' . $e->getMessage());
         } finally {
-            $this->processando = false; // Desativar indicador de processamento
+            $this->processando = false;
+            $this->carregarLayoutsDisponiveis();
         }
     }
 
@@ -697,7 +666,7 @@ class ImportadorPersonalizado extends Component
             unlink($resultado['arquivo_csv']);
         }
 
-        $this->step = 2;
+        $this->liberarMapeamento();
     }
 
     private function extrairPdfParaCsv(): array
@@ -825,7 +794,7 @@ class ImportadorPersonalizado extends Component
             unlink($resultado['arquivo_csv']);
         }
 
-        $this->step = 2;
+        $this->liberarMapeamento();
     }
 
     private function extrairExcelParaCsv(): array
@@ -1030,8 +999,8 @@ class ImportadorPersonalizado extends Component
         } finally {
             $this->processando = false; // Desativar indicador de processamento
         }
-        
-        $this->step = 2;
+
+        $this->liberarMapeamento();
     }
 
     public function lerCabecalhoCsv()
@@ -1068,7 +1037,7 @@ class ImportadorPersonalizado extends Component
 
             fclose($handle);
             Log::info('Colunas do arquivo definidas:', ['colunas' => $this->colunasArquivo]);
-            $this->step = 2;
+            $this->liberarMapeamento();
         } catch (\Exception $e) {
             Log::error('Erro ao ler cabeçalho CSV:', [
                 'erro' => $e->getMessage(),
@@ -1144,8 +1113,8 @@ class ImportadorPersonalizado extends Component
         } finally {
             $this->processando = false; // Desativar indicador de processamento
         }
-        
-        $this->step = 2;
+
+        $this->liberarMapeamento();
     }
     
     private function lerCabecalhoExcelFallback()
@@ -1172,8 +1141,8 @@ class ImportadorPersonalizado extends Component
         
         // Carregar prévia automática de 10 linhas
         $this->carregarPreviaAutomaticaExcel($worksheet);
-        
-        $this->step = 2;
+
+        $this->liberarMapeamento();
     }
     
     private function carregarPreviaAutomaticaCsvConvertido($arquivoCsv)
@@ -1236,17 +1205,66 @@ class ImportadorPersonalizado extends Component
         $this->layoutSelecionado = $layout;
         $this->nomeLayout = $layout->nome;
         $this->tipoArquivo = $layout->tipo_arquivo;
-        $this->delimitador = $layout->delimitador ?? ',';
+        if ($layout->delimitador) {
+            $this->delimitador = $layout->delimitador;
+        }
         $this->temCabecalho = $layout->tem_cabecalho;
-        $this->linhaCabecalho = $layout->configuracoes['linha_cabecalho'] ?? ($layout->configuracoes['linhas_pular_cabecalho'] ?? 0) + 1;
-        $this->pdfTabelaEscolhida = (int) ($layout->configuracoes['pdf_indice_tabela'] ?? 0);
-        $this->pdfIgnorarTotais = (bool) ($layout->configuracoes['pdf_ignorar_totais'] ?? true);
-        $this->excelAbaEscolhida = (string) ($layout->configuracoes['excel_aba'] ?? '');
-        $this->excelTabelaEscolhida = (int) ($layout->configuracoes['excel_indice_tabela'] ?? 0);
 
-        // Carregar mapeamento de colunas
+        $config = is_array($layout->configuracoes) ? $layout->configuracoes : [];
+        if (array_key_exists('linha_cabecalho', $config)) {
+            $this->linhaCabecalho = (int) $config['linha_cabecalho'];
+        } elseif (array_key_exists('linhas_pular_cabecalho', $config)) {
+            $this->linhaCabecalho = (int) $config['linhas_pular_cabecalho'] + 1;
+        }
+        if (array_key_exists('pdf_indice_tabela', $config)) {
+            $this->pdfTabelaEscolhida = (int) $config['pdf_indice_tabela'];
+        }
+        if (array_key_exists('pdf_ignorar_totais', $config)) {
+            $this->pdfIgnorarTotais = (bool) $config['pdf_ignorar_totais'];
+        }
+        if (!empty($config['excel_aba'])) {
+            $this->excelAbaEscolhida = (string) $config['excel_aba'];
+        }
+        if (array_key_exists('excel_indice_tabela', $config)) {
+            $this->excelTabelaEscolhida = (int) $config['excel_indice_tabela'];
+        }
+
         $this->mapeamentoColunas = $layout->getMapeamentoColunas();
+        $this->regrasAmarracao = $layout->getRegrasAtivas()
+            ->map(fn (RegraAmarracaoImportacao $regra) => $this->regraParaFormulario($regra))
+            ->values()
+            ->all();
+        $this->resetarRegraAtual();
+        $this->aguardandoEscolhaLayout = false;
+        $this->step = 2;
+    }
 
+    public function iniciarNovoLayout(): void
+    {
+        $this->layoutSelecionado = null;
+        $this->regrasAmarracao = [];
+        $this->regraSelecionada = null;
+        $this->resetarRegraAtual();
+        $this->aguardandoEscolhaLayout = false;
+        $this->step = 2;
+    }
+
+    private function liberarMapeamento(): void
+    {
+        if ($this->step === 2) {
+            return;
+        }
+
+        $this->carregarLayoutsDisponiveis();
+
+        if (collect($this->layoutsDisponiveis)->isNotEmpty()) {
+            $this->aguardandoEscolhaLayout = true;
+            $this->step = 1;
+
+            return;
+        }
+
+        $this->aguardandoEscolhaLayout = false;
         $this->step = 2;
     }
 
@@ -1877,29 +1895,41 @@ class ImportadorPersonalizado extends Component
             'status' => 'processando',
         ]);
 
-        // Salvar layout se não existir
-        if (!$this->layoutSelecionado) {
-            $this->salvarLayout($importacao);
-        }
+        $regras = $this->regrasQueSeraoSalvas();
+        $layout = $this->salvarLayout($importacao);
+        $this->persistirRegrasDoLayout($layout, $regras);
 
-        // Processar arquivo completo
         $this->processarArquivoCompleto($importacao);
 
-        $mensagem = $this->layoutAtualizado 
-            ? 'Importação concluída com sucesso! Layout "' . $this->nomeLayout . '" foi atualizado.'
-            : 'Importação concluída com sucesso! Novo layout "' . $this->nomeLayout . '" foi criado.';
+        $mensagem = $this->layoutAtualizado
+            ? 'Importação concluída. Layout "' . $this->nomeLayout . '" atualizado.'
+            : 'Importação concluída. Layout "' . $this->nomeLayout . '" criado.';
+
+        if (count($regras) === 1) {
+            $mensagem .= ' 1 regra salva neste layout.';
+        } elseif (count($regras) > 1) {
+            $mensagem .= ' ' . count($regras) . ' regras salvas neste layout.';
+        }
         
         session()->flash('message', $mensagem);
         return redirect()->route('importacoes');
     }
 
-    public function salvarLayout($importacao)
+    public function salvarLayout($importacao): LayoutImportacao
     {
-        // Verificar se já existe um layout com esse nome para esta empresa
         $empresaId = $this->empresa_id ?? auth()->user()->empresa_id ?? 1;
-        $layoutExistente = LayoutImportacao::where('nome', $this->nomeLayout)
-            ->where('empresa_id', $empresaId)
-            ->first();
+        $layoutExistente = null;
+        $layoutId = $this->idLayoutSelecionado();
+
+        if ($layoutId) {
+            $layoutExistente = LayoutImportacao::where('empresa_id', $empresaId)->find($layoutId);
+        }
+
+        if (!$layoutExistente && $this->nomeLayout) {
+            $layoutExistente = LayoutImportacao::where('nome', $this->nomeLayout)
+                ->where('empresa_id', $empresaId)
+                ->first();
+        }
 
         $configuracoes = array_merge(($layoutExistente && $layoutExistente->configuracoes) ? $layoutExistente->configuracoes : [], [
             'linha_cabecalho' => (int) $this->linhaCabecalho,
@@ -1925,6 +1955,8 @@ class ImportadorPersonalizado extends Component
             $layout = $layoutExistente;
             $this->layoutAtualizado = true;
             $layout->update([
+                'nome' => $this->nomeLayout,
+                'tipo_arquivo' => $this->tipoArquivo ?: $layout->tipo_arquivo,
                 'delimitador' => $this->delimitador,
                 'tem_cabecalho' => $this->temCabecalho,
                 'configuracoes' => $configuracoes,
@@ -1956,6 +1988,110 @@ class ImportadorPersonalizado extends Component
                 'ordem' => array_search($colunaArquivo, $this->colunasArquivo),
             ]);
         }
+
+        $this->layoutSelecionado = $layout;
+
+        return $layout;
+    }
+
+    public function regrasQueSeraoSalvas(): array
+    {
+        $regras = $this->regrasAmarracao;
+
+        if ($this->regraTemConteudo($this->regraAtual)) {
+            $regras[] = $this->regraAtual;
+        }
+
+        $resultado = [];
+
+        foreach (array_values($regras) as $regra) {
+            if (!$this->regraTemConteudo($regra)) {
+                continue;
+            }
+
+            $nome = trim((string) ($regra['nome_regra'] ?? ''));
+            $regra['nome_regra'] = $nome !== '' ? $nome : 'Regra ' . (count($resultado) + 1);
+            $resultado[] = $regra;
+        }
+
+        return $resultado;
+    }
+
+    private function persistirRegrasDoLayout(LayoutImportacao $layout, array $regras): void
+    {
+        if ($regras === []) {
+            return;
+        }
+
+        RegraAmarracaoImportacao::where('layout_importacao_id', $layout->id)->delete();
+
+        foreach ($regras as $ordem => $dados) {
+            RegraAmarracaoImportacao::create([
+                'layout_importacao_id' => $layout->id,
+                'nome_regra' => $dados['nome_regra'],
+                'tipo' => in_array($dados['tipo'] ?? '', ['automatica', 'manual'], true) ? $dados['tipo'] : 'automatica',
+                'ordem' => $ordem + 1,
+                'ativo' => true,
+                'coluna_data' => $dados['coluna_data'] ?? null,
+                'coluna_descricao' => $dados['coluna_descricao'] ?? null,
+                'coluna_documento' => $dados['coluna_documento'] ?? null,
+                'conta_debito_fixa' => $dados['conta_debito_fixa'] ?? null,
+                'conta_credito_fixa' => $dados['conta_credito_fixa'] ?? null,
+                'historico_fixo' => $dados['historico_fixo'] ?? null,
+                'centro_custo_fixo' => $dados['centro_custo_fixo'] ?? null,
+                'colunas_valores' => $dados['colunas_valores'] ?? [],
+                'contas_debito' => $dados['contas_debito'] ?? [],
+                'contas_credito' => $dados['contas_credito'] ?? [],
+                'historicos' => $dados['historicos'] ?? [],
+            ]);
+        }
+    }
+
+    private function regraTemConteudo(?array $regra): bool
+    {
+        if (!$regra) {
+            return false;
+        }
+
+        foreach (['nome_regra', 'coluna_data', 'coluna_descricao', 'coluna_documento', 'conta_debito_fixa', 'conta_credito_fixa', 'historico_fixo'] as $campo) {
+            if (trim((string) ($regra[$campo] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return $this->temValorConfigurado($regra['colunas_valores'] ?? []);
+    }
+
+    private function regraParaFormulario(RegraAmarracaoImportacao $regra): array
+    {
+        return [
+            'nome_regra' => $regra->nome_regra,
+            'tipo' => $regra->tipo,
+            'coluna_data' => $regra->coluna_data ?? '',
+            'coluna_descricao' => $regra->coluna_descricao ?? '',
+            'coluna_documento' => $regra->coluna_documento ?? '',
+            'conta_debito_fixa' => $regra->conta_debito_fixa ?? '',
+            'conta_credito_fixa' => $regra->conta_credito_fixa ?? '',
+            'historico_fixo' => $regra->historico_fixo ?? '',
+            'centro_custo_fixo' => $regra->centro_custo_fixo ?? '',
+            'colunas_valores' => $this->normalizarColunasValoresParaEdicao($regra->colunas_valores ?? []),
+            'contas_debito' => $regra->contas_debito ?: [''],
+            'contas_credito' => $regra->contas_credito ?: [''],
+            'historicos' => $regra->historicos ?: [''],
+        ];
+    }
+
+    private function idLayoutSelecionado(): ?int
+    {
+        if ($this->layoutSelecionado instanceof LayoutImportacao) {
+            return $this->layoutSelecionado->id;
+        }
+
+        if (is_numeric($this->layoutSelecionado)) {
+            return (int) $this->layoutSelecionado;
+        }
+
+        return null;
     }
 
     public function processarArquivoCompleto($importacao)
