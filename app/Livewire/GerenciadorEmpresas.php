@@ -581,6 +581,13 @@ class GerenciadorEmpresas extends Component
         $certificados = CertificadoDigital::query()
             ->with('empresa')
             ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
             ->orderBy('nome')
             ->get();
 

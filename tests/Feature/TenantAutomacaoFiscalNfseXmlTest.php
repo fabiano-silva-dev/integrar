@@ -125,6 +125,60 @@ class TenantAutomacaoFiscalNfseXmlTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_resolve_certificado_nfse_substitui_vinculo_inativo_e_vencido(): void
+    {
+        $vencido = CertificadoDigital::create([
+            'empresa_operadora_id' => $this->operadora->id,
+            'empresa_id' => $this->empresa->id,
+            'nome' => 'A1 antigo vencido',
+            'tipo' => 'A1',
+            'arquivo_path' => 'antigo.pfx',
+            'senha_criptografada' => 'x',
+            'ativo' => false,
+            'valido_de' => now()->subYears(2),
+            'valido_ate' => now()->subDay(),
+        ]);
+
+        $ativo = CertificadoDigital::create([
+            'empresa_operadora_id' => $this->operadora->id,
+            'empresa_id' => $this->empresa->id,
+            'nome' => 'A1 atual',
+            'tipo' => 'A1',
+            'arquivo_path' => 'atual.pfx',
+            'senha_criptografada' => 'x',
+            'ativo' => true,
+            'valido_de' => now()->subMonth(),
+            'valido_ate' => now()->addYear(),
+        ]);
+
+        $integracao = EmpresaIntegracao::create([
+            'empresa_operadora_id' => $this->operadora->id,
+            'empresa_id' => $this->empresa->id,
+            'portal_integracao_id' => $this->portal->id,
+            'ativo' => true,
+            'modo_autenticacao' => 'certificado_a1',
+            'certificado_digital_id' => $vencido->id,
+            'status_configuracao' => 'configurado',
+        ]);
+
+        $documento = DocumentoFiscal::create([
+            'empresa_operadora_id' => $this->operadora->id,
+            'empresa_id' => $this->empresa->id,
+            'portal_integracao_id' => $this->portal->id,
+            'tipo_documento' => 'nfse',
+            'chave_acesso' => '43080031216679526000180000000000001726066074736113',
+            'competencia' => '2026-06',
+            'valor_total' => 1,
+            'origem' => 'nfse_nacional_extrato_txt',
+        ]);
+
+        $resolvido = app(NfseXmlDownloadService::class)->resolverCertificadoEmpresa($documento);
+
+        $this->assertNotNull($resolvido);
+        $this->assertSame($ativo->id, $resolvido->id);
+        $this->assertSame($ativo->id, $integracao->fresh()->certificado_digital_id);
+    }
+
     public function test_botao_avulso_rejeita_nfe_no_fluxo_nfse_e_vice_versa(): void
     {
         Queue::fake();

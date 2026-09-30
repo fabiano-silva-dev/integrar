@@ -251,6 +251,35 @@ class TenantAutomacaoFiscalTest extends TestCase
         ]);
     }
 
+    public function test_nao_vincula_certificado_vencido(): void
+    {
+        $this->actingAs($this->userA);
+
+        $certificado = CertificadoDigital::create([
+            'empresa_operadora_id' => $this->operadoraA->id,
+            'empresa_id' => $this->empresaA->id,
+            'nome' => 'Certificado vencido',
+            'tipo' => 'A1',
+            'arquivo_path' => 'vencido.pfx',
+            'senha_criptografada' => 'x',
+            'ativo' => true,
+            'valido_ate' => now()->subDay(),
+        ]);
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        app(\App\Services\AutomacaoFiscal\EmpresaIntegracaoService::class)->sincronizar($this->empresaA, [
+            [
+                'portal_codigo' => 'ecac_rs',
+                'ativo' => true,
+                'certificado_digital_id' => $certificado->id,
+                'recursos' => [
+                    'nfe_emitidas' => ['ativo' => true],
+                ],
+            ],
+        ]);
+    }
+
     public function test_nao_vincula_agenda_de_outro_escritorio(): void
     {
         $this->actingAs($this->userA);
