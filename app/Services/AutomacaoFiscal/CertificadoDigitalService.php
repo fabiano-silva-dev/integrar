@@ -3,6 +3,7 @@
 namespace App\Services\AutomacaoFiscal;
 
 use App\Models\CertificadoDigital;
+use App\Models\EmpresaIntegracao;
 use App\Services\OperadoraStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
@@ -71,6 +72,109 @@ class CertificadoDigitalService
             'ativo' => false,
             'status_validacao' => 'inativo',
         ]);
+
+        foreach ($certificado->empresaIntegracoes()->get() as $integracao) {
+            $this->resolverParaIntegracao($integracao);
+        }
+    }
+
+    public function utilizavel(CertificadoDigital $certificado): bool
+    {
+        if (! $certificado->ativo || strtoupper((string) $certificado->tipo) !== 'A1') {
+            return false;
+        }
+
+        $agora = now();
+
+        if ($certificado->valido_de && $certificado->valido_de->isAfter($agora)) {
+            return false;
+        }
+
+        if ($certificado->valido_ate && $certificado->valido_ate->isBefore($agora)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Resolve um A1 utilizável para a integração e repara vínculos antigos.
+     *
+     * Quando o certificado salvo está inativo, vencido ou ainda não válido,
+     * procura outro A1 ativo e válido no mesmo escopo (escritório ou empresa).
+     */
+    public function resolverParaIntegracao(
+        EmpresaIntegracao $integracao,
+        bool $repararVinculo = true
+    ): ?CertificadoDigital {
+        $integracao->loadMissing('certificadoDigital');
+        $configurado = $integracao->certificadoDigital;
+
+        if ($configurado && $this->utilizavel($configurado)) {
+            return $configurado;
+        }
+
+        $query = CertificadoDigital::query()
+            ->where('empresa_operadora_id', (int) $integracao->empresa_operadora_id)
+            ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            });
+
+        if ($configurado) {
+            if ($configurado->empresa_id === null) {
+                $query->whereNull('empresa_id');
+            } else {
+                $query->where('empresa_id', (int) $configurado->empresa_id);
+            }
+        } else {
+            $query->where('empresa_id', (int) $integracao->empresa_id);
+        }
+
+        $substituto = $query
+            ->orderByDesc('valido_ate')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($repararVinculo) {
+            $novoId = $substituto?->id;
+            $idAtual = $integracao->certificado_digital_id
+                ? (int) $integracao->certificado_digital_id
+                : null;
+
+            if ($novoId !== $idAtual) {
+                $integracao->update([
+                    'certificado_digital_id' => $novoId,
+                    'status_configuracao' => $substituto ? 'configurado' : 'pendente',
+                ]);
+                $integracao->setRelation('certificadoDigital', $substituto);
+            }
+        }
+
+        return $substituto;
+    }
+
+    public function garantirUtilizavel(CertificadoDigital $certificado): void
+    {
+        if (! $certificado->ativo) {
+            throw new RuntimeException('O certificado A1 selecionado está inativo.');
+        }
+
+        if (strtoupper((string) $certificado->tipo) !== 'A1') {
+            throw new RuntimeException('O certificado selecionado não é um certificado A1.');
+        }
+
+        if ($certificado->valido_de && $certificado->valido_de->isFuture()) {
+            throw new RuntimeException('O certificado A1 ainda não está dentro do período de validade.');
+        }
+
+        if ($certificado->valido_ate && $certificado->valido_ate->isPast()) {
+            throw new RuntimeException('O certificado A1 está vencido.');
+        }
     }
 
     /**
@@ -150,6 +254,9 @@ class CertificadoDigitalService
             ->where('tipo', 'A1')
             ->whereNull('empresa_id')
             ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
                 $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
             })
             ->orderByDesc('id')
@@ -174,6 +281,9 @@ class CertificadoDigitalService
                 [$digits]
             )
             ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
                 $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
             })
             ->orderByDesc('id')
@@ -193,6 +303,9 @@ class CertificadoDigitalService
             ->with(['empresa:id,cnpj'])
             ->where('ativo', true)
             ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
             ->where(function ($q) {
                 $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
             })
@@ -220,6 +333,8 @@ class CertificadoDigitalService
      */
     public function extrairPem(CertificadoDigital $certificado): array
     {
+        $this->garantirUtilizavel($certificado);
+
         $caminho = $this->caminhoAbsoluto($certificado);
         if ($caminho === null || ! is_file($caminho)) {
             throw new RuntimeException('Arquivo do certificado A1 não encontrado no storage.');

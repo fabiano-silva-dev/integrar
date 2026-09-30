@@ -8,6 +8,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaIntegracao;
 use App\Models\PortalRecurso;
 use App\Services\AutomacaoFiscal\AutomacaoArtefatoService;
+use App\Services\AutomacaoFiscal\CertificadoDigitalService;
 use App\Services\AutomacaoFiscal\Contratos\PortalAutomacao;
 use App\Services\AutomacaoFiscal\Contratos\ResultadoAutomacao;
 use App\Services\AutomacaoFiscal\Contratos\ResultadoValidacao;
@@ -20,7 +21,8 @@ class NfseNacionalPortal implements PortalAutomacao
     public function __construct(
         private readonly NodeRunnerBridge $runner,
         private readonly AutomacaoLogService $logs,
-        private readonly AutomacaoArtefatoService $artefatos
+        private readonly AutomacaoArtefatoService $artefatos,
+        private readonly CertificadoDigitalService $certificados
     ) {
     }
 
@@ -35,8 +37,11 @@ class NfseNacionalPortal implements PortalAutomacao
             return ResultadoValidacao::falha('Integração NFS-e Nacional inativa.');
         }
 
-        if (!$integracao->certificado_digital_id) {
-            return ResultadoValidacao::falha('Selecione um certificado digital A1 para o Portal Nacional.');
+        $certificado = $this->certificados->resolverParaIntegracao($integracao);
+        if (! $certificado) {
+            return ResultadoValidacao::falha(
+                'Nenhum certificado digital A1 ativo e dentro da validade está disponível para o Portal Nacional.'
+            );
         }
 
         return ResultadoValidacao::sucesso();
@@ -57,6 +62,35 @@ class NfseNacionalPortal implements PortalAutomacao
         $mode = $fake ? 'fake' : 'certificate';
         $params = $this->montarParams($execucao, $operation, $recurso);
 
+        $integracao = $execucao->empresaIntegracao;
+        if (! $integracao) {
+            return ResultadoAutomacao::falha('Integração NFS-e da empresa não encontrada.');
+        }
+
+        $certificadoAnteriorId = $integracao->certificado_digital_id
+            ? (int) $integracao->certificado_digital_id
+            : null;
+        $certificado = $this->certificados->resolverParaIntegracao($integracao);
+
+        if (! $certificado) {
+            return ResultadoAutomacao::falha(
+                'Nenhum certificado A1 ativo e dentro da validade está disponível para consultar a NFS-e.'
+            );
+        }
+
+        if ($certificadoAnteriorId !== (int) $certificado->id) {
+            $this->logs->registrar(
+                $execucao,
+                'warning',
+                'O certificado configurado estava inativo, vencido ou indisponível. A integração foi atualizada para o certificado A1 ativo e válido.',
+                'CERTIFICATE_REPLACED',
+                [
+                    'certificado_anterior_id' => $certificadoAnteriorId,
+                    'certificado_utilizado_id' => (int) $certificado->id,
+                ]
+            );
+        }
+
         try {
             $saida = $this->runner->executar(
                 $execucao,
@@ -64,7 +98,7 @@ class NfseNacionalPortal implements PortalAutomacao
                 $operation,
                 $params,
                 $mode,
-                $execucao->empresaIntegracao?->certificadoDigital,
+                $certificado,
                 onEvent: function (array $event) use ($execucao): void {
                     $etapa = (string) ($event['eventType'] ?? 'evento');
                     $mensagem = (string) ($event['message'] ?? $etapa);

@@ -133,6 +133,14 @@ class EmpresaIntegracaoService
 
         return CertificadoDigital::query()
             ->where('empresa_operadora_id', $operadoraId)
+            ->where('ativo', true)
+            ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
             ->findOrFail((int) $id)
             ->id;
     }

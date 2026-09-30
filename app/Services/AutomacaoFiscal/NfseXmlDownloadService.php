@@ -18,6 +18,7 @@ class NfseXmlDownloadService
 {
     public function __construct(
         private readonly NfseSefinNacionalClient $sefin,
+        private readonly CertificadoDigitalService $certificados,
     ) {}
 
     public function chaveNfseValida(DocumentoFiscal|string|null $documentoOuChave): bool
@@ -171,12 +172,11 @@ class NfseXmlDownloadService
             ->with('certificadoDigital')
             ->first();
 
-        $cert = $integracao?->certificadoDigital;
-        if (! $cert || ! $cert->ativo || strtoupper((string) $cert->tipo) !== 'A1') {
+        if (! $integracao) {
             return null;
         }
 
-        return $cert;
+        return $this->certificados->resolverParaIntegracao($integracao);
     }
 
     public function persistirXml(DocumentoFiscal $documento, string $xml, string $fonte): string

@@ -68,9 +68,15 @@ class ConsultaAvulsaService
                 ->whereKey($certificadoId)
                 ->where('ativo', true)
                 ->where('tipo', 'A1')
+                ->where(function ($q) {
+                    $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+                })
                 ->first();
             if (! $certificado) {
-                throw new RuntimeException('Certificado A1 selecionado não encontrado ou inativo.');
+                throw new RuntimeException('Certificado A1 selecionado não encontrado, inativo ou fora da validade.');
             }
             $cnpjDest = $this->nfeXml->cnpjDoCertificado($certificado);
             if ($cnpjDest === '') {
@@ -108,9 +114,15 @@ class ConsultaAvulsaService
             ->whereKey($certificadoId)
             ->where('ativo', true)
             ->where('tipo', 'A1')
+            ->where(function ($q) {
+                $q->whereNull('valido_de')->orWhere('valido_de', '<=', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('valido_ate')->orWhere('valido_ate', '>=', now());
+            })
             ->first();
         if (! $certificado) {
-            throw new RuntimeException('Certificado A1 selecionado não encontrado ou inativo.');
+            throw new RuntimeException('Certificado A1 selecionado não encontrado, inativo ou fora da validade.');
         }
 
         return $this->nfseXml->baixarPorChave($chave, $certificado, $onEvent);
