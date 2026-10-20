@@ -330,6 +330,42 @@
                     </div>
                 @elseif ($aba === 'documentos')
                     <div class="bg-white shadow rounded-xl overflow-hidden border border-gray-100">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-gray-100 flex flex-wrap items-end justify-between gap-3">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <div>
+                                    <label for="filtro_data_inicio_documentos" class="block text-xs font-semibold text-slate-600 mb-1">Data inicial ({{ $analiseEhNfse ? 'geração' : 'emissão' }})</label>
+                                    <input id="filtro_data_inicio_documentos" type="date" wire:model.live="filtro_data_inicio"
+                                           class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                    @error('filtro_data_inicio') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label for="filtro_data_fim_documentos" class="block text-xs font-semibold text-slate-600 mb-1">Data final</label>
+                                    <input id="filtro_data_fim_documentos" type="date" wire:model.live="filtro_data_fim"
+                                           class="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                    @error('filtro_data_fim') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                </div>
+                                @if ($filtro_data_inicio || $filtro_data_fim)
+                                    <button type="button" wire:click="limparDatasDocumentos"
+                                            class="h-9 text-sm font-medium text-indigo-600 hover:text-indigo-800">Limpar datas</button>
+                                @endif
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" wire:click="exportarListagem('xls')"
+                                        wire:loading.attr="disabled" wire:target="exportarListagem('xls')"
+                                        @disabled(!($totaisDocumentosFiltrados?->quantidade ?? 0))
+                                        class="inline-flex items-center h-9 rounded-md border border-emerald-600 px-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-40">Exportar XLS</button>
+                                <button type="button" wire:click="exportarListagem('pdf')"
+                                        wire:loading.attr="disabled" wire:target="exportarListagem('pdf')"
+                                        @disabled(!($totaisDocumentosFiltrados?->quantidade ?? 0))
+                                        class="inline-flex items-center h-9 rounded-md border border-red-600 px-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">Exportar PDF</button>
+                            </div>
+                        </div>
+                        <div class="px-4 py-2 border-b text-sm text-gray-600">
+                            <strong>{{ number_format((int) ($totaisDocumentosFiltrados?->quantidade ?? 0), 0, ',', '.') }} documento(s)</strong>
+                            <span class="mx-1">·</span>
+                            Total do período: <strong>R$ {{ number_format((float) ($totaisDocumentosFiltrados?->valor_total ?? 0), 2, ',', '.') }}</strong>
+                            <span class="text-xs text-gray-400 ml-1">(todas as páginas)</span>
+                        </div>
                         @if ($analiseEhNfse)
                             <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
                                 <p class="text-sm text-gray-600">XML e DANFSe (PDF) da competência. O download automático usa a Sefin Nacional.</p>

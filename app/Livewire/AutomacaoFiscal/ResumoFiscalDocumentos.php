@@ -32,6 +32,8 @@ class ResumoFiscalDocumentos extends Component
     public string $filtro_tipo = '';
     public string $filtro_competencia_mes = '';
     public string $filtro_competencia_ano = '';
+    public string $filtro_data_inicio = '';
+    public string $filtro_data_fim = '';
 
     public ?int $analiseEmpresaId = null;
     public ?int $analisePortalId = null;
@@ -98,6 +100,16 @@ class ResumoFiscalDocumentos extends Component
         $this->resetPage('listagemPage');
     }
 
+    public function updatedFiltroDataInicio(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFiltroDataFim(): void
+    {
+        $this->resetPage();
+    }
+
     /**
      * Competência Y-m só quando mês e ano estão preenchidos.
      */
@@ -150,6 +162,8 @@ class ResumoFiscalDocumentos extends Component
         $this->analiseEhNfse = $dados['eh_nfse'];
         $this->resumo = $dados['resumo'];
         $this->aba = 'documentos';
+        $this->filtro_data_inicio = '';
+        $this->filtro_data_fim = '';
         $this->resetPage();
     }
 
@@ -183,6 +197,40 @@ class ResumoFiscalDocumentos extends Component
         $this->filtro_competencia_mes = '';
         $this->filtro_competencia_ano = '';
         $this->resetPage('listagemPage');
+    }
+
+    public function limparDatasDocumentos(): void
+    {
+        $this->filtro_data_inicio = '';
+        $this->filtro_data_fim = '';
+        $this->resetValidation();
+        $this->resetPage();
+    }
+
+    public function exportarListagem(string $formato): ?\Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        abort_unless(in_array($formato, ['xls', 'pdf'], true), 404);
+        if (OperadoraContext::superAdminPrecisaSelecionarEscritorio()
+            || ! $this->analiseEmpresaId || ! $this->analisePortalId || ! $this->analiseCompetencia) {
+            session()->flash('error', 'Selecione um escritório e uma análise para exportar.');
+
+            return null;
+        }
+
+        $this->validate([
+            'filtro_data_inicio' => ['nullable', 'date_format:Y-m-d'],
+            'filtro_data_fim' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:filtro_data_inicio'],
+        ]);
+
+        return app(\App\Services\AutomacaoFiscal\ExportadorListagemFiscalService::class)->baixar(
+            (int) $this->analiseEmpresaId,
+            (int) $this->analisePortalId,
+            (string) $this->analiseCompetencia,
+            $this->analiseTipoListagem,
+            $this->filtro_data_inicio ?: null,
+            $this->filtro_data_fim ?: null,
+            $formato
+        );
     }
 
     public function baixarXml(int $documentoId): void
@@ -421,6 +469,7 @@ class ResumoFiscalDocumentos extends Component
         $portais = PortalIntegracao::query()->where('ativo', true)->orderBy('nome')->get();
         $analises = null;
         $documentos = null;
+        $totaisDocumentosFiltrados = null;
         $precisaSelecionarEscritorio = OperadoraContext::superAdminPrecisaSelecionarEscritorio();
         $emDetalhe = $this->analiseEmpresaId
             && $this->analisePortalId
@@ -436,13 +485,19 @@ class ResumoFiscalDocumentos extends Component
         }
 
         if (! $precisaSelecionarEscritorio && $emDetalhe && $this->aba === 'documentos') {
-            $documentos = app(AnaliseFiscalService::class)
+            $queryDocumentos = app(AnaliseFiscalService::class)
                 ->queryDocumentos(
                     (int) $this->analiseEmpresaId,
                     (int) $this->analisePortalId,
                     (string) $this->analiseCompetencia,
-                    $this->analiseTipoListagem
-                )
+                    $this->analiseTipoListagem,
+                    $this->filtro_data_inicio ?: null,
+                    $this->filtro_data_fim ?: null
+                );
+            $totaisDocumentosFiltrados = (clone $queryDocumentos)
+                ->selectRaw('COUNT(*) as quantidade, COALESCE(SUM(valor_total), 0) as valor_total')
+                ->first();
+            $documentos = $queryDocumentos
                 ->orderByDesc('data_emissao')
                 ->orderByDesc('numero')
                 ->paginate(25);
@@ -465,6 +520,7 @@ class ResumoFiscalDocumentos extends Component
             'portais' => $portais,
             'analises' => $analises,
             'documentos' => $documentos,
+            'totaisDocumentosFiltrados' => $totaisDocumentosFiltrados,
             'emDetalhe' => $emDetalhe,
             'precisaSelecionarEscritorio' => $precisaSelecionarEscritorio,
             'labelsColunasArquivo' => $this->analiseEhNfse

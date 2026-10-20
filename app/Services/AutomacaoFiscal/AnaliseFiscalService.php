@@ -251,7 +251,9 @@ class AnaliseFiscalService
         int $empresaId,
         int $portalId,
         string $competencia,
-        ?string $tipoListagem = null
+        ?string $tipoListagem = null,
+        ?string $dataInicio = null,
+        ?string $dataFim = null
     ): Builder {
         $competenciaExpr = $this->expressaoCompetencia();
         $tipoListagem = self::normalizarTipoListagem($tipoListagem);
@@ -263,6 +265,14 @@ class AnaliseFiscalService
             ->when(
                 $tipoListagem !== null,
                 fn (Builder $q) => $q->whereRaw("{$this->expressaoTipoListagem()} = ?", [$tipoListagem])
+            )
+            ->when(
+                $dataInicio !== null && $dataInicio !== '',
+                fn (Builder $q) => $q->whereDate('data_emissao', '>=', $dataInicio)
+            )
+            ->when(
+                $dataFim !== null && $dataFim !== '',
+                fn (Builder $q) => $q->whereDate('data_emissao', '<=', $dataFim)
             );
     }
 
