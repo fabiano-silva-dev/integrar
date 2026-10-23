@@ -4,7 +4,7 @@ Arquivos de referência para desenvolvimento e teste dos conversores PDF/OFX/CSV
 
 Organização: `docs/extratos/<banco>/<modelo>[-periodo].ext`
 
-Binários ficam só na máquina local (`.gitignore`); este README é o catálogo versionado.
+Extratos reais ficam só na máquina local (`.gitignore`). A exceção versionada é a amostra **anonimizada** do C6, gerada com dados fictícios, para testes automatizados.
 
 ## Caixa — layouts
 
@@ -37,6 +37,7 @@ docker compose exec app python3 /var/www/html/scripts/conversor_extrato_pdf_ofx.
 | `banrisul/` | `conta-corrente-*.pdf`, `relatorio-pix-*.pdf`, `relatorio-pagamentos-titulos-*.pdf` |
 | `bradesco/` | `extrato-mensal-01-a-04-2026.pdf` |
 | `cora/` | `extrato-periodo.pdf`, `extrato-01-a-08-2026.pdf` |
+| `c6/` | `extrato-anonimizado.pdf` (versionado, dados fictícios; usar **data contábil**) |
 | `cresol/` | `consolidado.pdf` / `conta-corrente.pdf` (+ variantes) — layouts `cresol` e `cresol_modelo2` |
 | `dominio/` | `extrato-2026-08-13.pdf` — layout `dominio_conta_digital` |
 | `grafeno/` | `extrato-claudio-abr.ofx` |
