@@ -76,6 +76,10 @@ LAYOUTS = {
         'tipo': 'ofx_direto',
         'script': 'conversor_extrato_cora_pdf_ofx.py',
     },
+    'c6': {
+        'tipo': 'ofx_direto',
+        'script': 'conversor_extrato_c6_pdf_ofx.py',
+    },
 }
 
 
