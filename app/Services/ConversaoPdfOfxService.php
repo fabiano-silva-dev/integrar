@@ -58,6 +58,9 @@ class ConversaoPdfOfxService
             'cora' => [
                 'cora' => 'Cora (PDF)',
             ],
+            'c6' => [
+                'c6' => 'C6 Bank (PDF)',
+            ],
         ];
     }
 
@@ -68,7 +71,7 @@ class ConversaoPdfOfxService
 
     public function layoutsComListagemLancamentos(): array
     {
-        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2', 'nubank', 'infinitepay', 'dominio_conta_digital', 'cora'];
+        return ['banrisul', 'banrisul_enriquecido', 'cresol', 'cresol_modelo2', 'nubank', 'infinitepay', 'dominio_conta_digital', 'cora', 'c6'];
     }
 
     public function layoutRequerArquivosAuxiliares(string $layout): bool
@@ -98,6 +101,7 @@ class ConversaoPdfOfxService
             'infinitepay' => 'InfinitePay',
             'dominio_conta_digital' => 'Domínio Conta Digital',
             'cora' => 'Cora',
+            'c6' => 'C6 Bank',
         ];
     }
 
