@@ -11,6 +11,7 @@ import sys
 import os
 import json
 from datetime import datetime
+from leitor_planilha import eh_excel_xml_2003, ler_excel_xml_2003
 
 class ConversorLaravel:
     """Conversor otimizado para Laravel"""
@@ -52,8 +53,27 @@ class ConversorLaravel:
                 
                 if df is None:
                     raise Exception("Não foi possível decodificar o arquivo CSV com nenhum encoding testado")
+            elif eh_excel_xml_2003(arquivo_entrada):
+                # SpreadsheetML pode ter extensão .xls, mas não é XLS binário.
+                from detector_tabela_planilha import detectar_tabelas_aba, cabecalho_unico
+
+                abas = ler_excel_xml_2003(arquivo_entrada)
+                tabelas = [
+                    tabela
+                    for linhas in abas.values()
+                    for tabela in detectar_tabelas_aba(linhas)
+                ]
+                if not tabelas:
+                    raise ValueError(
+                        "Arquivo Excel XML analisado, mas nenhuma tabela de movimentações foi identificada."
+                    )
+                tabela = tabelas[0]
+                df = pd.DataFrame(
+                    tabela["dados"],
+                    columns=cabecalho_unico(tabela["cabecalho"]),
+                )
             else:
-                # Para arquivos Excel: openpyxl (.xlsx), xlrd (.xls), ou auto-detect
+                # Para arquivos Excel: openpyxl (.xlsx) e xlrd (.xls binário)
                 df = None
                 extensao_lower = extensao
                 
@@ -64,7 +84,7 @@ class ConversorLaravel:
                     except Exception as e:
                         raise Exception(f"Erro ao ler XLSX: {str(e)}")
                 
-                # Tentativa 2: .xls - tentar xlrd, depois auto-detect (Excel 2003 XML, etc)
+                # Tentativa 2: .xls binário - tentar xlrd, depois auto-detect
                 elif extensao_lower == '.xls':
                     engines_tentados = []
                     # xlrd suporta .xls binário (xlrd < 2.0)

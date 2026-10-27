@@ -67,6 +67,12 @@
                 <!-- Step 1: Upload -->
                 @if($step == 1)
                 <div class="space-y-6">
+                    @if (session()->has('info'))
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4" role="status">
+                        <div class="font-medium text-blue-800">Nenhuma transação encontrada</div>
+                        <p class="mt-1 text-sm text-blue-700">{{ session('info') }}</p>
+                    </div>
+                    @endif
                     @if (session()->has('error'))
                     <div class="bg-red-50 border border-red-200 rounded-lg p-4">
                         <div class="flex items-center">

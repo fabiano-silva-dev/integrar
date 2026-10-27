@@ -61,6 +61,14 @@ class DetectorTabelaPlanilhaService
             }
 
             if (!$dados['sucesso']) {
+                // Arquivo válido, mas sem lançamentos: não tratar como falha técnica.
+                if ($dados['sem_movimentos'] ?? false) {
+                    return [
+                        'sucesso' => false,
+                        'sem_movimentos' => true,
+                        'mensagem' => $dados['mensagem'] ?? 'Nenhuma transação encontrada.',
+                    ];
+                }
                 throw new Exception($dados['mensagem'] ?? 'Nenhuma tabela foi identificada nesta planilha.');
             }
 

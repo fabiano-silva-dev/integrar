@@ -20,6 +20,7 @@ from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
+from leitor_planilha import eh_excel_xml_2003, ler_excel_xml_2003
 
 warnings.filterwarnings("ignore")
 
@@ -214,6 +215,11 @@ def detectar_tabelas_aba(linhas: list[list[str]]) -> list[dict[str, Any]]:
 
 
 def ler_planilha(caminho: str) -> dict[str, list[list[str]]]:
+    if eh_excel_xml_2003(caminho):
+        return {
+            nome: [[achatar(celula) for celula in linha] for linha in linhas]
+            for nome, linhas in ler_excel_xml_2003(caminho).items()
+        }
     extensao = os.path.splitext(caminho)[1].lower()
     engine = "openpyxl" if extensao == ".xlsx" else None
     xl = pd.ExcelFile(caminho, engine=engine)
@@ -292,11 +298,24 @@ def montar_analise(caminho: str) -> dict[str, Any]:
         })
 
     abas_com_tabela = [a["nome"] for a in abas if a["tem_tabela"]]
+    sem_movimentos = not tabelas and any(
+        re.search(
+            r"\b(?:nenhum(?:a|as|s)?|sem)\s+(?:transa[cç][aã]o|transa[cç][oõ]es|lan[cç]amentos?|movimenta[cç][aã]o|movimenta[cç][oõ]es)\b",
+            celula,
+            re.IGNORECASE,
+        )
+        for linhas in abas_brutas.values()
+        for linha in linhas
+        for celula in linha
+    )
     return {
         "sucesso": bool(tabelas),
+        "sem_movimentos": sem_movimentos,
         "mensagem": (
             f"{len(tabelas)} tabela(s) em {len(abas_com_tabela)} aba(s)"
             if tabelas else
+            "Arquivo analisado, mas não contém transações para o período ou filtros selecionados."
+            if sem_movimentos else
             "Nenhuma tabela foi identificada nesta planilha."
         ),
         "abas": abas,

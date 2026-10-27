@@ -699,7 +699,11 @@ class ImportadorPersonalizado extends Component
 
             if (!($resultado['sucesso'] ?? false)) {
                 $this->excelAnalise = null;
-                session()->flash('error', $resultado['erro'] ?? 'Não foi possível identificar uma tabela nesta planilha.');
+                if ($resultado['sem_movimentos'] ?? false) {
+                    session()->flash('info', $resultado['mensagem'] ?? 'Nenhuma transação encontrada.');
+                } else {
+                    session()->flash('error', $resultado['erro'] ?? 'Não foi possível identificar uma tabela nesta planilha.');
+                }
                 return;
             }
 
