@@ -9,7 +9,8 @@ use InvalidArgumentException;
 
 /**
  * Núcleo experimental de geração local. Somente ambiente 2 e serviço nacional
- * tributado, sem retenções, benefícios, deduções ou grupo IBS/CBS.
+ * tributado, regular, com destinatário igual ao tomador, sem retenções,
+ * benefícios, deduções ou grupo IBS/CBS.
  * Não atribui números oficiais nem determina enquadramento fiscal.
  */
 class GeradorDps
@@ -59,7 +60,7 @@ class GeradorDps
         $inf = $this->no($root, 'infDPS');
         $inf->setAttribute('Id', $id);
         foreach (['tpAmb' => '2', 'dhEmi' => $emissao->format('Y-m-d\TH:i:sP'), 'verAplic' => 'IntegraExpert-0.1',
-            'serie' => $serie, 'nDPS' => $numero, 'dCompet' => $data, 'tpEmit' => '1', 'cLocEmi' => $municipio] as $tag => $v) {
+            'serie' => $serie, 'nDPS' => $numero, 'dCompet' => $data, 'tpEmit' => '1', 'finNFSe' => '0', 'cLocEmi' => $municipio] as $tag => $v) {
             $this->no($inf, $tag, $v);
         }
         $prest = $this->no($inf, 'prest');
@@ -92,6 +93,7 @@ class GeradorDps
             }
             $this->no($end, 'xBairro', $this->texto($endereco['bairro'] ?? '', 60, 'Bairro'));
         }
+        $this->no($inf, 'indDest', '0');
         $serv = $this->no($inf, 'serv');
         $this->no($this->no($serv, 'locPrest'), 'cLocPrestacao', $local);
         $cs = $this->no($serv, 'cServ');

@@ -8,3 +8,37 @@ SCRIPT="$ROOT/script-manutencao/atualizar-producao.sh"
 "$SCRIPT" --help | grep -q -- 'sudo'
 
 echo "ok - atualizar-producao.sh --help"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/projeto/script-manutencao" "$TMP/bin"
+cp "$SCRIPT" "$TMP/projeto/script-manutencao/atualizar-producao.sh"
+touch "$TMP/projeto/artisan" "$TMP/projeto/docker-compose.yml"
+export NFSE_TEST_LOG="$TMP/comandos.log"
+cat > "$TMP/bin/docker" <<'MOCK'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$NFSE_TEST_LOG"
+if [[ "$*" == *'ps --status running app'* ]]; then
+    echo app
+fi
+if [[ "$*" == *'nfse:instalar-recursos'* && "${NFSE_TEST_FAIL_INSTALL:-0}" == 1 ]]; then
+    exit 1
+fi
+MOCK
+chmod +x "$TMP/bin/docker"
+export PATH="$TMP/bin:$PATH"
+"$TMP/projeto/script-manutencao/atualizar-producao.sh" --docker --skip-composer --skip-npm --skip-cache > "$TMP/saida"
+[[ "$(grep -n 'php artisan migrate --force' "$NFSE_TEST_LOG" | cut -d: -f1)" -lt "$(grep -n 'php artisan nfse:instalar-recursos' "$NFSE_TEST_LOG" | cut -d: -f1)" ]]
+echo "ok - instalação NFS-e ocorre depois das migrations"
+
+if NFSE_TEST_FAIL_INSTALL=1 "$TMP/projeto/script-manutencao/atualizar-producao.sh" --docker --skip-composer --skip-npm --skip-cache > "$TMP/falha"; then
+    echo "erro - atualização ignorou falha na instalação NFS-e" >&2
+    exit 1
+fi
+! grep -q 'Atualização concluída' "$TMP/falha"
+echo "ok - instalação NFS-e com falha interrompe atualização"
+
+: > "$NFSE_TEST_LOG"
+"$TMP/projeto/script-manutencao/atualizar-producao.sh" --docker --skip-composer --skip-npm --skip-cache --skip-migrate > "$TMP/sem-migrations"
+! grep -q 'nfse:instalar-recursos' "$NFSE_TEST_LOG"
+echo "ok - skip-migrate preserva a opção de não alterar o banco"

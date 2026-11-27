@@ -1,5 +1,10 @@
 * text=auto eol=lf
 
+# Recursos oficiais preservam os bytes usados na conferência SHA-256.
+resources/nfse/oficiais/** -text -whitespace
+resources/nfse/catalogos/*.csv -text -whitespace
+resources/nfse/xsd/restrita/*.xsd -text -whitespace
+
 *.blade.php diff=html
 *.css diff=css
 *.html diff=html

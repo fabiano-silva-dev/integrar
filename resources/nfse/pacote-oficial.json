@@ -1,0 +1,72 @@
+{
+  "conferido_em": "2026-11-27",
+  "fontes": {
+    "nfse": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita",
+    "rtc": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc",
+    "cst": "https://dfe-portal.svrs.rs.gov.br/NFe/Documentos",
+    "implantacao": "https://www.gov.br/nfse/pt-br/noticias/cgnfs-e-informa-disponibilizado-no-ambiente-de-testes-o-release-2-das-evolucoes-da-nota-tecnica-009"
+  },
+  "arquivos": {
+    "oficiais/anexo_c-indop_ibscbs-snnfse-prodrest-v1-01-20260122.xlsx": "f13b08dc802e82c3c43d591d06575922095595a17c94e61bc4a37c41633a744b",
+    "oficiais/anexo_i-sefin_adn-dps_nfse-snnfse_prodrest-v1-01-20261124.xlsx": "cf4d1d36daae5600060db2b36d9a84a703aa209cb099a0abbd7d3793c3e7e928",
+    "oficiais/anexo_viii-tabela-correlacao-v01-02-00-20261026.xlsx": "12cc80bc92687856b47e961b98cdbaa3f8cae568c099b3ef71994e73482ac7d0",
+    "oficiais/anexovi-leiautesrn_rtc_ibscbs-v1-04-01-nt009.xlsx": "103a150dd6f56ec8edcaa3a453b59a1b0e096d7cd5025d7bd06a387f141ddf39",
+    "oficiais/anexovii-indop_ibscbs_v1-03-00-nt009.xlsx": "95f30a44ee94adeea57fb92f3a0337b1e62fdc106f393e73894087889be9e5aa",
+    "oficiais/esquemas-xsd-producao-restrita-20261124.zip": "1ca83c1a7929f6d5684c9a17700fe3d3a375e4ea12b7ccb832bfc369768902c0",
+    "oficiais/svrs-cst-cclasstrib-consulta-20261127.csv": "64079e3c94678ecc7a927a6086cb583bcac06b5c68b85aee2d4f833a193c07e6",
+    "oficiais/svrs-cst-cclasstrib-consulta-20261127.json": "8a1f2c853c69f5f7f2d831fd555da6683ecb70ecef90f27bb5faf0e2d1d49d75",
+    "oficiais/svrs-cst-cclasstrib-consulta-20261127.xlsx": "8cbcaa855803c7a3c11a9120ad32fc650e5b53444faa0d0276500a88df2bb2d1",
+    "oficiais/tabela-it-2025-002-v1-71-cclasstrib-20261030.xlsx": "d104ce4df4d2fd8ea6329ce794d8d8ce03855f3adc1692b99f5446d87c4c71f8",
+    "catalogos/cst-cclasstrib-v1.71.csv": "bb1ff516f9777ad93a2b736c1304d08a31857b1ac5d04d3d0a828e6e59716dc7",
+    "catalogos/indop-anexo-c-v1.01-20260122.csv": "44fb74bb56708f8d9bccfc800debcd64fe9a8ec5f2888309c3e8b341a8d40c07",
+    "xsd/restrita/CNC_v1.00.xsd": "7032188bb6f137d52b16512583b739a361e6b1434c42cb539a29b8efa32f8321",
+    "xsd/restrita/DPS_v1.01.xsd": "fe45e5250a48e519aba89fc6a472863b8e602ed957778fb64692804933a00d0c",
+    "xsd/restrita/NFSe_v1.01.xsd": "af0bd2d8c50acba3d9c3f3f515426eca083b3f66e3211ce8dd48a7cf101818b8",
+    "xsd/restrita/evento_v1.01.xsd": "986d0a1c4d27454f712169849aa7c2380aaa4560bd9c920e0ff03ba6599ae28b",
+    "xsd/restrita/pedRegEvento_v1.01.xsd": "e90b6816d29cca0bd5ed8f86ad98d3b7b0d8bbfc11a7583e6ff8f98170fd4009",
+    "xsd/restrita/tiposCnc_v1.00.xsd": "af606b7317824fa8fa7ad8e44bac2ad8530cd5d162ebcdec647205473c41d525",
+    "xsd/restrita/tiposComplexos_v1.01.xsd": "3e72f4d443dfefb6c9eb97c97719261e2c0bba7a1542193729a1799ac3abdb96",
+    "xsd/restrita/tiposEventos_v1.01.xsd": "1b32bea21089dc232d78b62d805e9c07382f440d4e0ea2cb3fb6b82ebde68c11",
+    "xsd/restrita/tiposSimples_v1.01.xsd": "e20074f552b2000227adcc89492ed9485b776ea96695b693444001d70c441e0c",
+    "xsd/restrita/xmldsig-core-schema.xsd": "8c9792a056aedcadfc95bf16f2d7448a35da40df71533e20aea37d0329980c48"
+  },
+  "catalogo_tributario": {
+    "arquivo": "catalogos/cst-cclasstrib-v1.71.csv",
+    "original": "oficiais/tabela-it-2025-002-v1-71-cclasstrib-20261030.xlsx",
+    "fonte": "svrs",
+    "versao": "IT2025.002-v1.71",
+    "publicada_em": "2026-10-30",
+    "quantidade": 173,
+    "mapeamento": {
+      "CST": "cClass.CST-IBS/CBS (3 dígitos)",
+      "descricaoCST": "cClass.Descrição CST-IBS/CBS",
+      "cClassTrib": "cClass.cClassTrib (6 dígitos)",
+      "descricao": "cClass.Descrição cClassTrib",
+      "dIniVig": "cClass.dIniVig",
+      "dFimVig": "cClass.dFimVig",
+      "indNFSe": "cClass.indNFSe",
+      "ind_gIBSCBS": "CST.ind_gIBSCBS (junção por CST-IBS/CBS)",
+      "pRedIBS": "cClass.pRedIBS",
+      "pRedCBS": "cClass.pRedCBS"
+    }
+  },
+  "indicadores": {
+    "arquivo": "catalogos/indop-anexo-c-v1.01-20260122.csv",
+    "original": "oficiais/anexo_c-indop_ibscbs-snnfse-prodrest-v1-01-20260122.xlsx",
+    "versao": "AnexoC-v1.01-20260122",
+    "publicada_em": "2026-01-22",
+    "restrita_desde": "2026-11-24",
+    "quantidade": 26,
+    "mapeamento": "IndOp G2:G27; descrição B/D/H/I, fundamento A. Expandir apenas mesclagens originais. Vigências por código não informadas."
+  },
+  "somente_acervo": [
+    "oficiais/anexovii-indop_ibscbs_v1-03-00-nt009.xlsx",
+    "oficiais/anexo_viii-tabela-correlacao-v01-02-00-20261026.xlsx"
+  ],
+  "notas": [
+    "Anexo VII v1.03.00 não é ativado automaticamente por data futura.",
+    "CSV da exportação pública SVRS possui falhas de escape; carga utiliza a planilha oficial IT v1.71 com vigências e indicadores.",
+    "Data 2026-11-24 do Anexo C registra a evidência de implantação do conjunto restrito Release 2, não a vigência tributária do serviço.",
+    "Abas cClass 2026-09-01 e CST 2026-09-01 preservadas; publicação do arquivo no portal: 30/10/2026."
+  ]
+}

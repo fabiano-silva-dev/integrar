@@ -336,6 +336,7 @@ ensure_www_html_symlink() {
 
 run_migrations() {
     run sudo -u www-data php "$PROJECT_DIR/artisan" migrate --force
+    run sudo -u www-data php "$PROJECT_DIR/artisan" nfse:instalar-recursos
     run sudo -u www-data php "$PROJECT_DIR/artisan" optimize
 }
 

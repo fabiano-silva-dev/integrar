@@ -82,6 +82,8 @@ jobs:
       - name: Pint
         continue-on-error: true
         run: vendor/bin/pint --test
+      - name: Recursos oficiais NFS-e, XSD real e instalação idempotente
+        run: php artisan test --filter='Nfse(RecursosOficiais|InstalacaoRecursosTenant)Test'
       - name: Testes PHP
         run: php artisan test --exclude-filter='Tests\\Feature\\Auth\\|Tests\\Feature\\ProfileTest|Tests\\Feature\\ExampleTest'
 

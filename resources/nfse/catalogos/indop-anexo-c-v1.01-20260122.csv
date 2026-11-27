@@ -1,0 +1,61 @@
+cIndOp;descricao;fundamento;dIniVig;dFimVig
+020101;Operação com bem imóvel, bem imaterial, inclusive direito,  relacionada a bem imóvel | Execução de operações com bem imóvel, bem imaterial, inclusive direito, relacionado a bem imóvel | Localidade do imóvel (1) | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. II;;
+020201;Serviço prestado fisicamente sobre bem imóvel | Execução de serviços sobre bem imóvel | Localidade do imóvel (1) | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. II;;
+020301;"Serviço de administração e
+intermediação de bem imóvel | Execução dos serviços de administração e intermediação de bens imóveis | Localidade do imóvel (1) | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao";Art. 11, Inc. II;;
+030101;Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física | Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física (2) | Estabelecimento do fornecedor | NFSe/infNFSe/DPS/infDPS/prest/end/;Art. 11, Inc. III;;
+030102;"Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física | Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física (2) | Endereço do adquirente | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. III;;
+030103;Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física | Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física (2) | Endereço do destinatário | NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/;Art. 11, Inc. III;;
+030104;Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física | Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física (2) | Endereço diverso do fornecedor, adquirente ou destinatário | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. III;;
+040101;Serviço de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres | Execução de serviços de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres | Local do Evento | NFSe/infNFSe/DPS/infDPS/serv/atvEvento/;Art. 11, Inc. IV;;
+050101;Serviço prestado fisicamente sobre bem móvel material | Execução de serviços diversos fisicamente prestados sobre bem móvel material | Estabelecimento do fornecedor | NFSe/infNFSe/DPS/infDPS/prest/end/;Art. 11, Inc. V;;
+050102;"Serviço prestado fisicamente sobre bem móvel material | Execução de serviços diversos fisicamente prestados sobre bem móvel material | Endereço do adquirente | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. V;;
+050103;Serviço prestado fisicamente sobre bem móvel material | Execução de serviços diversos fisicamente prestados sobre bem móvel material | Endereço do destinatário | NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/;Art. 11, Inc. V;;
+050104;Serviço prestado fisicamente sobre bem móvel material | Execução de serviços diversos fisicamente prestados sobre bem móvel material | Endereço diverso do fornecedor, adquirente ou destinatário | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. V;;
+050201;Serviços portuários | Execução de serviços portuários | Local da prestação | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. V;;
+060101;Serviço de transporte de passageiros | Execução de serviços de transporte de passageiros | Local de início do transporte | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. VI;;
+070101;Serviço de transporte de carga | Execução de serviços de transporte de carga | Endereço fornecido para entrega | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. VII;;
+070102;Serviço de transporte de carga | Execução de serviços de transporte de carga | Local da retirada | NFSe/infNFSe/DPS/infDPS/serv/locPrest/cLocPrestacao;Art. 11, Inc. VII;;
+080101;Serviço de exploração de via | Execução de serviços de exploração de via | Local da prestação, correspondente à extensão da via explorada e proporcional ao território dos entes tributantes | EXCLUSIVO PARA NFS-e Via.;Art. 11, Inc. VIII;;
+100101;"Cessão de espaço para prestação de serviços publicitários, em operações onerosas (4) | Execução de operações de cessão de espaço para prestação de serviços publicitários | Local do domicílio principal do adquirente (3) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100102;"Cessão de espaço para prestação de serviços publicitários, em operações onerosas (4) | Execução de operações de cessão de espaço para prestação de serviços publicitários | Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)(6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end/endExt
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/end/endExt";Art. 11, Inc. X;;
+100201;"Cessão de espaço para prestação de serviços publicitários, em operações não onerosas (4) | Execução de operações de cessão de espaço para prestação de serviços publicitários | Local do domicílio principal do destinatário (6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100301;"Demais serviços, em operações onerosas | Execução dos demais serviços em operações não especificadas anteriormente ou, nos serviços de que trata o inc. III, estes sejam, ainda que parcialmente, prestados à distância (2) | Local do domicílio principal do adquirente (3) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100302;"Demais serviços, em operações onerosas | Execução dos demais serviços em operações não especificadas anteriormente ou, nos serviços de que trata o inc. III, estes sejam, ainda que parcialmente, prestados à distância (2) | Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)(6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100401;"Demais serviços, em operações não onerosas | Execução dos demais serviços em operações não especificadas anteriormente ou, nos serviços de que tratam o inc. III, estes sejam, ainda que parcialmente, prestados à distância | Local do domicílio principal do destinatário (6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100501;"Demais bens móveis imateriais, inclusive direitos, em operações onerosas | Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos | Local do domicílio principal do adquirente (3) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;
+100502;"Demais bens móveis imateriais, inclusive direitos, em operações onerosas | Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos | Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)(6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end/endExt/
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/end/endExt/";Art. 11, Inc. X;;
+100601;"Demais bens móveis imateriais, inclusive direitos, em operações não onerosas | Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos | Local do domicílio principal do destinatário (6) | -> Se NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 0–O destinatário é o próprio tomador/adquirente identificado na NFS-e (tomador=adquirente=destinatário)
+NFSe/infNFSe/DPS/infDPS/toma/end
+-> SeNaoSe NFSe/infNFSe/DPS/infDPS/IBSCBS/indDest = 1 – o destinatário não é o próprio adquirente, podendo ser outra pessoa, física ou jurídica (ou equiparada), ou um estabelecimento diferente do indicado como tomador (tomador=adquirente≠destinatário);
+NFSe/infNFSe/DPS/infDPS/IBSCBS/dest/";Art. 11, Inc. X;;

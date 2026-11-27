@@ -1,11 +1,38 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.14 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.15 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
 **Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) publicados; interface e artefatos de homologação (2B.7) publicados; fila coletiva de homologação (2B.8) publicada; perfis tributários declaratórios (2B.9) publicados; catálogo tributário versionado (2B.10) publicado; catálogo de indicadores de operação (2B.11) incluído, pendente de carga oficial e homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
+
+### Atualização 2B.12 — Recursos oficiais instalados pelo atualizador
+
+Os bloqueios de obtenção de arquivos descritos nos incrementos históricos abaixo
+foram resolvidos: os XSD de 24/11/2026, anexos I/C/VI/VII/VIII, exportações SVRS
+e a planilha oficial CST/cClassTrib IT2025.002 v1.71 estão no repositório.
+`resources/nfse/pacote-oficial.json` registra fontes, hashes e mapeamentos.
+
+`./atualizar-producao.sh` e o instalador nativo executam `nfse:instalar-recursos`
+após as migrations: conferem os arquivos e carregam em uma transação os 173
+cClassTrib (73 permitidos para NFS-e) e 26 cIndOp do Anexo C atual. Repetir a
+atualização não duplica versões. O caminho do XSD DPS é resolvido por padrão,
+sem editar o `.env`. Anexo VII v1.03.00 e Anexo VIII ficam em acervo e não
+habilitam novas regras. Detalhes em `docs/NFSE_CATALOGO_TRIBUTARIO.md`.
+
+A conferência com o XSD revelou `finNFSe` e `indDest` obrigatórios ausentes no
+gerador experimental. O cenário limitado agora informa `finNFSe=0` (nota regular)
+e `indDest=0` (destinatário igual ao tomador); a confirmação visual foi atualizada.
+Testes com os originais conferem todas as linhas do CST/cClassTrib, códigos do
+Anexo C, XML assinado contra o XSD real, rejeição por campo obrigatório ausente,
+carga idempotente, reversão de transação em conflito e ausência de ativação futura.
+
+Ainda falta homologar o contrato e as respostas reais da API, certificado próprio
+e representação, rejeições/timeouts/reconciliação e DANFSe real de teste. Retenções,
+deduções, regimes especiais e geração dos grupos IBS/CBS continuam fora do XML
+simplificado. A inclusão dos arquivos não comprova homologação fiscal. Nenhuma
+flag de transmissão é alterada por esta atualização; não houve emissão nem deploy.
 
 Criar uma central de emissão de notas fiscais de serviço para escritórios contábeis, com operação multiempresa, utilizando o Portal Nacional da NFS-e e, preferencialmente quando homologada, a API oficial da SEFIN Nacional. A plataforma deve reduzir a digitação repetitiva e permitir emissão avulsa, importação de planilhas com layouts reutilizáveis, recorrências e emissão em lote com conferência prévia.
 

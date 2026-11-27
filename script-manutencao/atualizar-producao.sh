@@ -354,6 +354,9 @@ main() {
         log "Migrations..."
         run_artisan migrate --force
         ok "Banco de dados atualizado"
+        log "Instalando os recursos oficiais de NFS-e..."
+        run_artisan nfse:instalar-recursos
+        ok "XSD e catálogos NFS-e disponíveis sem downloads manuais"
     fi
 
     if ! $SKIP_CACHE; then

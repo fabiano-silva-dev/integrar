@@ -48,7 +48,7 @@
                         @else
                             <p class="text-sm text-gray-600">Sem perfil vigente. Preenchimento manual de homologação.</p>
                         @endif
-                        <p class="text-sm">Escopo inicial: serviço nacional comum, ISS tributado, sem retenções, deduções, benefícios ou regime especial. Não use em outros casos. Não há cálculo automático de tributos.</p>
+                        <p class="text-sm">Escopo inicial: nota regular de serviço nacional comum, com destinatário igual ao tomador, ISS tributado, sem retenções, deduções, benefícios ou regime especial. Não use em outros casos. Não há cálculo automático de tributos.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <label class="text-sm">Município da prestação (IBGE)<input wire:model="fiscal.municipio_prestacao" required maxlength="7" pattern="[0-9]{7}" class="block w-full rounded-md border-gray-300"></label>
                             @if($cfg?->regime_tributario==='simples_nacional')<label class="text-sm">Regime de apuração do SN (código oficial)<select wire:model="fiscal.regApTribSN" required class="block w-full rounded-md border-gray-300"><option value="">Selecione conforme regra fiscal vigente</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>@endif

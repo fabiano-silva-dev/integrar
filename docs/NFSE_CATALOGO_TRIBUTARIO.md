@@ -1,10 +1,42 @@
 # Catálogo público de CST e cClassTrib
 
+## Instalação automática — pacote de 27/11/2026
+
+Os originais oficiais, XSD e CSVs normalizados estão versionados em
+`resources/nfse/`. Após `git pull`, o comando usual `./atualizar-producao.sh`
+executa as migrations e `nfse:instalar-recursos`. O instalador nativo também
+executa essa etapa. Não é necessário baixar planilhas, configurar o caminho
+do XSD ou importar catálogos manualmente. A operação confere SHA-256, usa uma
+transação para os dois catálogos e pode ser repetida sem duplicar versões.
+
+- CST/cClassTrib: planilha oficial **IT 2025.002 v1.71**, publicada em
+  **30/10/2026**, obtida no Portal NF-e/SVRS, seção Tabelas. São 173 códigos,
+  73 com `indNFSe=1`, com vigências efetivas extraídas da planilha. A descrição
+  vem de `Descrição cClassTrib`; `ind_gIBSCBS` vem da aba CST, unido por CST.
+- cIndOp: Anexo C produção restrita **v1.01, 22/01/2026**, 26 códigos.
+  A data `restrita_desde=2026-11-24` registra a evidência de implantação do
+  conjunto Release 2, não uma vigência tributária presumida. Descrições e
+  fundamentos expandem somente mesclagens explícitas do XLSX; códigos vêm de G2:G27.
+- Anexo VII **v1.03.00**: original arquivado sem ativação automática, inclusive
+  após a data prevista para o Release 3. Nova liberação exige conferir a implantação.
+- Anexo VIII **v1.02.00**: complementar e orientativo, sem regra automática de enquadramento.
+
+O CSV da consulta interativa SVRS possui defeitos de escape em dez linhas e não
+informa vigências. Ele foi preservado como original, mas **não alimenta a carga**.
+A planilha oficial v1.71 obtida posteriormente fornece as vigências e os
+indicadores que faltavam nessa exportação. URLs, hashes e mapeamentos ficam
+em `resources/nfse/pacote-oficial.json`.
+
+Conferência sem gravação em desenvolvimento: `docker compose exec app php artisan nfse:instalar-recursos --verificar`.
+A carga administrativa abaixo permanece disponível para futuras edições;
+ela não é um passo exigido na instalação normal. Nenhuma flag de transmissão é alterada.
+
 ## Fonte e carga inicial
 
 Fontes de referência:
 
-- Portal Nacional da NF-e: https://www.nfe.fazenda.gov.br/PORTAL/listaConteudo.aspx?tipoConteudo=%2FNJarYc9nus%3D (publicação de 30/10/2026 localizada na pesquisa).
+- Portal Nacional da NF-e: https://www.nfe.fazenda.gov.br/PORTAL/listaConteudo.aspx?tipoConteudo=%2FNJarYc9nus%3D (publicação de 30/10/2026).
+- Planilha oficial v1.71 obtida em https://dfe-portal.svrs.rs.gov.br/NFe/Documentos, seção Tabelas, em 27/11/2026.
 - SVRS: https://dfe-portal.svrs.rs.gov.br/DFE/ClassificacaoTributaria (consulta e exportações).
 - Comunicação da API: https://dfe-portal.svrs.rs.gov.br/Cff/Noticias — GET https://cff.svrs.rs.gov.br/api/v1/consultas/classTrib, certificado ICP-Brasil, TLS 1.2. Respeitar recomendação de no máximo uma consulta diária por empresa. A sincronização autenticada fica pendente de confirmação do JSON real.
 
@@ -31,7 +63,10 @@ Emissão de NFS-e > Perfis tributários: selecione a vigência e pesquise códig
 
 ## Pendências
 
-Obter e importar a tabela oficial completa; conferir a normalização com o arquivo original; executar CI e homologação fiscal; implementar sincronização pela API após obter resposta real autorizada e tabela de cIndOp. Nenhuma classificação real foi carregada nesta implementação. Não habilitar emissão RTC com base apenas no catálogo.
+Concluir homologação fiscal externa; implementar sincronização pela API após obter
+resposta real autorizada. Os arquivos oficiais e a carga automática estão incluídos;
+a execução no servidor ocorre durante sua atualização. Não habilitar emissão RTC
+com base apenas no catálogo.
 
 
 ## Indicadores da operação (cIndOp)
@@ -44,7 +79,7 @@ Formato CSV intermediário UTF-8, separador ponto e vírgula:
 cIndOp;descricao;fundamento;dIniVig;dFimVig
 ```
 
-Preserve códigos com seis dígitos, descrição e referência da fonte. Fundamento e datas podem ficar vazios quando não informados; não invente vigências. Conferir todos os códigos e quantidade com o original. Não há arquivo oficial carregado nesta entrega. Os exemplos de teste no repositório são exclusivamente fictícios.
+Preserve códigos com seis dígitos, descrição e referência da fonte. Fundamento e datas podem ficar vazios quando não informados; não invente vigências. Conferir todos os códigos e quantidade com o original. O pacote atual inclui o Anexo C efetivo e o Anexo VII futuro, separados. Os exemplos sintéticos dos testes antigos continuam fictícios; os testes do pacote conferem os arquivos oficiais.
 
 Para arquivar edição ainda não implantada (substitua todos os parâmetros):
 
