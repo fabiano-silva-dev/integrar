@@ -58,7 +58,7 @@ class CentralEmissao extends Component
     public function mudarAba(string $aba): void
     {
         $empresa = $this->empresa();
-        abort_unless(in_array($aba, ['notas', 'tomadores', 'servicos', 'importar', 'conferencia', 'configuracao'], true), 404);
+        abort_unless(in_array($aba, ['notas', 'tomadores', 'servicos', 'importar', 'conferencia', 'recorrencias', 'configuracao'], true), 404);
         if ($aba === 'configuracao') {
             abort_unless(app(PreparacaoNfse::class)->podeConfigurar(), 403);
         }

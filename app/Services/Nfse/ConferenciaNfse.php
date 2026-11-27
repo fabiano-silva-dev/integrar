@@ -60,6 +60,13 @@ class ConferenciaNfse
             $empresa = $this->bloquear($empresaId);
             foreach ($this->selecionadas($empresaId, $mes, $versoes, true) as $nota) {
                 $antes = $this->estado($nota);
+                if ($nota->recorrencia_id && (
+                    (isset($dados['tomador_id']) && (int) $dados['tomador_id'] !== (int) $nota->tomador_id)
+                    || (isset($dados['servico_id']) && (int) $dados['servico_id'] !== (int) $nota->servico_id)
+                    || (isset($dados['competencia']) && substr($dados['competencia'], 0, 7) !== substr($nota->getRawOriginal('recorrencia_competencia'), 0, 7))
+                )) {
+                    $this->falhar('Notas recorrentes mantêm o tomador, serviço e mês do contrato. Ajuste somente os dados permitidos.');
+                }
                 $nota->fill($dados);
                 $nota->snapshot = $this->snapshotAtual($empresa, $nota);
                 $this->salvarEvento($empresa, $nota, 'editar', $antes);
@@ -201,7 +208,7 @@ class ConferenciaNfse
 
     private function estado(Nota $nota): array
     {
-        return $nota->only(['tomador_id', 'servico_id', 'competencia', 'descricao', 'valor', 'status', 'snapshot', 'lote_id', 'versao']);
+        return $nota->only(['tomador_id', 'servico_id', 'competencia', 'descricao', 'valor', 'status', 'snapshot', 'lote_id', 'versao', 'recorrencia_id', 'recorrencia_competencia']);
     }
 
     private function salvarEvento(Empresa $empresa, Nota $nota, string $acao, array $antes): void
