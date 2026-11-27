@@ -35,10 +35,10 @@ class ValidacaoPortalNfse
                 return $pendente;
             }
             ValidacaoPortal::daEmpresa($empresa)->whereIn('status', ['pendente', 'iniciada'])
-                ->update(['status' => 'nao_confirmada', 'codigo' => 'UNAVAILABLE', 'concluida_em' => now()]);
+                ->update(['status' => 'nao_confirmada', 'codigo' => 'UNAVAILABLE', 'concluida_em' => now(), 'diagnostico_tecnico' => LogTesteAcessoNfse::json(['etapa' => 'worker_interrompido', 'codigo' => 'WORKER_INTERROMPIDO'])]);
             $a->update(['status_validacao' => 'pendente']);
             $r = ValidacaoPortal::create(['empresa_operadora_id' => $empresa->empresa_operadora_id, 'empresa_id' => $empresa->id,
-                'acesso_id' => $a->id, 'usuario_id' => auth()->id(), 'modo' => $a->modo, 'config_hash' => $this->hash($a, $c), 'status' => 'pendente']);
+                'acesso_id' => $a->id, 'usuario_id' => auth()->id(), 'modo' => $a->modo, 'config_hash' => $this->hash($a, $c), 'status' => 'pendente', 'diagnostico_tecnico' => ['etapa' => 'fila', 'codigo' => 'AGUARDANDO_WORKER']]);
             ValidarAcessoPortalNfseJob::dispatch((int) $empresa->empresa_operadora_id, $empresa->id, $r->id)->afterCommit();
             return $r;
         });
@@ -50,18 +50,22 @@ class ValidacaoPortalNfse
         $query = fn () => ValidacaoPortal::withoutGlobalScope('operadora')->where('empresa_operadora_id', $operadoraId)
             ->where('empresa_id', $empresaId)->whereKey($validacaoId);
         $r = $query()->first();
-        if (! $r || $r->status !== 'pendente' || ! $query()->where('status', 'pendente')->update(['status' => 'iniciada'])) {
+        if (! $r || $r->status !== 'pendente' || ! $query()->where('status', 'pendente')->update(['status' => 'iniciada', 'diagnostico_tecnico' => LogTesteAcessoNfse::json(['etapa' => 'validar_configuracao'])])) {
             return;
         }
+        $inicio = hrtime(true);
+        $log = ['etapa' => 'validar_configuracao'];
         $codigo = 'UNAVAILABLE';
         $status = 'nao_confirmada';
         try {
             $empresa = $this->empresaWorker($operadoraId, $empresaId);
             [$a, $c] = $this->resolver($empresa, $r->usuario_id);
             if ($r->created_at->lt(now()->subMinutes(5)) || ! hash_equals($r->config_hash, $this->hash($a, $c))) {
-                $query()->update(['status' => 'config_alterada', 'concluida_em' => now()]);
+                $query()->update(['status' => 'config_alterada', 'concluida_em' => now(), 'diagnostico_tecnico' => LogTesteAcessoNfse::json(['etapa' => 'validar_configuracao', 'codigo' => 'CONFIG_ALTERADA', 'duracao_ms' => LogTesteAcessoNfse::duracao($inicio)])]);
                 return;
             }
+            $log = ['etapa' => 'preparar_credencial'];
+            $query()->update(['diagnostico_tecnico' => LogTesteAcessoNfse::json($log)]);
             $entrada = ['mode' => $a->modo, 'companyDocument' => $a->documento_prestador,
                 'loginDocument' => $c ? preg_replace('/\D/', '', (string) $c->documento_titular) : $a->usuario_criptografado];
             if ($c) {
@@ -75,22 +79,30 @@ class ValidacaoPortalNfse
             } else {
                 $entrada['password'] = $a->senha_criptografada;
             }
+            $log = ['etapa' => 'iniciar_runner'];
+            $query()->update(['diagnostico_tecnico' => LogTesteAcessoNfse::json($log)]);
             $resultado = $this->runner->testar($entrada);
             unset($entrada, $pem);
             $codigo = in_array($resultado['code'] ?? '', PortalWebNfseRunner::CODIGOS, true) ? $resultado['code'] : 'UNAVAILABLE';
+            $log = LogTesteAcessoNfse::filtrar(is_array($resultado['diagnostico'] ?? null) ? $resultado['diagnostico'] : []) + ['etapa' => 'validar_retorno', 'codigo' => $codigo];
+            $log['identidade_confirmada'] = ($resultado['identityConfirmed'] ?? false) === true;
+            $log['representacao_confirmada'] = ($resultado['representationConfirmed'] ?? false) === true;
             $representante = str_ends_with($a->modo, '_representante');
             if ($codigo === 'ACCESS_CONFIRMED' && ($resultado['identityConfirmed'] ?? false) === true
                 && ($resultado['representationConfirmed'] ?? false) === $representante) {
                 $status = 'confirmada';
             } elseif ($codigo === 'ACCESS_CONFIRMED') {
                 $codigo = 'IDENTITY_MISMATCH';
+                $log['codigo'] = $codigo;
             }
         } catch (ValidationException) {
             $status = 'config_alterada';
+            $log['codigo'] = 'CONFIG_INVALIDA';
         } catch (\Throwable) {
+            $log['codigo'] = $log['etapa'] === 'preparar_credencial' ? 'CREDENCIAL_INDISPONIVEL' : 'ERRO_TECNICO';
             // Não persiste exceções que possam carregar credenciais, HTML ou detalhes da sessão.
         }
-        DB::transaction(function () use ($operadoraId, $empresaId, $r, $query, $codigo, $status) {
+        DB::transaction(function () use ($operadoraId, $empresaId, $r, $query, $codigo, $status, $log, $inicio) {
             try {
                 $empresa = $this->empresaWorker($operadoraId, $empresaId, true);
                 [$a, $c] = $this->resolver($empresa, $r->usuario_id);
@@ -104,7 +116,11 @@ class ValidacaoPortalNfse
             } catch (\Throwable) {
                 $status = 'config_alterada';
             }
-            $query()->where('status', 'iniciada')->update(['status' => $status, 'codigo' => $codigo, 'concluida_em' => now()]);
+            if ($status === 'config_alterada' && ! in_array($log['codigo'] ?? '', ['CONFIG_INVALIDA', 'CONFIG_ALTERADA'], true)) {
+                $log = ['etapa' => 'revalidar_configuracao', 'codigo' => 'CONFIG_ALTERADA'];
+            }
+            $log['duracao_ms'] = LogTesteAcessoNfse::duracao($inicio);
+            $query()->where('status', 'iniciada')->update(['status' => $status, 'codigo' => $codigo, 'concluida_em' => now(), 'diagnostico_tecnico' => LogTesteAcessoNfse::json($log)]);
         });
     }
 

@@ -12,7 +12,7 @@ class ValidacaoPortal extends RegistroNfse
 
     protected function casts(): array
     {
-        return ['concluida_em' => 'datetime'];
+        return ['concluida_em' => 'datetime', 'diagnostico_tecnico' => 'array'];
     }
 
     public function mensagem(): string

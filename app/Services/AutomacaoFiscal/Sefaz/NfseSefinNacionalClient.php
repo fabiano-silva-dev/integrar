@@ -41,19 +41,19 @@ class NfseSefinNacionalClient
             'producao' => 'https://sefin.nfse.gov.br/SefinNacional',
             default => throw new RuntimeException('Ambiente inválido.'),
         };
-        $raw = $this->getJson($base.'/nfse/'.$chave, $certificado);
+        $raw = $this->getJson($base.'/nfse/'.$chave, $certificado, true);
         if ($raw['http'] !== 200) {
-            throw new RuntimeException('Consulta não confirmada (HTTP '.$raw['http'].').');
+            throw new NfseConsultaDiagnosticoException('HTTP_SEFIN', $raw['http']);
         }
         $json = $this->decodificarJson($raw['body']);
         $b64 = $json['nfseXmlGZipB64'] ?? $json['NfseXmlGZipB64'] ?? null;
         if (! is_string($b64) || strlen($b64) > 8388608) {
-            throw new RuntimeException('Resposta XML ausente ou excede o limite.');
+            throw new NfseConsultaDiagnosticoException('RESPOSTA_INVALIDA', 200);
         }
         $bin = base64_decode($b64, true);
         $xml = is_string($bin) ? (str_starts_with(ltrim($bin), '<') ? $bin : @gzdecode($bin, 8388608)) : false;
         if (! is_string($xml) || strlen($xml) > 8388608) {
-            throw new RuntimeException('XML inválido ou excede o limite.');
+            throw new NfseConsultaDiagnosticoException('RESPOSTA_INVALIDA', 200);
         }
         return $xml;
     }
@@ -137,9 +137,16 @@ class NfseSefinNacionalClient
     /**
      * @return array{http: int, body: string}
      */
-    private function getJson(string $url, CertificadoDigital $certificado): array
+    private function getJson(string $url, CertificadoDigital $certificado, bool $diagnostico = false): array
     {
-        $mtls = $this->certificados->materializarCredenciaisMtls($certificado);
+        try {
+            $mtls = $this->certificados->materializarCredenciaisMtls($certificado);
+        } catch (\Throwable $e) {
+            if ($diagnostico) {
+                throw new NfseConsultaDiagnosticoException('CREDENCIAL_INDISPONIVEL');
+            }
+            throw $e;
+        }
 
         try {
             $ch = curl_init($url);
@@ -169,9 +176,15 @@ class NfseSefinNacionalClient
             curl_close($ch);
 
             if ($errno !== 0) {
+                if ($diagnostico) {
+                    throw new NfseConsultaDiagnosticoException('CURL_SEFIN', $http ?: null, $errno);
+                }
                 throw new RuntimeException('Falha de comunicação com a Sefin Nacional: '.$error);
             }
             if (! is_string($body) || $body === '') {
+                if ($diagnostico) {
+                    throw new NfseConsultaDiagnosticoException($http >= 400 ? 'HTTP_SEFIN' : 'RESPOSTA_INVALIDA', $http ?: null);
+                }
                 throw new RuntimeException('Sefin Nacional retornou resposta vazia (HTTP '.$http.').');
             }
 

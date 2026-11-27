@@ -196,4 +196,64 @@ class NfseValidacaoPortalTenantTest extends TestCase
             $this->assertSame('confirmada', $r->refresh()->status);
         }
     }
+
+    public function test_tela_indica_credenciais_salvas_sem_expor_login_ou_senha(): void
+    {
+        $this->salvar('senha_representante');
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Acessos::class)
+            ->assertSee('Usuário e senha cadastrados')
+            ->assertSee('Cadastrada e protegida')
+            ->assertSee('4725')
+            ->assertDontSee('52998224725')
+            ->assertDontSee('segredo-ficticio')
+            ->set('modo', 'senha_propria')
+            ->assertSee('Usuário e senha não cadastrados ou indisponíveis nesta modalidade')
+            ->assertSee('Há alterações na configuração que ainda não foram salvas');
+    }
+
+    public function test_log_portal_mostra_etapa_e_permite_download_sem_segredos(): void
+    {
+        $this->salvar();
+        $r = $this->service->solicitar($this->empresa->id);
+        $this->runner->shouldReceive('testar')->once()->andReturn([
+            'code' => 'LOGIN_REJECTED', 'identityConfirmed' => false, 'representationConfirmed' => false,
+            'diagnostico' => ['etapa' => 'confirmar_identidade', 'codigo' => 'LOGIN_REJECTED', 'html' => 'segredo-ficticio'],
+        ]);
+        $this->processar($r);
+        $r->refresh();
+        $this->assertSame('confirmar_identidade', $r->diagnostico_tecnico['etapa']);
+        $this->assertSame('LOGIN_REJECTED', $r->diagnostico_tecnico['codigo']);
+        $this->assertArrayNotHasKey('html', $r->diagnostico_tecnico);
+        $log = json_encode(\App\Services\Nfse\LogTesteAcessoNfse::relatorio($r));
+        $this->assertStringNotContainsString('segredo-ficticio', $log);
+        $this->assertStringNotContainsString($r->config_hash, $log);
+        $this->assertStringNotContainsString($this->empresa->cnpj, $log);
+        $this->actingAs($this->admin);
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Acessos::class)
+            ->assertSee('LOGIN_REJECTED')->assertSee('Baixar log (.json)')
+            ->call('baixarLog', 'portal', $r->id)->assertFileDownloaded('nfse-teste-portal-'.$r->id.'.json');
+    }
+
+    public function test_log_de_outra_empresa_nao_pode_ser_baixado(): void
+    {
+        $this->salvar();
+        $r = $this->service->solicitar($this->empresa->id);
+        $outra = Empresa::factory()->create(['empresa_operadora_id' => $this->empresa->empresa_operadora_id, 'ativo' => true]);
+        session(['empresa_selecionada_id' => $outra->id]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Acessos::class)
+            ->call('baixarLog', 'portal', $r->id)->assertNotFound();
+    }
+
+    public function test_log_api_preserva_apenas_detalhes_tecnicos_permitidos(): void
+    {
+        $this->assertSame([
+            'etapa' => 'consultar_sefin', 'codigo' => 'CURL_SEFIN', 'duracao_ms' => 1200, 'curl' => 28,
+        ], \App\Services\Nfse\LogTesteAcessoNfse::filtrar([
+            'etapa' => 'consultar_sefin', 'codigo' => 'CURL_SEFIN', 'duracao_ms' => 1200, 'curl' => 28,
+            'url' => 'chave-secreta', 'password' => 'segredo-ficticio', 'http' => 'segredo-ficticio',
+        ]));
+    }
+
 }

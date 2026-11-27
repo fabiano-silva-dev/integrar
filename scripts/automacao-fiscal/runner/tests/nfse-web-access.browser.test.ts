@@ -89,6 +89,7 @@ for (const mode of [
             code: 'ACCESS_CONFIRMED',
             identityConfirmed: true,
             representationConfirmed: mode.endsWith('_representante'),
+            stage: 'concluido',
         });
     });
 }
@@ -99,7 +100,9 @@ const own: WebAccessInput = {
     password: 'ficticia',
 };
 test('senha recusada não confirma o acesso', async () => {
-    assert.equal((await fixture(own, 'reject')).result.code, 'LOGIN_REJECTED');
+    const { result } = await fixture(own, 'reject');
+    assert.equal(result.code, 'LOGIN_REJECTED');
+    assert.equal(result.stage, 'confirmar_identidade');
 });
 test('outro titular no cabeçalho bloqueia acesso', async () => {
     assert.equal((await fixture(own, 'wrong_identity')).result.code, 'IDENTITY_MISMATCH');
@@ -120,7 +123,9 @@ test('procuração recusada não confirma representação', async () => {
         mode: 'senha_representante',
         loginDocument: representative,
     };
-    assert.equal((await fixture(input, 'denied')).result.code, 'REPRESENTATION_NOT_CONFIRMED');
+    const { result } = await fixture(input, 'denied');
+    assert.equal(result.code, 'REPRESENTATION_NOT_CONFIRMED');
+    assert.equal(result.stage, 'selecionar_representacao');
 });
 test('troca para representado diferente não confirma representação', async () => {
     const input: WebAccessInput = {

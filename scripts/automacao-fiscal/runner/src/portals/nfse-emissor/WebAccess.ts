@@ -48,6 +48,7 @@ export type WebAccessResult = {
     code: WebAccessCode;
     identityConfirmed: boolean;
     representationConfirmed: boolean;
+    stage?: 'entrada_runner' | 'iniciar_navegador' | 'abrir_portal' | 'autenticar' | 'confirmar_identidade' | 'selecionar_representacao' | 'concluido';
 };
 const ORIGIN = 'https://www.nfse.gov.br';
 const CERT_ORIGIN = 'https://certificado.nfse.gov.br';
@@ -248,9 +249,11 @@ export async function testWebAccess(
 ): Promise<WebAccessResult> {
     const parsed = webAccessSchema.safeParse(input);
     if (!parsed.success)
-        return { code: 'INVALID_INPUT', identityConfirmed: false, representationConfirmed: false };
+        return { code: 'INVALID_INPUT', identityConfirmed: false, representationConfirmed: false, stage: 'entrada_runner' };
     input = parsed.data;
-    const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
+    let stage: NonNullable<WebAccessResult['stage']> = 'iniciar_navegador';
+    const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] }).catch(() => null);
+    if (!browser) return { code: 'UNAVAILABLE', identityConfirmed: false, representationConfirmed: false, stage };
     const deadline = setTimeout(() => {
         void browser.close();
     }, 75_000);
@@ -293,8 +296,10 @@ export async function testWebAccess(
         let page = await context.newPage();
         page.setDefaultTimeout(8000);
         page.setDefaultNavigationTimeout(20_000);
+        stage = 'abrir_portal';
         await page.goto(LOGIN, { waitUntil: 'domcontentloaded' });
         await manual(page);
+        stage = 'autenticar';
         if (input.mode.startsWith('senha_')) {
             const field = page.locator('input#Inscricao[name="Inscricao"]');
             const password = page.locator('input#Senha[name="Senha"][type="password"]');
@@ -320,19 +325,25 @@ export async function testWebAccess(
                 await page.waitForLoadState('domcontentloaded');
             }
         }
+        stage = 'confirmar_identidade';
         await assertLogin(page, input);
         const represented = input.mode.endsWith('_representante');
-        if (represented) await represent(page, input);
+        if (represented) {
+            stage = 'selecionar_representacao';
+            await represent(page, input);
+        }
         return {
             code: 'ACCESS_CONFIRMED',
             identityConfirmed: true,
             representationConfirmed: represented,
+            stage: 'concluido',
         };
     } catch (error) {
         return {
             code: error instanceof AccessFailure ? error.code : 'UNAVAILABLE',
             identityConfirmed: false,
             representationConfirmed: false,
+            stage,
         };
     } finally {
         clearTimeout(deadline);

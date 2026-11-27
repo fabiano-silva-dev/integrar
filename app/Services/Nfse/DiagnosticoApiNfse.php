@@ -6,6 +6,7 @@ use App\Models\CertificadoDigital;
 use App\Models\Empresa;
 use App\Models\Nfse\AcessoEmissao;
 use App\Models\Nfse\DiagnosticoAcesso;
+use App\Services\AutomacaoFiscal\Sefaz\NfseConsultaDiagnosticoException;
 use App\Services\AutomacaoFiscal\Sefaz\NfseSefinNacionalClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -38,7 +39,7 @@ class DiagnosticoApiNfse
             $registro = new DiagnosticoAcesso([
                 'acesso_id' => $acesso->id, 'certificado_id' => $certificado->id, 'usuario_id' => auth()->id(),
                 'ambiente' => $ambiente, 'config_hash' => $hash, 'chave_hash' => hash('sha256', $chave),
-                'status' => 'iniciada',
+                'status' => 'iniciada', 'diagnostico_tecnico' => ['etapa' => 'consultar_sefin'],
             ]);
             $registro->empresa_id = $empresa->id;
             $registro->empresa_operadora_id = $empresa->empresa_operadora_id;
@@ -48,14 +49,24 @@ class DiagnosticoApiNfse
 
         // Rede fora da transação; nenhum XML, chave ou detalhe do erro é exibido ou persistido.
         $status = 'nao_confirmada';
+        $inicio = hrtime(true);
+        $log = ['etapa' => 'consultar_sefin', 'codigo' => 'ERRO_TECNICO'];
         try {
             $xml = $this->client->consultarXmlParaDiagnostico($chave, $certificado, $ambiente);
+            $log = ['etapa' => 'validar_identidade_xml', 'codigo' => 'RESPOSTA_INVALIDA', 'http' => 200];
             $status = self::corresponde($xml, $chave, $acesso->documento_prestador, $ambiente) ? 'consulta_confirmada' : 'identidade_divergente';
+            $log['codigo'] = $status === 'consulta_confirmada' ? 'CONSULTA_CONFIRMADA' : 'XML_DIVERGENTE';
+        } catch (NfseConsultaDiagnosticoException $e) {
+            $log = ['etapa' => match ($e->codigoTecnico) {
+                'CREDENCIAL_INDISPONIVEL' => 'preparar_credencial',
+                'RESPOSTA_INVALIDA' => 'decodificar_resposta',
+                default => 'consultar_sefin',
+            }, 'codigo' => $e->codigoTecnico, 'http' => $e->http, 'curl' => $e->curl];
         } catch (\Throwable) {
             // Falha de transporte, rejeição, ausência de documento ou resposta inválida não prova falta de procuração.
         }
 
-        return DB::transaction(function () use ($empresa, $hash, $registro, $status) {
+        return DB::transaction(function () use ($empresa, $hash, $registro, $status, $log, $inicio) {
             $empresa = $this->lockEmpresa($empresa);
             try {
                 [$atual, $certificado] = $this->resolver($empresa);
@@ -66,7 +77,11 @@ class DiagnosticoApiNfse
                 $status = 'config_alterada';
             }
             $registro = DiagnosticoAcesso::daEmpresa($empresa)->lockForUpdate()->findOrFail($registro->id);
-            $registro->update(['status' => $status]);
+            if ($status === 'config_alterada') {
+                $log = ['etapa' => 'revalidar_configuracao', 'codigo' => 'CONFIG_ALTERADA'];
+            }
+            $log['duracao_ms'] = LogTesteAcessoNfse::duracao($inicio);
+            $registro->update(['status' => $status, 'diagnostico_tecnico' => LogTesteAcessoNfse::filtrar($log)]);
             return $registro;
         });
     }

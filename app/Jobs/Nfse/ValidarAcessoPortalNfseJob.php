@@ -3,6 +3,7 @@
 namespace App\Jobs\Nfse;
 
 use App\Models\Nfse\ValidacaoPortal;
+use App\Services\Nfse\LogTesteAcessoNfse;
 use App\Services\Nfse\ValidacaoPortalNfse;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -34,6 +35,6 @@ class ValidarAcessoPortalNfseJob implements ShouldQueue
     {
         ValidacaoPortal::withoutGlobalScope('operadora')->where('empresa_operadora_id', $this->operadoraId)
             ->where('empresa_id', $this->empresaId)->whereKey($this->validacaoId)->whereIn('status', ['pendente', 'iniciada'])
-            ->update(['status' => 'nao_confirmada', 'codigo' => 'UNAVAILABLE', 'concluida_em' => now()]);
+            ->update(['status' => 'nao_confirmada', 'codigo' => 'UNAVAILABLE', 'concluida_em' => now(), 'diagnostico_tecnico' => LogTesteAcessoNfse::json(['etapa' => 'worker_interrompido', 'codigo' => 'WORKER_INTERROMPIDO'])]);
     }
 }
