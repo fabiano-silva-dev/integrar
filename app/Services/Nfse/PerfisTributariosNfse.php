@@ -18,7 +18,7 @@ class PerfisTributariosNfse
 
     public function __construct(private AcessoEmissaoNfse $acessos) {}
 
-    public function cadastrar(int $empresaId, ?int $servicoId, string $vigencia, array $dados, ?int $versaoRevisada = null): PerfilTributario
+    public function cadastrar(int $empresaId, ?int $servicoId, string $vigencia, array $dados, ?int $versaoRevisada = null, ?int $versaoIndopRevisada = null): PerfilTributario
     {
         $empresa = $this->acessos->empresa($empresaId);
         $v = Validator::make([...$dados, 'vigencia' => $vigencia], [
@@ -56,7 +56,7 @@ class PerfisTributariosNfse
             $this->falhar('Informe CST e cClassTrib coerentes. A conferência na tabela oficial ainda é necessária.');
         }
 
-        return DB::transaction(function () use ($empresa, $servicoId, $v, $versaoRevisada) {
+        return DB::transaction(function () use ($empresa, $servicoId, $v, $versaoRevisada, $versaoIndopRevisada) {
             $empresa = Empresa::query()->where('empresa_operadora_id', $empresa->empresa_operadora_id)
                 ->where('ativo', true)->lockForUpdate()->findOrFail($empresa->id);
             if ($servicoId !== null) {
@@ -80,7 +80,20 @@ class PerfisTributariosNfse
                     $this->falhar('CST/cClassTrib não localizado como permitido para NFS-e e vigente durante todo o mês no catálogo carregado.');
                 }
             }
+            $indop = app(CatalogoIndicadoresNfse::class);
+            $versaoIndop = $indop->atual();
+            if ($versaoIndopRevisada !== null && $versaoIndopRevisada !== (int) ($versaoIndop?->id ?? 0)) {
+                $this->falhar('A edição de cIndOp mudou. Atualize a seleção e confira novamente.');
+            }
+            $indicador = null;
+            if ($v['ind_op'] !== null && $versaoIndop) {
+                $indicador = $indop->consulta((int) $versaoIndop->id, $v['vigencia'])->where('codigo', $v['ind_op'])->first();
+                if (! $indicador) {
+                    $this->falhar('Indicador de operação não localizado no catálogo aplicável à homologação e competência.');
+                }
+            }
             $perfil = new PerfilTributario([
+                'indop_catalogo_id' => $indicador?->id,
                 'classificacao_catalogo_id' => $classificacao?->id,
                 'servico_id' => $servicoId, 'usuario_id' => auth()->id(), 'escopo' => $escopo, 'vigencia' => $data,
                 'dados' => array_diff_key($v, ['vigencia' => true]),

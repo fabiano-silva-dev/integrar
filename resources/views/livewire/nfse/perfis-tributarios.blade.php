@@ -37,7 +37,7 @@
                     <label class="text-sm">Preenchimento do grupo IBS/CBS<select wire:model.live="form.ibscbs" required class="block w-full rounded-md border-gray-300"><option value="">Selecione</option><option value="dispensado">Dispensado conforme regra aplicável</option><option value="exigido">Exigido</option><option value="indefinido">A definir</option></select></label>
                     <label class="text-sm">CST<input wire:model.live.debounce.400ms="form.cst" maxlength="3" pattern="[0-9]{3}" @required($form['ibscbs']==='exigido') class="block w-full rounded-md border-gray-300"></label>
                     <label class="text-sm">cClassTrib<input wire:model.live.debounce.400ms="form.cclass_trib" maxlength="6" pattern="[0-9]{6}" @required($form['ibscbs']==='exigido') class="block w-full rounded-md border-gray-300"></label>
-                    <label class="text-sm">Indicador de operação (cIndOp)<input wire:model="form.ind_op" maxlength="6" pattern="[0-9]{6}" class="block w-full rounded-md border-gray-300"></label>
+                    <label class="text-sm">Indicador de operação (cIndOp)<input wire:model.live.debounce.400ms="form.ind_op" maxlength="6" pattern="[0-9]{6}" class="block w-full rounded-md border-gray-300"></label>
                 </div>
                 <div class="border rounded-md p-4 space-y-3">
                     <div class="flex flex-wrap justify-between gap-2"><h3 class="font-semibold">Consultar CST e cClassTrib</h3><a href="https://dfe-portal.svrs.rs.gov.br/DFE/ClassificacaoTributaria" target="_blank" rel="noopener noreferrer" class="text-blue-600 text-sm">Tabela no portal SVRS</a></div>
@@ -62,6 +62,33 @@
                     @if(filled($form['cst']) || filled($form['cclass_trib']))<button type="button" wire:click="limparClassificacao" class="text-blue-600 text-sm">Limpar CST/cClassTrib</button>@endif
                     <p class="text-sm text-gray-600">A seleção não determina dispensa, incidência ou enquadramento. O indicador do grupo gIBSCBS não substitui a análise do preenchimento dos demais campos RTC.</p>
                 </div>
+                <div class="border rounded-md p-4 space-y-3">
+                    <div class="flex flex-wrap justify-between gap-2"><h3 class="font-semibold">Consultar indicador da operação (cIndOp)</h3><a href="https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc" target="_blank" rel="noopener noreferrer" class="text-blue-600 text-sm">Anexo VII — Portal NFS-e</a></div>
+                    @if($indopPendente)
+                        <p class="text-sm text-amber-900">Edição {{ $indopPendente->versao }} arquivada, sem confirmação de implantação em produção restrita.</p>
+                    @endif
+                    @if($versaoIndop)
+                        <p class="text-sm text-gray-600">Edição {{ $versaoIndop->versao }} · implantação restrita informada: {{ $versaoIndop->restrita_desde }} · {{ $versaoIndop->quantidade }} indicadores. Origem e data conferidas pelo administrador.</p>
+                        <label class="block text-sm">Pesquisar código, descrição ou fundamento<input type="search" wire:model.live.debounce.350ms="buscaIndicador" maxlength="100" placeholder="Indicador da operação" class="block w-full rounded-md border-gray-300"></label>
+                        <p class="text-sm text-gray-600">Até 25 resultados. Quando a fonte informa vigência por código, considera todo o mês selecionado.</p>
+                        @forelse($indicadores as $c)
+                            <div wire:key="cat-indop-{{ $c->id }}" class="flex flex-wrap items-start justify-between gap-2 border-b pb-2 text-sm">
+                                <div class="flex-1"><p class="font-semibold">{{ $c->codigo }} — {{ $c->descricao }}</p>@if($c->fundamento)<p>{{ $c->fundamento }}</p>@endif
+                                    @if($c->inicio || $c->fim)<p class="text-gray-600">Vigência informada: {{ $c->inicio ?? '—' }} a {{ $c->fim ?? '—' }}</p>@endif</div>
+                                <button type="button" wire:click="selecionarIndicador({{ $c->id }})" class="text-blue-600">Selecionar indicador</button>
+                            </div>
+                        @empty<p class="text-sm">Nenhum indicador encontrado para a busca e competência.</p>@endforelse
+                        @if($indicadorSelecionado)
+                            <p class="text-sm"><strong>Indicador informado:</strong> {{ $indicadorSelecionado->descricao }}. Confirme a aplicabilidade ao caso.</p>
+                        @elseif(filled($form['ind_op']))
+                            <p class="text-sm text-red-700">Indicador não consta na edição aplicável ao recorte de homologação.</p>
+                        @endif
+                    @else
+                        <p class="text-sm text-amber-900">Nenhuma edição liberada para consulta de homologação. Cadastro manual declaratório, sem conferência na tabela.</p>
+                    @endif
+                    @if(filled($form['ind_op']))<button type="button" wire:click="limparIndicador" class="text-blue-600 text-sm">Limpar indicador</button>@endif
+                    <p class="text-sm text-gray-600">O indicador não determina sozinho o local de incidência nem o enquadramento de IBS/CBS. O Anexo VIII é orientação em desenvolvimento e não constitui validação automática.</p>
+                </div>
                 <h2 class="font-bold border-t pt-4">Percentuais aproximados de tributos (não são alíquotas de retenção)</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     @foreach(['pTotTribFed'=>'Federal','pTotTribEst'=>'Estadual','pTotTribMun'=>'Municipal'] as $campo=>$label)
@@ -83,6 +110,11 @@
                         <p class="text-gray-600">Referência registrada: {{ $ref->versao }} ({{ $ref->fonte }}, {{ $ref->publicada_em }}) — {{ $ref->descricao }}</p>
                     @elseif(filled($p->dados['cclass_trib'] ?? null))
                         <p class="text-amber-900">Classificação declarada sem vínculo a versão de catálogo.</p>
+                    @endif
+                    @if($refInd = $referenciasIndop->get($p->indop_catalogo_id))
+                        <p class="text-gray-600">Referência cIndOp: {{ $refInd->versao }} — {{ $refInd->descricao }}</p>
+                    @elseif(filled($p->dados['ind_op'] ?? null))
+                        <p class="text-amber-900">Indicador declarado sem vínculo a edição do catálogo.</p>
                     @endif
                     <p class="text-gray-600 whitespace-pre-wrap">{{ $p->dados['fundamento'] }}</p>
                     @if($impedimentos)<p class="text-red-700">Impedimentos atuais: {{ implode(' ', $impedimentos) }}</p>@else<p class="text-gray-600">Compatível com o recorte local, sujeito à conferência e homologação.</p>@endif

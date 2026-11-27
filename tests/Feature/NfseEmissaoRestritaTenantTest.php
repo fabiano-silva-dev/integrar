@@ -371,4 +371,69 @@ class NfseEmissaoRestritaTenantTest extends TestCase
             ->assertSet('form.cclass_trib', '000001')->assertSet('form.ibscbs', '')->assertSet('confirmado', false);
     }
 
+
+    private function indicadoresFicticios(string $versao, ?string $implantacao, string $descricao = 'Operação fictícia A'): object
+    {
+        $csv = implode(';', \App\Services\Nfse\CatalogoIndicadoresNfse::CABECALHO)."\n"
+            ."010001;".$descricao.";Artigo fictício;;\n"
+            ."010002;Operação expirada;;2026-01-01;2026-11-15\n";
+
+        return app(\App\Services\Nfse\CatalogoIndicadoresNfse::class)->importar($csv, $versao, '2026-10-01', $implantacao, hash('sha256', $csv));
+    }
+
+    public function test_indop_separa_publicacao_e_implantacao_e_preserva_acervo(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-11-27 10:00:00'));
+        $svc = app(\App\Services\Nfse\CatalogoIndicadoresNfse::class);
+        $antiga = $this->indicadoresFicticios('Teste anterior', '2026-10-01');
+        $nova = $this->indicadoresFicticios('Teste futura', null, 'Operação fictícia B');
+        $this->assertEquals($antiga->id, $svc->atual()->id);
+        $this->assertEquals($nova->id, $svc->pendente()->id);
+        $this->assertSame(['010001'], $svc->buscar($antiga->id, '2026-11', '010')->pluck('codigo')->all());
+        try {
+            $svc->liberar('Teste futura', '2026-12-07', $nova->sha256);
+            $this->fail('Implantação futura não pode ser confirmada.');
+        } catch (\InvalidArgumentException) {
+            $this->assertEquals($antiga->id, $svc->atual()->id);
+        }
+        $this->travelTo(\Carbon\Carbon::parse('2026-12-08 10:00:00'));
+        $this->assertEquals($antiga->id, $svc->atual()->id);
+        $svc->liberar('Teste futura', '2026-12-07', $nova->sha256);
+        $this->assertEquals($nova->id, $svc->atual()->id);
+        $this->assertSame('Operação fictícia A', $svc->consulta($antiga->id, '2026-11')->first()->descricao);
+    }
+
+    public function test_indop_vincula_perfil_e_bloqueia_codigo_nao_vigente(): void
+    {
+        $v = $this->indicadoresFicticios('Teste anterior', '2026-10-01');
+        $svc = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+        $dados = array_replace($this->dadosPerfil(), ['ibscbs'=>'exigido', 'cst'=>'000', 'cclass_trib'=>'000001', 'ind_op'=>'010001']);
+        $perfil = $svc->cadastrar($this->empresa->id, null, '2026-11', $dados, null, (int) $v->id);
+        $item = app(\App\Services\Nfse\CatalogoIndicadoresNfse::class)->consulta($v->id, '2026-11')->first();
+        $this->assertEquals($item->id, $perfil->indop_catalogo_id);
+        $this->expectException(ValidationException::class);
+        $svc->cadastrar($this->empresa->id, null, '2026-12', array_replace($dados, ['ind_op'=>'010002']));
+    }
+
+    public function test_indop_rejeita_selecao_de_edicao_substituida(): void
+    {
+        $v = $this->indicadoresFicticios('Teste anterior', '2026-10-01');
+        $this->indicadoresFicticios('Teste posterior', '2026-10-02', 'Operação fictícia B');
+        $this->expectException(ValidationException::class);
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($this->empresa->id, null, '2026-11',
+            array_replace($this->dadosPerfil(), ['ibscbs'=>'exigido','cst'=>'000','cclass_trib'=>'000001','ind_op'=>'010001']), null, (int) $v->id);
+    }
+
+    public function test_indop_na_tela_preenche_apenas_indicador(): void
+    {
+        $v = $this->indicadoresFicticios('Teste anterior', '2026-10-01');
+        $item = app(\App\Services\Nfse\CatalogoIndicadoresNfse::class)->consulta($v->id, '2026-11')->first();
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\PerfisTributarios::class)
+            ->set('vigencia', '2026-11')->set('buscaIndicador', 'Artigo fictício')
+            ->assertSee('Operação fictícia A')->assertDontSee('Operação expirada')
+            ->call('selecionarIndicador', $item->id)->assertSet('form.ind_op', '010001')
+            ->assertSet('form.cst', null)->assertSet('form.ibscbs', '')->assertSet('confirmado', false);
+    }
+
 }

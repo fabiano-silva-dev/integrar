@@ -32,3 +32,33 @@ Emissão de NFS-e > Perfis tributários: selecione a vigência e pesquise códig
 ## Pendências
 
 Obter e importar a tabela oficial completa; conferir a normalização com o arquivo original; executar CI e homologação fiscal; implementar sincronização pela API após obter resposta real autorizada e tabela de cIndOp. Nenhuma classificação real foi carregada nesta implementação. Não habilitar emissão RTC com base apenas no catálogo.
+
+
+## Indicadores da operação (cIndOp)
+
+Anexo VII oficial: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc . Em 27/11/2026, a v1.03.00 já foi publicada, mas sua implantação pertence ao Release 3 previsto para 07/12/2026. Não confundir publicação com implantação. Confirme a edição efetivamente implantada antes de carregar como aplicável. A correlação do Anexo VIII é orientativa e não deve ser aplicada como regra obrigatória.
+
+Formato CSV intermediário UTF-8, separador ponto e vírgula:
+
+```csv
+cIndOp;descricao;fundamento;dIniVig;dFimVig
+```
+
+Preserve códigos com seis dígitos, descrição e referência da fonte. Fundamento e datas podem ficar vazios quando não informados; não invente vigências. Conferir todos os códigos e quantidade com o original. Não há arquivo oficial carregado nesta entrega. Os exemplos de teste no repositório são exclusivamente fictícios.
+
+Para arquivar edição ainda não implantada (substitua todos os parâmetros):
+
+```bash
+sha256sum /caminho/indop.csv
+php artisan nfse:importar-indop /caminho/indop.csv --versao=VERSAO_REAL --publicada-em=AAAA-MM-DD --sha256=HASH_REAL --confirmar-origem
+```
+
+Depois de confirmar a implantação efetiva em produção restrita (não basta a previsão):
+
+```bash
+php artisan nfse:liberar-indop VERSAO_REAL --restrita-desde=AAAA-MM-DD --sha256=HASH_REAL --confirmar-implantacao
+```
+
+Se já estiver implantada, pode informar --restrita-desde na importação inicial. Data futura é rejeitada; a liberação é única e não permite sobrescrever uma data previamente confirmada. O SHA-256 assegura integridade do CSV normalizado, não autenticidade da fonte. A edição liberada mais recente pela data de implantação é usada na consulta; não há ativação automática de arquivo arquivado. Em caso de erro administrativo, corrigir via revisão técnica controlada, sem sobrescrever histórico. Não há atualização automática nem permissões de alteração pelo usuário do escritório.
+
+A busca na tela Perfis tributários não altera o enquadramento fiscal. Com edição carregada/liberada, a seleção e gravação exigem código existente e, se fornecidas pela fonte, datas de vigência que cubram a competência mensal. Não habilita XML RTC. Sem edição liberada, entrada manual continua declaratória. A validação de combinações legais entre serviço, indicador e CST/cClassTrib depende de análise posterior.

@@ -8,6 +8,7 @@ use App\Models\Nfse\PerfilTributario;
 use App\Models\Nfse\Servico;
 use App\Services\Nfse\AcessoEmissaoNfse;
 use App\Services\Nfse\CatalogoTributarioNfse;
+use App\Services\Nfse\CatalogoIndicadoresNfse;
 use Illuminate\Support\Facades\DB;
 use App\Services\Nfse\PerfisTributariosNfse;
 use App\Services\Nfse\PreparacaoNfse;
@@ -31,6 +32,36 @@ class PerfisTributarios extends Component
 
     #[Locked]
     public ?int $versaoRevisada = null;
+
+    public string $buscaIndicador = '';
+
+    #[Locked]
+    public ?int $versaoIndopRevisada = null;
+
+    public function selecionarIndicador(int $id): void
+    {
+        $this->empresa();
+        $catalogo = app(CatalogoIndicadoresNfse::class);
+        $versao = $catalogo->atual();
+        abort_unless($versao && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $this->vigencia), 422);
+        $item = $catalogo->consulta((int) $versao->id, $this->vigencia)->where('id', $id)->first();
+        if (! $item) {
+            $this->addError('indop', 'Indicador indisponível na edição ou competência selecionada.');
+            return;
+        }
+        $this->form['ind_op'] = $item->codigo;
+        $this->versaoIndopRevisada = (int) $versao->id;
+        $this->confirmado = false;
+        $this->resetValidation('indop');
+    }
+
+    public function limparIndicador(): void
+    {
+        $this->empresa();
+        $this->form['ind_op'] = null;
+        $this->versaoIndopRevisada = null;
+        $this->confirmado = false;
+    }
 
     public function selecionarClassificacao(int $id): void
     {
@@ -80,7 +111,7 @@ class PerfisTributarios extends Component
 
     public function updated(string $campo): void
     {
-        if ($campo !== 'confirmado' && $campo !== 'buscaClassificacao') {
+        if ($campo !== 'confirmado' && $campo !== 'buscaClassificacao' && $campo !== 'buscaIndicador') {
             $this->confirmado = false;
         }
         if ($campo === 'form.regime' && $this->form['regime'] !== 'simples_nacional') {
@@ -94,6 +125,7 @@ class PerfisTributarios extends Component
         $perfil = PerfilTributario::daEmpresa($empresa)->findOrFail($id);
         $this->form = array_replace($this->form, array_intersect_key($perfil->dados, $this->form));
         $this->versaoRevisada = null;
+        $this->versaoIndopRevisada = null;
         $this->servicoId = $perfil->servico_id === null ? '' : (string) $perfil->servico_id;
         $this->vigencia = $perfil->vigencia->copy()->addMonthNoOverflow()->format('Y-m');
         $this->confirmado = false;
@@ -105,7 +137,7 @@ class PerfisTributarios extends Component
         $empresa = $this->empresa();
         $this->validate(['confirmado' => 'accepted', 'servicoId' => 'nullable|integer|min:1']);
         $dados = array_map(fn ($v) => $v === '' ? null : $v, $this->form);
-        app(PerfisTributariosNfse::class)->cadastrar($empresa->id, $this->servicoId === '' ? null : (int) $this->servicoId, $this->vigencia, $dados, $this->versaoRevisada);
+        app(PerfisTributariosNfse::class)->cadastrar($empresa->id, $this->servicoId === '' ? null : (int) $this->servicoId, $this->vigencia, $dados, $this->versaoRevisada, $this->versaoIndopRevisada);
         $this->confirmado = false;
         $this->resetPage();
         session()->flash('nfse_perfil_mensagem', 'Nova versão registrada. O cadastro não comprova enquadramento fiscal nem autorização de emissão.');
@@ -126,6 +158,8 @@ class PerfisTributarios extends Component
         $perfis = null;
         $cfg = $versaoCatalogo = $classificacaoSelecionada = null;
         $classificacoes = $referencias = collect();
+        $versaoIndop = $indopPendente = $indicadorSelecionado = null;
+        $indicadores = $referenciasIndop = collect();
         if ($empresa) {
             $servicos = Servico::daEmpresa($empresa)->orderBy('nome')->get(['id', 'nome', 'codigo', 'ativo']);
             $perfis = PerfilTributario::daEmpresa($empresa)->orderByDesc('vigencia')->orderByDesc('id')->paginate(20);
@@ -139,11 +173,24 @@ class PerfisTributarios extends Component
                         ->where('cst', $this->form['cst'])->where('cclass_trib', $this->form['cclass_trib'])->first();
                 }
             }
+            $indop = app(CatalogoIndicadoresNfse::class);
+            $versaoIndop = $indop->atual();
+            $indopPendente = $indop->pendente();
+            if ($versaoIndop && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $this->vigencia)) {
+                $indicadores = $indop->buscar((int) $versaoIndop->id, $this->vigencia, $this->buscaIndicador)->limit(25)->get();
+                if (filled($this->form['ind_op'])) {
+                    $indicadorSelecionado = $indop->consulta((int) $versaoIndop->id, $this->vigencia)
+                        ->where('codigo', $this->form['ind_op'])->first();
+                }
+            }
+            $referenciasIndop = DB::table('nfse_indop_codigos as c')->join('nfse_indop_versoes as v', 'v.id', '=', 'c.versao_id')
+                ->whereIn('c.id', $perfis->pluck('indop_catalogo_id')->filter()->all())
+                ->get(['c.id', 'c.descricao', 'v.versao', 'v.restrita_desde'])->keyBy('id');
             $referencias = DB::table('nfse_catalogo_classificacoes as c')->join('nfse_catalogo_versoes as v', 'v.id', '=', 'c.versao_id')
                 ->whereIn('c.id', $perfis->pluck('classificacao_catalogo_id')->filter()->all())
                 ->get(['c.id', 'c.descricao', 'v.versao', 'v.fonte', 'v.publicada_em'])->keyBy('id');
         }
 
-        return view('livewire.nfse.perfis-tributarios', compact('empresa', 'servicos', 'perfis', 'cfg', 'versaoCatalogo', 'classificacoes', 'classificacaoSelecionada', 'referencias'))->layout($this->layout);
+        return view('livewire.nfse.perfis-tributarios', compact('empresa', 'servicos', 'perfis', 'cfg', 'versaoCatalogo', 'classificacoes', 'classificacaoSelecionada', 'referencias', 'versaoIndop', 'indopPendente', 'indicadorSelecionado', 'indicadores', 'referenciasIndop'))->layout($this->layout);
     }
 }
