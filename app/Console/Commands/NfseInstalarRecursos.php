@@ -9,6 +9,7 @@ use Throwable;
 class NfseInstalarRecursos extends Command
 {
     protected $signature = 'nfse:instalar-recursos {--verificar : Confere os arquivos sem gravar no banco}';
+
     protected $description = 'Confere XSD e instala os catálogos oficiais NFS-e incluídos no repositório, sem transmissão';
 
     public function handle(RecursosOficiaisNfse $recursos): int

@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use App\Services\Nfse\CatalogoTributarioNfse;
 use App\Services\Nfse\CatalogoIndicadoresNfse;
+use App\Services\Nfse\CatalogoTributarioNfse;
 use App\Services\Nfse\Dps\AssinadorDps;
 use App\Services\Nfse\Dps\GeradorDps;
 use App\Services\Nfse\Dps\ValidadorDps;

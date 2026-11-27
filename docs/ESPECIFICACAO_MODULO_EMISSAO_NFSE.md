@@ -34,6 +34,12 @@ deduções, regimes especiais e geração dos grupos IBS/CBS continuam fora do X
 simplificado. A inclusão dos arquivos não comprova homologação fiscal. Nenhuma
 flag de transmissão é alterada por esta atualização; não houve emissão nem deploy.
 
+Validação do commit `da8f33d`: [CI 46039471387](https://github.com/fabiano-silva-dev/integrar/actions/runs/46039471387).
+Os cinco testes do pacote passaram (1.784 assertions), incluindo o XSD real e
+carga MySQL; todas as classes NFS-e passaram na suíte geral. Resultado global:
+357 aprovados e as mesmas 27 falhas do commit-base `8531b3e`, comparadas por
+nome do teste (sem nova falha funcional). Frontend, runner e scripts aprovados.
+
 Criar uma central de emissão de notas fiscais de serviço para escritórios contábeis, com operação multiempresa, utilizando o Portal Nacional da NFS-e e, preferencialmente quando homologada, a API oficial da SEFIN Nacional. A plataforma deve reduzir a digitação repetitiva e permitir emissão avulsa, importação de planilhas com layouts reutilizáveis, recorrências e emissão em lote com conferência prévia.
 
 Princípio operacional: **Selecionar empresa → Preparar notas → Conferir → Emitir → Acompanhar**. O operador não precisa acessar o portal a cada nota nem preencher novamente dados já conhecidos. A aprovação deve ser simples, mas toda transmissão fiscal precisa ser explícita, rastreável e protegida contra duplicidade.
