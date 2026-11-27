@@ -1,8 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.0 — 27/11/2026**  
+**Especificação funcional e técnica — versão 1.1 — 27/11/2026**
+
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** proposta para aprovação e desenvolvimento; nenhuma alteração de código ou produção realizada.
+**Situação:** fase 1 parcial publicada; incremento de importação preparado para revisão e homologação. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -191,7 +192,7 @@ Indicadores do piloto: tempo para preparar/emitir nota avulsa, tempo de conferê
 - Confirmar compatibilidade de `Terceiro`, importador personalizado, modelo de permissões, schema de `DocumentoFiscal`, fila e versão atual da stack durante a fase 0. O escopo-base do projeto é anterior aos recursos fiscais encontrados no GitHub.
 - Validar regimes, códigos, requisitos de inscrição/credenciamento, municípios e leiautes vigentes, incluindo RTC, com os primeiros clientes piloto e responsável fiscal. Não assumir suporte universal.
 - Recorrências mensais, aprovação humana, lote por prestador e uma linha por nota são escolhas iniciais propostas para reduzir risco. Definir futuramente outras frequências, agrupamento, cancelamento no sistema e planos comerciais.
-- Não foi executada homologação real, nem alterado o repositório. A visualização por screenshot do PDF oficial retornou erro de acesso; a consulta textual ao manual e às páginas oficiais foi possível. Confirmar o contrato exato no Swagger vigente antes de codificar.
+- Não foi executada homologação real. O repositório já recebeu a base de preparação (ver seção 14). A visualização por screenshot do PDF oficial retornou erro de acesso; a consulta textual ao manual e às páginas oficiais foi possível. Confirmar o contrato exato no Swagger vigente antes de codificar.
 
 ## 13. Referências para desenvolvimento
 
@@ -204,3 +205,38 @@ Fontes consultadas em 27/11/2026:
 - Serviço oficial e requisitos de acesso: https://www.gov.br/pt-br/servicos/emitir-nota-fiscal-de-servico-eletronica
 
 **Orientação ao desenvolvimento:** iniciar pela Fase 0; apresentar diagnóstico de reaproveitamento e resultado da prova de conceito antes de consolidar migrations ou driver definitivo. A entrega deste documento não autoriza emissão fiscal real nem alteração de produção.
+
+
+## 14. Acompanhamento da implementação — 27/11/2026
+
+### 14.1. Estado confirmado no GitHub
+
+- Documento original publicado no commit `e7b873c8d3eb73a70e4f00e0e84067cb11d7ffa6`.
+- Base de preparação publicada na `master` no commit `300a515f62c734aa57c612035178f4ac5440a4c8`: menu Emissão de NFS-e, central Livewire, configuração por prestador, tomadores, catálogo de serviços, rascunhos avulsos, snapshot cadastral, idempotência por intenção e testes de isolamento. São quatro tabelas e oito testes de feature previstos. A existência do código foi confirmada, mas a execução integrada dos testes e o deploy não foram comprovados.
+- A fase 0 continua bloqueada para transmissão: falta empresa/certificado de homologação autorizados e prova do contrato de DPS, assinatura, resposta e reconciliação. A fase 1 não está concluída: não há emissão avulsa efetiva, sequência DPS, driver de emissão ou integração do documento autorizado ao acervo.
+
+### 14.2. Incremento 2A — Importação de planilhas (código preparado)
+
+Foi priorizada a preparação de lotes de rascunhos, que é independente da autorização fiscal. O incremento deve ser aplicado sobre `300a515` e homologado antes de uso. Não libera transmissão, não cria DPS, não altera coleta existente e não equivale à fase 2 completa.
+
+- Nova aba **Importar planilha** na Central de emissão, com leitura de CSV UTF-8, XLS e XLSX utilizando o PhpSpreadsheet já declarado no projeto. Seleção por índice da aba, linha do cabeçalho e separador do CSV; limite inicial conservador de 2 MB, 200 linhas de dados, 40 colunas e 20 linhas de cabeçalho. XLSX com limite de expansão de 16 MB e 500 entradas. Não avalia fórmulas; rejeita planilhas Excel que as contenham. Exige exportação apenas de valores.
+- Mapeamento de identificador do tomador (documento ou código externo cadastrado), valor, código interno do serviço ou serviço fixo e descrição opcional. Competência fiscal única por importação. Formato de valores escolhido explicitamente: brasileiro ou decimal; não adivinhar separadores ou completar documentos truncados. Células numéricas Excel devem usar formato decimal.
+- Layouts imutáveis versionados por nome e prestador (`nfse_layouts_importacao`). Próximo mês: escolher layout, arquivo, competência e pré-conferir. Mudança de cabeçalho, ordem de colunas ou tipo de arquivo exige nova versão. Não copia layouts entre prestadores nesta entrega.
+- Pré-conferência com total exato, quantidade apta, pendências por linha, tomador/serviço/descrição/valor; confirmação explícita gera **somente todos os rascunhos aptos**. Não há seleção individual, edição em linha, criação de tomadores em massa ou agrupamento de linhas ainda. Aptidão para rascunho não significa aptidão fiscal para transmitir.
+- Revalidação no servidor e hash da conferência antes de confirmar, transação com lock por prestador, vínculo de nota à importação/linha, bloqueio de arquivo idêntico na mesma competência, sinalização impeditiva de conteúdo idêntico na planilha ou em nota existente da mesma competência. Possíveis duplicidades com valor ou descrição alterados ainda exigem conferência manual. Se a mesma prestação tiver de gerar notas legitimamente idênticas, usar emissão avulsa após conferência; a futura grade deverá permitir reconhecimento auditado de alertas.
+- Histórico de importações (`nfse_importacoes`) com arquivo original privado por operadora/prestador, hash, layout, usuário, competência e relatório de todas as linhas. Pendências ficam no histórico; corrigir e enviar arquivo com as linhas pendentes, sem reenviar o arquivo idêntico já processado. Se nenhuma linha estiver apta, não é criada importação nem versão de layout. O histórico exibe as últimas 20 importações neste incremento.
+- Os rascunhos da planilha entram na central existente com indicação de origem e linha. Se a competência importada for diferente do mês corrente, selecione o mês correspondente na central.
+
+**Arquivos principais:** `app/Services/Nfse/LeitorPlanilha.php`, `ImportacaoPlanilha.php`, `app/Livewire/Nfse/ImportarPlanilha.php`, models `LayoutImportacao` e `Importacao`, migration `2026_11_27_130000_create_nfse_importacao_tables.php`, view `livewire/nfse/importar-planilha.blade.php`. Alterações na central são restritas à aba e à identificação de origem.
+
+**Validação do incremento:** lint PHP e sete verificações isoladas de normalização monetária executadas; três métodos de teste unitário e cinco de feature adicionados (não executados no framework). Pendentes: migrations MySQL, testes completos de CSV/Excel, upload Livewire, storage, bloqueio de duplicidade sob concorrência, isolamento de tenant e build Vite. O ambiente de elaboração não possui Composer, dependências Laravel, MySQL, Docker, extensões PHP necessárias à leitura Excel e pipeline de frontend.
+
+### 14.3. Próximas entregas e critérios de saída
+
+1. **Homologar a preparação e a importação:** aplicar migrations apenas em ambiente de desenvolvimento/homologação, executar `docker compose exec app php artisan test --filter=Nfse` e `docker compose exec app npm run build`; verificar cadastro, importação em dois meses, alteração de cabeçalho, arquivo com pendências, troca de empresa, usuário sem contexto e ausência de transmissão. Resolver falhas antes de disponibilizar a operadores.
+2. **Completar a grade de conferência e os lotes (fase 2B):** edição auditada de rascunhos, seleção individual e em massa, comparação mensal, alertas reconhecíveis, cadastro de novos tomadores explicitamente confirmado, reimportação conciliada por referência externa e histórico paginado. Preparar lote, aprovação, fila e estados usando driver simulado; não confundir sucesso simulado com autorização fiscal.
+3. **Recorrências e painel (fase 3):** vínculo tomador/serviço, valor contratado, vigência, periodicidade mensal, pausa/reajuste e geração idempotente por vínculo e competência; visão multiempresa com indicadores e pendências. Pode avançar enquanto a prova técnica da API aguarda credencial.
+4. **Prova técnica nacional (fase 0/1, bloqueante para emissão real):** com empresa de teste e autorização, verificar Swagger/XSD vigente, parâmetros municipais, identificação do certificado, assinatura e transmissão de DPS em produção restrita, consulta por DPS e resultado desconhecido. Somente após aprovação integrar a emissão avulsa, a fila de lotes e o acervo fiscal. Reusar `CertificadoDigitalService` e o transporte do cliente `NfseSefinNacionalClient`, sem mudar o fluxo de coleta.
+5. **Piloto e evolução (fase 4):** XML/DANFSe, reconciliação com coleta, cancelamentos/substituições, exportação e entrega de documentos, revisão de permissões, retenção de arquivos, observabilidade e homologação com operadores. Produção somente após aprovação específica.
+
+Os incrementos 2A e 2B são subdivisões da fase 2 original para facilitar entregas verificáveis. Nenhuma etapa marcada como código preparado equivale a funcionalidade homologada. Esta atualização de acompanhamento substitui apenas a indicação de situação inicial; os requisitos das seções anteriores continuam válidos.
