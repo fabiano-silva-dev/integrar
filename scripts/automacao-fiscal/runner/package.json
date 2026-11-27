@@ -14,10 +14,11 @@
     "dev": "tsx watch src/server/index.ts",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts",
+    "test": "tsx --test tests/sanitize.test.ts tests/allowlist.test.ts tests/errors.test.ts tests/env.test.ts tests/url-rejection.test.ts tests/concurrency.test.ts tests/extract-nfe-nfce-params.test.ts tests/extract-nfse-params.test.ts tests/nfse-web-access.test.ts",
     "test:all": "tsx --test tests/**/*.test.ts",
     "test:browser": "tsx --test tests/fake-mode.test.ts tests/timeout.test.ts tests/mtls.test.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:nfse-web": "tsx --test tests/nfse-web-access.browser.test.ts"
   },
   "dependencies": {
     "playwright": "1.61.1",

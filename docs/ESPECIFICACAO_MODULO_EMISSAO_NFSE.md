@@ -1,11 +1,25 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.15 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.16 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
 **Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) publicados; interface e artefatos de homologação (2B.7) publicados; fila coletiva de homologação (2B.8) publicada; perfis tributários declaratórios (2B.9) publicados; catálogo tributário versionado (2B.10) publicado; catálogo de indicadores de operação (2B.11) incluído, pendente de carga oficial e homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
+
+### Atualização 2B.13 — Autenticação Web e representação
+
+Implementados teste em fila e histórico para senha própria, senha do representante,
+A1 próprio e A1 do escritório. O runner confirma o titular no cabeçalho e, quando
+aplicável, seleciona Procuração/Representação e confere o prestador representado.
+Credenciais transitam em pipe privado; sessões não são persistidas. Mudanças de
+configuração ou permissão invalidam o resultado. O atualizador prepara automaticamente
+Node, Chromium e runner, sem habilitar transmissão. Detalhes e limites em
+`docs/NFSE_ACESSOS_E_SIMULACAO.md`, incremento 2B.13.
+
+A confirmação no portal não autoriza emissão nem comprova acesso à API. A tela
+pública foi conferida; seleção de perfil autenticado precisa de homologação com
+credenciais e procuração autorizadas. Não foram realizadas emissões fiscais.
 
 ### Atualização 2B.12 — Recursos oficiais instalados pelo atualizador
 

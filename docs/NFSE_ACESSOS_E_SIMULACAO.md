@@ -1,6 +1,24 @@
 # IntegraExpert — Acessos e processamento simulado de NFS-e
 
-Complemento da especificação funcional e técnica v1.5, 27/11/2026. Base: `084700a54c9b36174ca2b8acaec6cc29344bcabb` (master). Incremento 2B.2 publicado em 1bffaae, ainda não homologado.
+Complemento da especificação funcional e técnica v1.16, 27/11/2026. Inclui o incremento 2B.13 de autenticação Web. As seções de incrementos anteriores abaixo são históricas.
+
+## Atualização 2B.13 — Login Web com senha, A1 e procuração
+
+Em **Emissão de NFS-e > Acesso para emissão**, selecionar a empresa, escolher uma das quatro modalidades e o canal **Emissor Web**, salvar e clicar em **Testar acesso ao Emissor Web**. Usuário e senha são os do próprio Emissor Nacional, não os da conta GOV.BR. Certificados suportados: A1 PFX/P12 já cadastrados; não há suporte a A3/token neste fluxo.
+
+O teste é executado na fila `database/default`, com apenas escritório, empresa e identificador da tentativa no job. Revalida usuário ativo e papel admin/gerente/super admin, escritório, empresa, modo, titular, credenciais e validade antes e depois da navegação. A configuração é identificada por HMAC; alteração de senha, certificado ou procuração invalida o resultado. Duplo clique reaproveita a tentativa pendente; a execução do mesmo job é idempotente. Tentativas abandonadas por mais de cinco minutos são encerradas ao solicitar novo teste. Limite: cinco solicitações por minuto por escritório. Requer worker da fila `default`; não utiliza a conexão `sync` das requisições web.
+
+No runner, cada tentativa cria um contexto Chromium isolado, recebe credenciais por stdin privado e encerra a sessão no final. Não utiliza arquivos de entrada, argumentos de CLI, trace, screenshots, vídeo, logs de páginas, cookies persistentes ou estado de sessão. O PEM do A1 é obtido pelo serviço existente e enviado em memória ao runner; o fallback de extração para PFX legado usa o diretório temporário restrito e a limpeza já existentes nesse serviço. A impressão SHA-256 do certificado é conferida com o cadastro antes de enviá-lo ao runner. O certificado é apresentado apenas a `https://certificado.nfse.gov.br`.
+
+O login com senha usa os campos públicos conferidos em 27/11/2026: `Inscricao`, `Senha` e formulário `/EmissorNacional/Login`. O acesso com A1 usa a opção pública **Acesso via certificado digital**. Autenticação exige identificação do titular no cabeçalho, saída disponível e ausência do formulário de senha. Por representação, abre **Procuração/Representação**, informa o CPF/CNPJ do prestador selecionado e clica em **Representar**; confirma representante, representado e aviso de atuação no cabeçalho/alerta. Nunca usa o histórico de representações nem o CPF/CNPJ digitado no modal como prova do perfil ativo.
+
+Rotas externas, mutações diferentes de autenticação/representação e rotas fiscais são bloqueadas. CAPTCHA/MFA, recusa de login, perfil ambíguo, procuração recusada e mudanças de layout resultam em acesso não confirmado, sem tentativas alternativas de identidade. O histórico persiste somente modo, usuário solicitante, hash de configuração, código controlado, situação e datas. `portal_confirmado` significa acesso observado naquele instante; não concede poderes de emissão, não autoriza API nem altera os bloqueios de produção/DPS.
+
+O atualizador padrão prepara Node 24+, dependências do runner, Chromium e build; reaproveita o instalador de automação com `--skip-systemd`, sem alterar o modo fake nem habilitar transmissão. O worker `default` já instalado é reiniciado pelo atualizador. `--skip-npm` também pula essa preparação. O servidor precisa poder acessar os repositórios de pacotes e o download do Playwright. `PLAYWRIGHT_BROWSERS_PATH` pode substituir o cache compartilhado padrão `/var/cache/integrar-playwright`.
+
+Provas automatizadas: schemas/identidade, fixtures do portal para as quatro modalidades e recusas, e testes Laravel de isolamento, rotação de credencial, revogação, idempotência, expiração e certificado. Fixtures não comprovam o DOM autenticado real: a homologação com credenciais autorizadas e procuração real permanece necessária, especialmente o menu e o aviso do perfil ativo. Nenhuma emissão fiscal ou login com credencial real foi realizado neste incremento.
+
+Fontes oficiais para homologação: [login do Emissor Nacional](https://www.nfse.gov.br/EmissorNacional/Login) e [FAQ, assunto 28 — procuração/representação](https://www.gov.br/nfse/pt-br/perguntas-frequentes/teste-do-perguntas). A tela pública foi inspecionada; os seletores autenticados seguem o fluxo documentado e falham de forma fechada quando não há confirmação inequívoca.
 
 ## 1. Representação e autenticação
 
@@ -14,7 +32,7 @@ A funcionalidade de alternância de perfis e procurações foi implantada no Emi
 
 Menu Emissão de NFS-e > Acesso para emissão; restrito a admin/gerente. Uma configuração por prestador, independente de `empresa_integracoes` e da coleta fiscal existente. Reaproveita `certificados_digitais` sem copiar PFX ou senha do certificado. `nfse_acessos_emissao` mantém usuário e senha com casts encrypted e hidden; nunca carregar as credenciais salvas no estado Livewire, nem enviar aos jobs. O formulário envia a nova credencial somente na ação de gravação e limpa os campos locais. Campos ambos vazios mantêm a credencial apenas no mesmo modo/documento. Troca para certificado limpa credenciais anteriores. Não registrar argumentos de requisição, formulários, tráfego, screenshots ou segredos em logs/APM; revisar middleware e ferramentas de observabilidade na homologação. Não enviar segredos por query string, CLI ou payload de fila. Certificado referenciado não pode ser excluído sem tratar vínculo; não há substituição automática.
 
-A validade da procuração informada é apenas declaratória; todas as configurações começam `pendente`. Não existe botão que marque como validada sem prova oficial. O fluxo de login e representação real ainda não foi implementado; o adapter Node atual suporta login A1 e coleta, sem operação de emissão. A interface existente de painel ainda indica presença de certificado próprio por datas, não a disponibilidade de representação. A evolução deve mostrar separadamente o modo configurado, validade da credencial, representação confirmada e habilitação fiscal.
+A validade da procuração informada é apenas declaratória; todas as configurações começam `pendente`. Não existe botão que marque como validada sem prova oficial. O incremento 2B.13 acima implementa o teste de login e representação; o adapter de coleta existente permanece independente. A interface de painel ainda indica presença de certificado próprio por datas, não a disponibilidade de representação.
 
 ## 2. Prova técnica e segurança para o driver real
 

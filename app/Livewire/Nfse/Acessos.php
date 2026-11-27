@@ -4,9 +4,11 @@ namespace App\Livewire\Nfse;
 
 use App\Models\Nfse\AcessoEmissao;
 use App\Models\Nfse\DiagnosticoAcesso;
+use App\Models\Nfse\ValidacaoPortal;
 use App\Services\Nfse\DiagnosticoApiNfse;
 use App\Services\Nfse\AcessoEmissaoNfse;
 use App\Services\Nfse\PreparacaoNfse;
+use App\Services\Nfse\ValidacaoPortalNfse;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -52,8 +54,15 @@ class Acessos extends Component
             'modo' => $this->modo, 'canal' => $this->canal, 'certificado_digital_id' => $this->certificadoId ?: null,
             'login' => $login, 'senha' => $senha, 'procuracao_ate' => $this->procuracaoAte ?: null,
         ]);
-        session()->flash('nfse_acesso_mensagem', 'Acesso cadastrado. Validação no portal/API ainda pendente.');
+        session()->flash('nfse_acesso_mensagem', 'Configuração salva. Teste o acesso para confirmar o perfil ativo.');
         return true;
+    }
+
+    public function testarPortal(): void
+    {
+        abort_unless($this->empresaId, 422);
+        app(ValidacaoPortalNfse::class)->solicitar($this->empresaId);
+        session()->flash('nfse_acesso_mensagem', 'Teste de acesso solicitado. Aguarde o resultado abaixo.');
     }
 
     public function diagnosticar(string $ambiente, string $chave): void
@@ -75,6 +84,7 @@ class Acessos extends Component
         $certificados = $empresa ? app(AcessoEmissaoNfse::class)->certificados($empresa, $this->modo)->orderBy('nome')->get(['id', 'nome', 'valido_ate']) : collect();
         $status = $empresa ? AcessoEmissao::daEmpresa($empresa)->first(['modo', 'status_validacao', 'certificado_digital_id', 'procuracao_ate']) : null;
         $diagnosticos = $empresa ? DiagnosticoAcesso::daEmpresa($empresa)->latest('id')->limit(10)->get(['id', 'ambiente', 'status', 'certificado_id', 'created_at']) : collect();
-        return view('livewire.nfse.acessos', compact('empresa', 'certificados', 'status', 'diagnosticos'))->layout($this->layout);
+        $validacoesPortal = $empresa ? ValidacaoPortal::daEmpresa($empresa)->latest('id')->limit(10)->get(['id', 'modo', 'status', 'codigo', 'created_at', 'concluida_em']) : collect();
+        return view('livewire.nfse.acessos', compact('empresa', 'certificados', 'status', 'diagnosticos', 'validacoesPortal'))->layout($this->layout);
     }
 }

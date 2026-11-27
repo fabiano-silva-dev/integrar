@@ -34,6 +34,8 @@ return [
 
     'nfse_cert_origins' => env('NFSE_EMISSOR_CERT_ORIGINS', 'https://certificado.nfse.gov.br'),
 
+    'playwright_browsers_path' => env('PLAYWRIGHT_BROWSERS_PATH', '/var/cache/integrar-playwright'),
+
     /*
     |--------------------------------------------------------------------------
     | Sefin Nacional — consulta XML da NFS-e por chave (mTLS do contribuinte)

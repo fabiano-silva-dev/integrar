@@ -64,6 +64,7 @@ Opções:
   --dry-run                  Mostra ações sem alterar o sistema
   --project-dir CAMINHO      Raiz do Laravel (padrão: pai deste script)
   --app-user USUÁRIO         Dono do projeto / quem roda npm (padrão: \$SUDO_USER)
+  --app-group GRUPO          Grupo do runtime (padrão: www-data)
   --browsers-path CAMINHO    PLAYWRIGHT_BROWSERS_PATH (padrão: $PLAYWRIGHT_BROWSERS_PATH_DEFAULT)
   --skip-apt                 Não instala pacotes apt
   --skip-node                Não instala/atualiza Node.js
@@ -485,6 +486,7 @@ parse_args() {
                 shift 2
                 ;;
             --app-user) APP_USER="$2"; shift 2 ;;
+            --app-group) APP_GROUP="$2"; shift 2 ;;
             --browsers-path) PLAYWRIGHT_BROWSERS_PATH="$2"; shift 2 ;;
             --skip-apt) SKIP_APT=true; shift ;;
             --skip-node) SKIP_NODE=true; shift ;;

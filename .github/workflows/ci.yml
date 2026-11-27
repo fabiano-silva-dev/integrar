@@ -84,6 +84,8 @@ jobs:
         run: vendor/bin/pint --test
       - name: Recursos oficiais NFS-e, XSD real e instalação idempotente
         run: php artisan test --filter='Nfse(RecursosOficiais|InstalacaoRecursosTenant)Test'
+      - name: Autenticação Web NFS-e e isolamento entre empresas
+        run: php artisan test --filter=NfseValidacaoPortalTenantTest
       - name: Testes PHP
         run: php artisan test --exclude-filter='Tests\\Feature\\Auth\\|Tests\\Feature\\ProfileTest|Tests\\Feature\\ExampleTest'
 
@@ -115,6 +117,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Instalar Chromium para provas de autenticação
+        run: npx playwright install --with-deps chromium
+      - name: Testar senha, certificado e procuração com portal simulado
+        run: npm run test:nfse-web
 
   scripts:
     runs-on: ubuntu-latest

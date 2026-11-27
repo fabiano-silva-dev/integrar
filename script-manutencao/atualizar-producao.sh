@@ -222,6 +222,23 @@ run_npm() {
     fi
 }
 
+prepare_nfse_web_runner() {
+    local runner_dir="$PROJECT_DIR/scripts/automacao-fiscal/runner"
+    [[ -f "$runner_dir/package-lock.json" ]] || return 0
+    log "Preparando acesso ao Emissor Web (Node, Chromium e runner)..."
+    if [[ "$MODE" == docker ]]; then
+        docker compose exec -T app npm --prefix scripts/automacao-fiscal/runner ci
+        docker compose exec -T app npm --prefix scripts/automacao-fiscal/runner run build
+        docker compose exec -T app env PLAYWRIGHT_BROWSERS_PATH=/var/cache/integrar-playwright npm --prefix scripts/automacao-fiscal/runner exec -- playwright install --with-deps chromium
+        docker compose exec -T app chmod -R a+rX /var/cache/integrar-playwright
+    else
+        run_as_root bash "$PROJECT_DIR/script-manutencao/instalar-deps-automacao-fiscal.sh" \
+            --yes --app-user "$DEPLOY_USER" --app-group "$APP_GROUP" --skip-systemd \
+            --browsers-path "${PLAYWRIGHT_BROWSERS_PATH:-/var/cache/integrar-playwright}"
+    fi
+    ok "Navegador e runner preparados"
+}
+
 fix_deploy_permissions() {
     if [[ "$MODE" != native ]]; then
         return
@@ -348,6 +365,7 @@ main() {
         else
             ok "Assets compilados"
         fi
+        prepare_nfse_web_runner
     fi
 
     if ! $SKIP_MIGRATE; then
