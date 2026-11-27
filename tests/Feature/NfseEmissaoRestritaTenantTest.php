@@ -1,0 +1,122 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\CertificadoDigital;
+use App\Models\Empresa;
+use App\Models\EmpresasOperadora;
+use App\Models\Nfse\Nota;
+use App\Models\Nfse\TransmissaoRestrita;
+use App\Models\User;
+use App\Services\Nfse\AcessoEmissaoNfse;
+use App\Services\Nfse\ConferenciaNfse;
+use App\Services\Nfse\Dps\AssinadorDps;
+use App\Services\Nfse\Dps\EmissaoRestrita;
+use App\Services\Nfse\Dps\GeradorDps;
+use App\Services\Nfse\Dps\NumeracaoDpsHomologacao;
+use App\Services\Nfse\Dps\PrepararDpsHomologacao;
+use App\Services\Nfse\Dps\TransporteSefinRestrita;
+use App\Services\Nfse\Dps\ValidadorDps;
+use App\Services\Nfse\PreparacaoNfse;
+use DateTimeImmutable;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
+use Tests\TestCase;
+
+class NfseEmissaoRestritaTenantTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private Empresa $empresa;
+    private Nota $nota;
+    private \App\Models\Nfse\DpsLocal $dps;
+    private const DOCUMENTO = '11222333000181';
+    private const CHAVE = '43080031211222333000181000000000001726066074736113';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['automacao_fiscal.nfse_dps_local_enabled' => true, 'automacao_fiscal.nfse_dps_restrita_enabled' => true,
+            'automacao_fiscal.nfse_dps_restrita_prestador' => self::DOCUMENTO, 'automacao_fiscal.nfse_dps_algoritmo' => 'rsa-sha256']);
+        $op = EmpresasOperadora::factory()->create(['ativo' => true]);
+        $this->empresa = Empresa::factory()->create(['empresa_operadora_id' => $op->id, 'cnpj' => self::DOCUMENTO, 'codigo_municipio_ibge' => '4308003', 'ativo' => true]);
+        $this->actingAs(User::factory()->admin()->create(['empresa_operadora_id' => $op->id, 'ativo' => true]));
+        $p = app(PreparacaoNfse::class);
+        $p->salvarConfiguracao($this->empresa->id, ['habilitado_preparo' => true, 'regime_tributario' => 'simples_nacional', 'serie_dps' => '1']);
+        $t = $p->salvarTomador($this->empresa->id, null, ['documento' => '52998224725', 'nome' => 'Tomador teste', 'ativo' => true]);
+        $s = $p->salvarServico($this->empresa->id, null, ['codigo' => 'S1', 'nome' => 'Serviço', 'descricao' => 'Serviço', 'codigo_tributacao_nacional' => '170101', 'ativo' => true]);
+        $this->nota = $p->salvarRascunho($this->empresa->id, (string) Str::uuid(), ['tomador_id' => $t->id, 'servico_id' => $s->id,
+            'competencia' => '2026-11-01', 'descricao' => 'Serviço', 'valor' => '100.01'])->refresh();
+        app(ConferenciaNfse::class)->prepararLote($this->empresa->id, '2026-11', [$this->nota->id => $this->nota->versao], '');
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+        $csr = openssl_csr_new(['commonName' => 'Teste local'], $key, ['digest_alg' => 'sha256']);
+        $cert = openssl_csr_sign($csr, null, $key, 1, ['digest_alg' => 'sha256']);
+        openssl_pkey_export($key, $privado);
+        openssl_x509_export($cert, $publico);
+        $c = CertificadoDigital::create(['empresa_operadora_id' => $op->id, 'empresa_id' => null, 'nome' => 'A1 teste', 'tipo' => 'A1',
+            'arquivo_path' => 'teste-inexistente.pfx', 'senha_criptografada' => 'teste', 'documento_titular' => '52998224725',
+            'fingerprint' => openssl_x509_fingerprint($cert, 'sha256'), 'ativo' => true, 'valido_de' => now()->subDay(), 'valido_ate' => now()->addDay()]);
+        app(AcessoEmissaoNfse::class)->salvar($this->empresa->id, ['modo' => 'certificado_representante', 'canal' => 'api', 'certificado_digital_id' => $c->id]);
+        $fiscal = ['municipio_prestacao' => '4308003', 'regApTribSN' => '1', 'escopo_confirmado' => true, 'ibscbs_nao_exigido' => true,
+            'percentuais_tributos' => ['pTotTribFed' => '5.00', 'pTotTribEst' => '0.00', 'pTotTribMun' => '2.00']];
+        $mock = $this->createMock(PrepararDpsHomologacao::class);
+        $mock->method('preparar')->willReturnCallback(fn ($empresa, $nota, $numero) => (new AssinadorDps)->assinar((new GeradorDps)->gerar($fiscal + [
+            'prestador' => self::DOCUMENTO, 'tomador' => '52998224725', 'nome_tomador' => 'Tomador teste',
+            'municipio_emissor' => '4308003', 'serie' => '1', 'numero' => $numero, 'competencia' => '2026-11-01',
+            'emissao' => new DateTimeImmutable('2026-11-27T10:00:00-03:00'), 'opSimpNac' => '3', 'valor' => '100.01',
+            'descricao' => 'Serviço', 'codigo_tributacao_nacional' => '170101']), $publico, $privado, 'rsa-sha256'));
+        $this->app->instance(PrepararDpsHomologacao::class, $mock);
+        $num = app(NumeracaoDpsHomologacao::class);
+        $num->inicializar($this->empresa->id, '0');
+        $this->dps = $num->preparar($this->empresa->id, $this->nota->id, $fiscal);
+        // XSD oficial ainda pendente: testa coordenação, não homologação fiscal.
+        $this->app->instance(ValidadorDps::class, $this->createMock(ValidadorDps::class));
+    }
+
+    private function aprovar(EmissaoRestrita $service): TransmissaoRestrita
+    {
+        return $service->aprovar($this->empresa->id, $this->dps->id, $this->dps->xml_hash);
+    }
+
+    public function test_timeout_impede_novo_post_e_consulta_404_nao_libera_reenvio(): void
+    {
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->once())->method('enviar')->willThrowException(new RuntimeException('timeout simulado'));
+        $mock->expects($this->once())->method('consultarDps')->willReturn(['http' => 404, 'body' => '{}']);
+        $mock->expects($this->never())->method('consultarNfse');
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        $service = app(EmissaoRestrita::class);
+        $r = $this->aprovar($service);
+        $this->assertSame($r->id, $this->aprovar($service)->id);
+        $this->assertSame('incerta', $service->enviar($this->empresa->id, $r->id)->status);
+        $this->travel(91)->seconds();
+        $this->assertSame('incerta', $service->reconciliar($this->empresa->id, $r->id)->status);
+        $this->assertSame('em_lote', $this->nota->refresh()->status);
+        $this->expectException(ValidationException::class);
+        $service->enviar($this->empresa->id, $r->id);
+    }
+
+    public function test_reconciliacao_recupera_xml_sem_reenviar(): void
+    {
+        $xml = new \DOMDocument;
+        $xml->loadXML($this->dps->xml_criptografado, LIBXML_NONET);
+        $nfse = '<NFSe xmlns="'.GeradorDps::NS.'"><infNFSe Id="NFS'.self::CHAVE.'"><cStat>100</cStat><emit><CNPJ>'.self::DOCUMENTO.'</CNPJ></emit>'.$xml->saveXML($xml->documentElement).'</infNFSe></NFSe>';
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->once())->method('enviar')->willReturn(['http' => 500, 'body' => '{}']);
+        $mock->expects($this->once())->method('consultarDps')->willReturn(['http' => 200, 'body' => json_encode(['idDps' => $this->dps->id_dps, 'chaveAcesso' => self::CHAVE])]);
+        $mock->expects($this->once())->method('consultarNfse')->willReturn(['http' => 200, 'body' => json_encode(['chaveAcesso' => self::CHAVE, 'nfseXmlGZipB64' => base64_encode(gzencode($nfse))])]);
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        $service = app(EmissaoRestrita::class);
+        $r = $this->aprovar($service);
+        $service->enviar($this->empresa->id, $r->id);
+        $this->travel(91)->seconds();
+        $r = $service->reconciliar($this->empresa->id, $r->id);
+        $this->assertSame('confirmada_teste', $r->status);
+        $this->assertSame(self::CHAVE, $r->chave_acesso);
+        $this->assertSame($nfse, $r->nfse_xml_criptografado);
+        $this->assertArrayNotHasKey('nfse_xml_criptografado', $r->toArray());
+        $this->assertSame('em_lote', $this->nota->refresh()->status);
+    }
+}
