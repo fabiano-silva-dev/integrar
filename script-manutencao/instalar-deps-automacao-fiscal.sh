@@ -456,6 +456,10 @@ JSON
 }
 
 print_next_steps() {
+    if $SKIP_SYSTEMD; then
+        success "Dependências Node/Playwright prontas para o atualizador."
+        return 0
+    fi
     cat <<EOF
 
 Próximos passos:

@@ -45,7 +45,7 @@ Opções:
   --docker          Usa Docker (desenvolvimento)
   --native          Modo nativo (padrão)
   --skip-composer   Não roda composer install
-  --skip-npm        Não compila assets (npm)
+  --skip-npm        Pula assets, runner e preparação do navegador
   --skip-migrate    Não roda migrations
   --skip-cache      Não limpa/recria cache Laravel
   --app-user USER   Usuário da aplicação (padrão: www-data)

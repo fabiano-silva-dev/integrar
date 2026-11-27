@@ -18,6 +18,8 @@ O atualizador padrão prepara Node 24+, dependências do runner, Chromium e buil
 
 Provas automatizadas: schemas/identidade, fixtures do portal para as quatro modalidades e recusas, e testes Laravel de isolamento, rotação de credencial, revogação, idempotência, expiração e certificado. Fixtures não comprovam o DOM autenticado real: a homologação com credenciais autorizadas e procuração real permanece necessária, especialmente o menu e o aviso do perfil ativo. Nenhuma emissão fiscal ou login com credencial real foi realizado neste incremento.
 
+Verificação em 27/11/2026, CI [46043380853](https://github.com/fabiano-silva-dev/integrar/actions/runs/46043380853): 39 testes unitários do runner e 10 testes Chromium do acesso Web aprovados; typecheck, lint, build do runner, build frontend e scripts aprovados. Os 11 testes PHP específicos de acesso Web também passaram. A suíte PHP geral continua com as 27 falhas anteriores ao incremento, já identificadas no CI da base; não é uma suíte globalmente verde. Neste workspace não há PHP/Docker nem worker ativo para reiniciar; a execução PHP e Chromium foi realizada no CI. O atualizador reinicia os workers instalados e ativos no servidor durante o deploy.
+
 Fontes oficiais para homologação: [login do Emissor Nacional](https://www.nfse.gov.br/EmissorNacional/Login) e [FAQ, assunto 28 — procuração/representação](https://www.gov.br/nfse/pt-br/perguntas-frequentes/teste-do-perguntas). A tela pública foi inspecionada; os seletores autenticados seguem o fluxo documentado e falham de forma fechada quando não há confirmação inequívoca.
 
 ## 1. Representação e autenticação

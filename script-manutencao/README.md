@@ -28,7 +28,8 @@ Exit `0` = livre; `1` = há atividade.
 Executa:
 
 - `composer install` (inclui `package:discover` do Livewire)
-- `npm ci && npm run build` (se `package.json` existir; requer Node.js 20+ no PATH do sistema)
+- preparação automática de Node.js 24+, Chromium, dependências e build do runner para o Emissor Web
+- `npm ci && npm run build` dos assets (se `package.json` existir)
 - `php artisan migrate --force`
 - `php artisan optimize:clear` (+ `optimize` em produção nativa)
 - reload PHP-FPM / filas systemd (nativo)
@@ -74,7 +75,7 @@ sudo ./habilitar-automacao-fiscal-producao.sh --yes
 sudo ./habilitar-automacao-fiscal-producao.sh --yes --with-deps
 ```
 
-O `./atualizar-producao.sh` **não** recompila o runner TypeScript. Depois de mudanças em `scripts/automacao-fiscal/runner/`, rode o instalador acima (ou `npm ci && npm run build` nesse diretório) e reinicie a fila de automações.
+O `./atualizar-producao.sh` prepara as dependências e recompila o runner TypeScript automaticamente, além de reiniciar as filas systemd já ativas. Reaproveita o instalador com `--skip-systemd`, preservando as configurações de acesso e transmissão. `--skip-npm` pula os assets e essa preparação do runner. Para NFS-e Web, usar a tela **Acesso para emissão > Emissor Web > Testar acesso**; não é necessário habilitar o coletor para testar o login. O teste é processado pelo worker `database/default`.
 
 Variáveis extras no `.env` (ver `.env.example`): `NFE_FAZENDA_ENTRY_URL`, `NFE_FAZENDA_CERT_ORIGINS`, `NFE_XML_TIMEOUT_MS` e, se o portal nacional exigir desafio de imagens, `CAPSOLVER_API_KEY`.
 
