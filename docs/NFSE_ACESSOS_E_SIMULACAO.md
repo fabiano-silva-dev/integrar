@@ -1,6 +1,6 @@
 # IntegraExpert — Acessos e processamento simulado de NFS-e
 
-Complemento da especificação funcional e técnica v1.5, 27/11/2026. Base: `084700a54c9b36174ca2b8acaec6cc29344bcabb` (master). Incremento 2B.2 preparado, ainda não homologado.
+Complemento da especificação funcional e técnica v1.5, 27/11/2026. Base: `084700a54c9b36174ca2b8acaec6cc29344bcabb` (master). Incremento 2B.2 publicado em 1bffaae, ainda não homologado.
 
 ## 1. Representação e autenticação
 
@@ -41,3 +41,16 @@ Próximos incrementos: (1) concluir homologação de todos os módulos publicado
 - https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/atualizacoes-e-implantacoes/atualizacoes-e-implantacoes
 - https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita
 - https://sefin.nfse.gov.br/SefinNacional/docs/index
+
+
+## 5. Incremento 2B.3 — Diagnóstico de acesso à API (consulta)
+
+O FAQ oficial atualizado em novembro de 2026, assunto 17.7, esclarece que o certificado do procurador pode servir para conexão mTLS e assinatura da DPS, mantendo a identidade do prestador no documento. A representação também é aplicável em produção restrita. O assunto 28 explica a alternância de perfil e a autorização cadastrada na Receita Federal. A emissão sem certificado nas interfaces visuais tem limitações; não se deve automatizar emissão em lote por senha como alternativa à API.
+
+Novo diagnóstico na tela Acesso para emissão: administradores/gerentes, prestador e certificado previamente cadastrados, chave conhecida de nota do próprio prestador e seleção explícita do ambiente. Reutiliza o transporte mTLS da SEFIN com GET e URLs oficiais fixas; sem POST, sem alterar a coleta. Habilitação explícita NFSE_DIAGNOSTICO_API_ENABLED=true (padrão false); limpar cache de configuração conforme procedimento do ambiente. Produção restrita é o padrão da tela; produção apenas para consulta de documento existente. Não utiliza a flag de coleta fake_mode, pois o diagnóstico tem habilitação própria. Limite de dez consultas por minuto por escritório.
+
+Confirma estritamente namespace, Id da NFSe, documento do emitente e prestador da DPS e tpAmb. Não exibe nem armazena XML/chave original ou detalhes de exceções; registra hash da chave, configuração, certificado, ambiente, operador e status em nfse_diagnosticos_acesso. Verifica se a configuração mudou durante a consulta. Histórico não equivale a validação atual. A consulta bem-sucedida não comprova poderes de emissão, pois o certificado pode ter acesso por outro papel. Não modifica status_validacao nem habilita emissão. Falhas de consulta não provam inexistência de procuração. Registros iniciados sem conclusão são históricos de tentativa interrompida.
+
+Próximos passos: executar os testes unitários e integrados, homologar GET com nota de teste, verificar regras e XSD vigentes, implementar DPS/assinatura/identidade e transmissão exclusivamente restrita com autorização específica. Login por senha e seleção de perfil do Emissor Web permanecem pendentes de implementação e testes com sessão real. Não contornar CAPTCHA/MFA. O Swagger interativo não pôde ser acessado nesta elaboração; confirmar endpoint e contrato antes de homologar. Não houve conexão real nem emissão.
+
+Referência: https://www.gov.br/nfse/pt-br/perguntas-frequentes/teste-do-perguntas (17.7, 28.1–28.6).

@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.5 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.6 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila preparado, pendente de publicação e homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 de diagnóstico de acesso à API incluído, pendente de homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -274,3 +274,8 @@ Base verificada: `41f062c4471d4c7eed6b26d1d4015e4279a9e1b7`. A nova aba **Confer
 5. **Piloto e evolução (fase 4):** XML/DANFSe, reconciliação com coleta, cancelamentos/substituições, exportação e entrega de documentos, revisão de permissões, retenção de arquivos, observabilidade e homologação com operadores. Produção somente após aprovação específica.
 
 Os incrementos 2A e 2B são subdivisões da fase 2 original para facilitar entregas verificáveis. Nenhuma etapa marcada como código preparado equivale a funcionalidade homologada. Esta atualização de acompanhamento substitui apenas a indicação de situação inicial; os requisitos das seções anteriores continuam válidos.
+
+
+### Incremento 2B.3 — diagnóstico de API
+
+Cadastro de acessos e simulador publicados em 1bffaae. Diagnóstico de consulta autenticada incluído nesta atualização, desligado por padrão e sem emissão. Ver [complemento de acessos e simulação](NFSE_ACESSOS_E_SIMULACAO.md), seção 5. A autorização fiscal, assinatura DPS, autenticação e representação no Emissor Web continuam pendentes de homologação/implementação.

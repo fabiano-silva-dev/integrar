@@ -27,6 +27,37 @@ class NfseSefinNacionalClient
         return $this->interpretarRespostaHttp($raw['http'], $raw['body'], $chave);
     }
 
+    /**
+     * Consulta de diagnóstico: endpoints oficiais fixos, sem POST nem alteração da coleta.
+     * Não equivale a autorização de emissão.
+     */
+    public function consultarXmlParaDiagnostico(string $chave, CertificadoDigital $certificado, string $ambiente): string
+    {
+        if (! preg_match('/^\d{50}$/D', $chave)) {
+            throw new RuntimeException('Chave inválida.');
+        }
+        $base = match ($ambiente) {
+            'restrita' => 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional',
+            'producao' => 'https://sefin.nfse.gov.br/SefinNacional',
+            default => throw new RuntimeException('Ambiente inválido.'),
+        };
+        $raw = $this->getJson($base.'/nfse/'.$chave, $certificado);
+        if ($raw['http'] !== 200) {
+            throw new RuntimeException('Consulta não confirmada (HTTP '.$raw['http'].').');
+        }
+        $json = $this->decodificarJson($raw['body']);
+        $b64 = $json['nfseXmlGZipB64'] ?? $json['NfseXmlGZipB64'] ?? null;
+        if (! is_string($b64) || strlen($b64) > 8388608) {
+            throw new RuntimeException('Resposta XML ausente ou excede o limite.');
+        }
+        $bin = base64_decode($b64, true);
+        $xml = is_string($bin) ? (str_starts_with(ltrim($bin), '<') ? $bin : @gzdecode($bin, 8388608)) : false;
+        if (! is_string($xml) || strlen($xml) > 8388608) {
+            throw new RuntimeException('XML inválido ou excede o limite.');
+        }
+        return $xml;
+    }
+
     public function montarUrl(string $chaveAcesso): string
     {
         $chave = $this->normalizarChave($chaveAcesso);

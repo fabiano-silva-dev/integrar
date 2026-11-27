@@ -3,6 +3,8 @@
 namespace App\Livewire\Nfse;
 
 use App\Models\Nfse\AcessoEmissao;
+use App\Models\Nfse\DiagnosticoAcesso;
+use App\Services\Nfse\DiagnosticoApiNfse;
 use App\Services\Nfse\AcessoEmissaoNfse;
 use App\Services\Nfse\PreparacaoNfse;
 use Livewire\Attributes\Locked;
@@ -54,12 +56,25 @@ class Acessos extends Component
         return true;
     }
 
+    public function diagnosticar(string $ambiente, string $chave): void
+    {
+        abort_unless($this->empresaId, 422);
+        $registro = app(DiagnosticoApiNfse::class)->executar($this->empresaId, $ambiente, trim($chave));
+        session()->flash('nfse_acesso_mensagem', match ($registro->status) {
+            'consulta_confirmada' => 'Consulta confirmada para o prestador. Não comprova autorização de emissão.',
+            'identidade_divergente' => 'A resposta não confirmou chave, prestador e ambiente. Nenhum XML foi armazenado.',
+            'config_alterada' => 'Configuração mudou durante o teste. Execute novamente.',
+            default => 'Consulta não confirmada. Confira certificado, chave, ambiente e permissões.',
+        });
+    }
+
     public function render()
     {
         abort_unless(app(PreparacaoNfse::class)->podeConfigurar(), 403);
         $empresa = $this->empresaId ? app(AcessoEmissaoNfse::class)->empresa($this->empresaId) : null;
         $certificados = $empresa ? app(AcessoEmissaoNfse::class)->certificados($empresa, $this->modo)->orderBy('nome')->get(['id', 'nome', 'valido_ate']) : collect();
         $status = $empresa ? AcessoEmissao::daEmpresa($empresa)->first(['modo', 'status_validacao', 'certificado_digital_id', 'procuracao_ate']) : null;
-        return view('livewire.nfse.acessos', compact('empresa', 'certificados', 'status'))->layout($this->layout);
+        $diagnosticos = $empresa ? DiagnosticoAcesso::daEmpresa($empresa)->latest('id')->limit(10)->get(['id', 'ambiente', 'status', 'certificado_id', 'created_at']) : collect();
+        return view('livewire.nfse.acessos', compact('empresa', 'certificados', 'status', 'diagnosticos'))->layout($this->layout);
     }
 }
