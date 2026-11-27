@@ -28,7 +28,8 @@
     "xsd/restrita/tiposComplexos_v1.01.xsd": "3e72f4d443dfefb6c9eb97c97719261e2c0bba7a1542193729a1799ac3abdb96",
     "xsd/restrita/tiposEventos_v1.01.xsd": "1b32bea21089dc232d78b62d805e9c07382f440d4e0ea2cb3fb6b82ebde68c11",
     "xsd/restrita/tiposSimples_v1.01.xsd": "e20074f552b2000227adcc89492ed9485b776ea96695b693444001d70c441e0c",
-    "xsd/restrita/xmldsig-core-schema.xsd": "8c9792a056aedcadfc95bf16f2d7448a35da40df71533e20aea37d0329980c48"
+    "xsd/restrita/xmldsig-core-schema.xsd": "8c9792a056aedcadfc95bf16f2d7448a35da40df71533e20aea37d0329980c48",
+    "oficiais/anexo-b-nbs2-lista-servico-nacional-snnfse-v1.01-20260122.xlsx": "e74b0be8ad204e458932efb1716225a3fb5703a84e5475ce5c4c6789d1c61b1a"
   },
   "catalogo_tributario": {
     "arquivo": "catalogos/cst-cclasstrib-v1.71.csv",
@@ -68,5 +69,15 @@
     "CSV da exportação pública SVRS possui falhas de escape; carga utiliza a planilha oficial IT v1.71 com vigências e indicadores.",
     "Data 2026-11-24 do Anexo C registra a evidência de implantação do conjunto restrito Release 2, não a vigência tributária do serviço.",
     "Abas cClass 2026-09-01 e CST 2026-09-01 preservadas; publicação do arquivo no portal: 30/10/2026."
-  ]
+  ],
+  "catalogo_servicos": {
+    "original": "oficiais/anexo-b-nbs2-lista-servico-nacional-snnfse-v1.01-20260122.xlsx",
+    "versao": "AnexoB-v1.01-20260122",
+    "publicada_em": "2026-01-22",
+    "fonte": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/anexo-b-nbs2-lista-servico-nacional-snnfse-v1.01-20260122.xlsx",
+    "copia": "https://github.com/edusouza/nfse-emissor-go/blob/master/docs/anexos/anexo_b-nbs2-lista_servico_nacional-snnfse-v1-01-20260122.xlsx",
+    "git_blob": "a2eab7f0e2fa54a7f22bce0ad29b1b7b751f64d1",
+    "mapeamento": "LISTA.SERV.NAC. A/E, validar B/C/D e excluir cabeçalhos; LISTA.NBS_v2.0 A/B, somente códigos completos de 9 dígitos com descrição.",
+    "observacao": "Cópia versionada do arquivo do Anexo B recuperada de repositório público; conteúdo das abas conferido, não foi possível comparar bytes com download direto gov.br."
+  }
 }

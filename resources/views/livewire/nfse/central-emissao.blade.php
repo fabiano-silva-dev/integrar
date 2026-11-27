@@ -82,6 +82,10 @@
                 <h2 class="text-xl font-bold text-gray-800 mt-6">{{ $editandoId ? 'Editar' : 'Cadastrar' }} {{ $aba === 'tomadores' ? 'tomador' : 'serviço' }}</h2>
                 <form wire:submit="salvarCadastro" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     @foreach ($campos as $campo => $rotulo)
+                        @if($aba === 'servicos' && in_array($campo, ['codigo_tributacao_nacional','codigo_tributacao_municipal','nbs'], true))
+                            @include('livewire.nfse.partials.seletor-codigo-servico')
+                            @continue
+                        @endif
                         <label wire:key="{{ $aba }}-{{ $campo }}" class="block text-sm {{ $campo === 'descricao' ? 'md:col-span-3' : '' }}">{{ $rotulo }}
                             @if ($campo === 'descricao')<textarea wire:model="form.{{ $campo }}" rows="3" required class="w-full rounded-md border-gray-300"></textarea>
                             @else<input type="{{ $campo === 'email' ? 'email' : ($campo === 'valor_padrao' ? 'number' : 'text') }}" @if($campo === 'valor_padrao') min="0" step="0.01" @endif wire:model="form.{{ $campo }}" @required(in_array($campo, $obrigatorios)) class="w-full rounded-md border-gray-300">@endif

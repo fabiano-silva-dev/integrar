@@ -7,15 +7,19 @@ use App\Models\Nfse\Configuracao;
 use App\Models\Nfse\Nota;
 use App\Models\Nfse\Servico;
 use App\Models\Nfse\Tomador;
+use App\Services\Nfse\CatalogoMunicipalNfse;
+use App\Services\Nfse\CatalogoServicosNfse;
 use App\Services\Nfse\PreparacaoNfse;
 use App\Services\OperadoraContext;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class CentralEmissao extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     protected $layout = 'components.layouts.app';
@@ -34,6 +38,10 @@ class CentralEmissao extends Component
 
     public string $busca = '';
     public array $form = [];
+    public string $buscaCodigoTributario = '';
+    #[Locked]
+    public ?string $pesquisaTributaria = null;
+    public $tabelaMunicipal = null;
     public array $nota = [];
     public string $competencia = '';
 
@@ -98,6 +106,8 @@ class CentralEmissao extends Component
     {
         $this->resetValidation();
         $this->editandoId = null;
+        $this->fecharPesquisaTributaria();
+        $this->reset('tabelaMunicipal');
         $this->form = match ($this->aba) {
             'tomadores' => array_fill_keys((new Tomador)->getFillable(), ''),
             'servicos' => array_fill_keys((new Servico)->getFillable(), ''),
@@ -117,8 +127,60 @@ class CentralEmissao extends Component
             default => abort(404),
         };
         $this->editandoId = $registro->id;
+        $this->fecharPesquisaTributaria();
         $this->form = $registro->only($registro->getFillable());
         $this->resetValidation();
+    }
+
+    public function abrirPesquisaTributaria(string $tipo): void
+    {
+        $this->empresa();
+        abort_unless($this->aba === 'servicos' && in_array($tipo, ['nacional', 'nbs'], true), 404);
+        $this->pesquisaTributaria = $tipo;
+        $this->buscaCodigoTributario = '';
+    }
+
+    public function fecharPesquisaTributaria(): void
+    {
+        $this->pesquisaTributaria = null;
+        $this->buscaCodigoTributario = '';
+    }
+
+    public function selecionarCodigoTributario(string $tipo, string $codigo): void
+    {
+        $this->empresa();
+        abort_unless($this->aba === 'servicos' && $tipo === $this->pesquisaTributaria && in_array($tipo, ['nacional', 'nbs'], true), 404);
+        $descricao = app(CatalogoServicosNfse::class)->descricao($tipo, $codigo);
+        abort_unless($descricao !== null, 422, 'Código inexistente no Anexo B.');
+        if ($tipo === 'nacional') {
+            if (($this->form['codigo_tributacao_nacional'] ?? '') !== $codigo) {
+                $this->form['codigo_tributacao_municipal'] = '';
+                // O NBS pode corresponder a outro serviço. Não selecionar automaticamente.
+                $this->form['nbs'] = '';
+            }
+            $this->form['codigo_tributacao_nacional'] = $codigo;
+        } else {
+            $this->form['nbs'] = $codigo;
+        }
+        $this->fecharPesquisaTributaria();
+    }
+
+    public function limparNbs(): void
+    {
+        $this->empresa();
+        abort_unless($this->aba === 'servicos', 404);
+        $this->form['nbs'] = '';
+    }
+
+    public function importarTabelaMunicipal(): void
+    {
+        $empresa = $this->empresa();
+        abort_unless($this->aba === 'servicos' && app(PreparacaoNfse::class)->podeConfigurar(), 403);
+        $this->validate(['tabelaMunicipal' => 'required|file|max:2048|extensions:csv,txt']);
+        $csv = file_get_contents($this->tabelaMunicipal->getRealPath(), false, null, 0, 2097153);
+        $quantidade = app(CatalogoMunicipalNfse::class)->importar($empresa->id, $csv === false ? '' : $csv);
+        $this->reset('tabelaMunicipal');
+        session()->flash('nfse_mensagem', $quantidade.' códigos complementares carregados para o município da empresa.');
     }
 
     public function salvarCadastro(): void
@@ -172,6 +234,9 @@ class CentralEmissao extends Component
         $tomadores = collect();
         $servicos = collect();
         $configuracao = null;
+        $codigosTributarios = $codigosMunicipais = [];
+        $descricaoNacional = $descricaoNbs = null;
+        $catalogoErro = false;
         if ($empresa) {
             $configuracao = Configuracao::daEmpresa($empresa)->first();
             if ($this->aba === 'notas') {
@@ -193,7 +258,21 @@ class CentralEmissao extends Component
                 })->orderBy('nome')->paginate(20);
             }
         }
-        return view('livewire.nfse.central-emissao', compact('empresa', 'registros', 'tomadores', 'servicos', 'configuracao'))
+        if ($empresa && $this->aba === 'servicos') {
+            try {
+                $catalogo = app(CatalogoServicosNfse::class);
+                $descricaoNacional = $catalogo->descricao('nacional', (string) ($this->form['codigo_tributacao_nacional'] ?? ''));
+                $descricaoNbs = $catalogo->descricao('nbs', (string) ($this->form['nbs'] ?? ''));
+                if ($this->pesquisaTributaria !== null) {
+                    $codigosTributarios = $catalogo->buscar($this->pesquisaTributaria, $this->buscaCodigoTributario);
+                }
+            } catch (\RuntimeException) {
+                $catalogoErro = true;
+            }
+            $codigosMunicipais = app(CatalogoMunicipalNfse::class)->consultar($empresa->id, (string) ($this->form['codigo_tributacao_nacional'] ?? ''));
+        }
+        return view('livewire.nfse.central-emissao', compact('empresa', 'registros', 'tomadores', 'servicos', 'configuracao',
+            'codigosTributarios', 'codigosMunicipais', 'descricaoNacional', 'descricaoNbs', 'catalogoErro'))
             ->layout($this->layout);
     }
 }

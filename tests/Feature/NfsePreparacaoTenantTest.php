@@ -128,4 +128,43 @@ class NfsePreparacaoTenantTest extends TestCase
         Livewire::test(CentralEmissao::class)->call('mudarAba', 'tomadores')
             ->assertSee('Tomador fictício')->assertDontSee('Tomador oculto');
     }
+
+    public function test_cadastro_servico_pesquisa_e_seleciona_codigos_do_anexo_b(): void
+    {
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        Livewire::test(CentralEmissao::class)->call('mudarAba', 'servicos')
+            ->call('abrirPesquisaTributaria', 'nacional')
+            ->set('buscaCodigoTributario', 'advocacia')->assertSee('171401')
+            ->call('selecionarCodigoTributario', 'nacional', '171401')
+            ->assertSet('form.codigo_tributacao_nacional', '171401')
+            ->assertSee('Advocacia')
+            ->call('abrirPesquisaTributaria', 'nbs')
+            ->set('buscaCodigoTributario', '1.0101.11.00')
+            ->call('selecionarCodigoTributario', 'nbs', '101011100')
+            ->assertSet('form.nbs', '101011100')
+            ->call('limparNbs')->assertSet('form.nbs', '');
+    }
+
+    public function test_catalogo_municipal_isola_escritorio_e_municipio(): void
+    {
+        $this->empresa->update(['codigo_municipio_ibge' => '4316907']);
+        $this->outraEmpresa->update(['codigo_municipio_ibge' => '4304606']);
+        $this->empresaOutroEscritorio->update(['codigo_municipio_ibge' => '4316907']);
+        $svc = app(\App\Services\Nfse\CatalogoMunicipalNfse::class);
+        $this->assertSame(1, $svc->importar($this->empresa->id, "17.14.01.000|Advocacia\n17.14.01.123|Complemento fictício de teste\n"));
+        $this->assertSame('123', $svc->consultar($this->empresa->id, '171401')[0]['municipal']);
+        $this->assertSame([], $svc->consultar($this->empresa->id, '010101'));
+        $this->assertSame([], $svc->consultar($this->outraEmpresa->id, '171401'));
+        $this->actingAs(User::factory()->admin()->create(['empresa_operadora_id' => $this->empresaOutroEscritorio->empresa_operadora_id, 'ativo' => true]));
+        $this->assertSame([], $svc->consultar($this->empresaOutroEscritorio->id, '171401'));
+    }
+
+    public function test_operador_nao_substitui_catalogo_municipal(): void
+    {
+        $this->empresa->update(['codigo_municipio_ibge' => '4316907']);
+        $this->actingAs($this->operador);
+        $this->expectException(HttpException::class);
+        app(\App\Services\Nfse\CatalogoMunicipalNfse::class)->importar($this->empresa->id, '17.14.01.123|Complemento fictício');
+    }
+
 }
