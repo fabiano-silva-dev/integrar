@@ -266,4 +266,29 @@ class NfseImportacaoTenantTest extends TestCase
         $this->service->importar($this->empresa->id, $arquivo, '2026-11-01', null, $config, 'Cliente', $p['conferencia'], [], [2 => array_replace($completo, ['numero' => '130'])]);
     }
 
+    public function test_grade_e_conferencia_exibem_valor_brasileiro_sem_alterar_decimal(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nfse-');
+        $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
+        try {
+            $book->getActiveSheet()->fromArray([
+                ['CPF', 'Valor pago'],
+                ['529.982.247-25', 934.16],
+                ['529.982.247-25', 2000],
+            ]);
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($path);
+            $arquivo = new UploadedFile($path, 'valores.xlsx', null, null, true);
+            \Livewire\Livewire::test(\App\Livewire\Nfse\ImportarPlanilha::class, ['empresaId' => $this->empresa->id])
+                ->set('competencia', '2026-11-01')->set('arquivo', $arquivo)
+                ->assertSee('934,16')->assertSee('2.000,00')
+                ->call('conferir')->assertSet('previa.total', '2934.16')
+                ->assertSet('previa.linhas.0.valor', '934.16')
+                ->assertSet('previa.linhas.0.valor_formatado', '934,16')
+                ->assertSee('2.934,16');
+        } finally {
+            $book->disconnectWorksheets();
+            unlink($path);
+        }
+    }
+
 }

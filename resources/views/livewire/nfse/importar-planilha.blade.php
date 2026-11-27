@@ -173,7 +173,7 @@
                                     <td class="p-2 align-top break-words {{ $campo !== 'complemento' && blank($linha[$campo] ?? null) ? 'text-red-700' : '' }}">{{ ($linha[$campo] ?? '') ?: '—' }}</td>
                                 @endforeach
                                 <td class="p-2 align-top break-words"><strong>{{ $linha['servico'] ?: '—' }}</strong><p class="text-gray-600">{{ $linha['descricao'] }}</p></td>
-                                <td class="p-2 align-top text-right break-words">{{ $linha['valor'] ?: '—' }}</td>
+                                <td class="p-2 align-top text-right break-words">{{ $linha['valor_formatado'] ?? ($linha['valor'] ?: '—') }}</td>
                                 <td class="p-2 align-top">
                                     <button type="button" wire:click="editarLinha({{ $numero }})" wire:loading.attr="disabled" class="text-blue-700 font-medium">Editar</button>
                                     @if(isset($ajustes[$numero]) || ($e['origem'] ?? '') === 'ajuste manual')<button type="button" wire:click="desfazerLinha({{ $numero }})" wire:loading.attr="disabled" class="block mt-1 text-gray-600">Desfazer</button>@endif
@@ -229,7 +229,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
                     <div class="bg-gray-50 p-3 rounded-md">Aptas: <strong>{{ $previa['aptas'] }}</strong></div>
                     <div class="bg-gray-50 p-3 rounded-md">Pendentes: <strong>{{ $previa['pendentes'] }}</strong></div>
-                    <div class="bg-gray-50 p-3 rounded-md">Total apto: <strong>R$ {{ number_format((float)$previa['total'],2,',','.') }}</strong></div>
+                    <div class="bg-gray-50 p-3 rounded-md">Total apto: <strong>R$ {{ \App\Services\Nfse\ImportacaoPlanilha::formatarValorBr($previa['total']) }}</strong></div>
                 </div>
                 @if($previa['novos_tomadores'])<p class="mt-3 text-sm">Serão cadastrados {{ $previa['novos_tomadores'] }} novos tomadores ao confirmar.</p>@endif
                 @if(collect($previa['linhas'])->sum('formulas'))<p class="mt-2 text-sm text-amber-900">Há fórmulas em campos mapeados. Foram utilizados os valores salvos, sem executar fórmulas.</p>@endif
@@ -237,7 +237,7 @@
                     <table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="sticky top-0 bg-gray-100"><tr><th class="text-left p-2">Linha</th><th class="text-left p-2">Tomador</th><th class="text-left p-2">Serviço / descrição</th><th class="text-right p-2">Valor</th><th class="text-left p-2">Situação</th><th></th></tr></thead><tbody>
                         @foreach($previa['linhas'] as $linha)
                             <tr wire:key="previa-{{ $linha['linha'] }}" class="border-b"><td class="p-2">{{ $linha['linha'] }}</td><td class="p-2">{{ $linha['tomador'] }}@if($linha['novo_tomador'])<p class="text-gray-600">Novo cadastro</p>@endif @php($cad = $linha['cadastro_efetivo'] ?? [])
-                            @if(filled($cad['logradouro'] ?? null))<p class="text-gray-600">{{ $cad['logradouro'] }}, {{ $cad['numero'] ?? '' }} · {{ $cad['bairro'] ?? '' }} · {{ $cad['cep'] ?? '' }} · {{ $cad['uf'] ?? '' }} (IBGE {{ $cad['codigo_municipio_ibge'] ?? '—' }})</p>@endif</td><td class="p-2">{{ $linha['servico'] }}<p class="text-gray-600">{{ $linha['descricao'] }}</p></td><td class="p-2 text-right">{{ $linha['valor'] }}</td><td class="p-2 {{ $linha['erro'] ? 'text-red-700' : 'text-gray-800' }}">{{ $linha['erro'] ?? 'Apta para rascunho' }}@if($linha['ajustada'])<p class="text-blue-700">Ajustada</p>@endif</td><td class="p-2"><button type="button" wire:click="editarLinha({{ $linha['linha'] }})" class="text-blue-700">Editar</button></td></tr>
+                            @if(filled($cad['logradouro'] ?? null))<p class="text-gray-600">{{ $cad['logradouro'] }}, {{ $cad['numero'] ?? '' }} · {{ $cad['bairro'] ?? '' }} · {{ $cad['cep'] ?? '' }} · {{ $cad['uf'] ?? '' }} (IBGE {{ $cad['codigo_municipio_ibge'] ?? '—' }})</p>@endif</td><td class="p-2">{{ $linha['servico'] }}<p class="text-gray-600">{{ $linha['descricao'] }}</p></td><td class="p-2 text-right">{{ $linha['valor_formatado'] ?? $linha['valor'] }}</td><td class="p-2 {{ $linha['erro'] ? 'text-red-700' : 'text-gray-800' }}">{{ $linha['erro'] ?? 'Apta para rascunho' }}@if($linha['ajustada'])<p class="text-blue-700">Ajustada</p>@endif</td><td class="p-2"><button type="button" wire:click="editarLinha({{ $linha['linha'] }})" class="text-blue-700">Editar</button></td></tr>
                         @endforeach
                     </tbody></table>
                 </div>
@@ -262,7 +262,7 @@
     </tbody></table></div>
     @if($detalhe)
         <div class="mt-4 border border-gray-200 rounded-md p-3"><div class="flex justify-between"><strong>{{ $detalhe->arquivo_original }}</strong><button type="button" wire:click="fecharHistorico" class="text-blue-600">Fechar</button></div>
-        @foreach($detalhe->relatorio as $linha)<p class="text-sm mt-2">Linha {{ $linha['linha'] }} — {{ $linha['tomador'] }} — {{ $linha['valor'] }} — {{ $linha['erro'] ?? 'Rascunho gerado' }} @if(!empty($linha['ajustes'])) · {{ count($linha['ajustes']) }} campo(s) ajustado(s) @endif @if(filled(data_get($linha,'endereco_revisao.origem'))) · Endereço: {{ data_get($linha,'endereco_revisao.origem') }} @endif @if(filled(data_get($linha,'cadastro.endereco_integral'))) — Endereço informado: {{ data_get($linha,'cadastro.endereco_integral') }} @endif</p>@endforeach
+        @foreach($detalhe->relatorio as $linha)<p class="text-sm mt-2">Linha {{ $linha['linha'] }} — {{ $linha['tomador'] }} — {{ $linha['valor_formatado'] ?? (isset($linha['dados']['valor']) ? \App\Services\Nfse\ImportacaoPlanilha::formatarValorBr($linha['dados']['valor']) : $linha['valor']) }} — {{ $linha['erro'] ?? 'Rascunho gerado' }} @if(!empty($linha['ajustes'])) · {{ count($linha['ajustes']) }} campo(s) ajustado(s) @endif @if(filled(data_get($linha,'endereco_revisao.origem'))) · Endereço: {{ data_get($linha,'endereco_revisao.origem') }} @endif @if(filled(data_get($linha,'cadastro.endereco_integral'))) — Endereço informado: {{ data_get($linha,'cadastro.endereco_integral') }} @endif</p>@endforeach
         </div>
     @endif
 </div>

@@ -42,6 +42,9 @@ class ImportarPlanilha extends Component
     public array $amostra = [];
 
     #[Locked]
+    public array $celulasNumericas = [];
+
+    #[Locked]
     public string $leitura = '';
 
     #[Locked]
@@ -124,6 +127,7 @@ class ImportarPlanilha extends Component
     {
         $this->colunas = $this->amostra = $this->ignoradas = $this->ajustes = $this->previa = [];
         $this->leitura = '';
+        $this->celulasNumericas = [];
         $this->enderecos = $this->enderecosProcessados = [];
         $this->fecharEdicao();
         if ($metadados) {
@@ -310,6 +314,7 @@ class ImportarPlanilha extends Component
 
     private function atualizarGrade(array $planilha): void
     {
+        $this->celulasNumericas = $planilha['numericas'] ?? [];
         // Todas as linhas ficam acessíveis. Textos longos têm versão integral no editor.
         $this->amostra = array_map(fn ($linha) => array_map(fn ($v) => \Illuminate\Support\Str::limit($v, 250), $linha), $planilha['linhas']);
     }
@@ -470,7 +475,7 @@ class ImportarPlanilha extends Component
         $resultado = app(ImportacaoPlanilha::class)->previa($this->empresaId, $this->arquivo, $this->competencia, $this->layoutId, $this->configNormalizada(), $this->ajustes, $this->enderecos);
         $this->previa = array_intersect_key($resultado, array_flip(['conferencia', 'aptas', 'pendentes', 'total', 'ignoradas', 'novos_tomadores']));
         $this->previa['linhas'] = array_map(function ($linha) {
-            $visivel = array_intersect_key($linha, array_flip(['linha', 'tomador', 'servico', 'valor', 'descricao', 'erro', 'formulas']));
+            $visivel = array_intersect_key($linha, array_flip(['linha', 'tomador', 'servico', 'valor', 'valor_formatado', 'descricao', 'erro', 'formulas']));
             foreach (['tomador', 'servico', 'valor', 'descricao'] as $campo) {
                 $visivel[$campo] = \Illuminate\Support\Str::limit($visivel[$campo], $campo === 'descricao' ? 4000 : 300);
             }
@@ -522,6 +527,7 @@ class ImportarPlanilha extends Component
         }
         $tomadores = Tomador::daEmpresa($empresa)->whereIn($identificacao, array_filter($ids))->get()->keyBy($identificacao);
         $servicos = $servicos->keyBy('codigo');
+        $importacao = app(ImportacaoPlanilha::class);
         foreach ($this->amostra as $numero => $linha) {
             $tomador = $tomadores->get($ids[$numero]);
             $codigo = $valor($linha, 'coluna_servico') ?: ($this->config['servico_fixo'] ?? '');
@@ -538,12 +544,17 @@ class ImportarPlanilha extends Component
                 $efetivo['municipio'] = ($endereco['codigo_municipio_ibge'] ?? '') === $tomador->codigo_municipio_ibge ? ($endereco['municipio'] ?? '') : '';
                 $cadastro = array_replace($cadastro, $efetivo);
             }
+            $valorOriginal = $valor($linha, 'coluna_valor');
+            $colunaValor = $this->config['coluna_valor'] ?? null;
+            $formato = isset($this->celulasNumericas[$numero][$colunaValor]) ? 'decimal' : ($this->config['formato_valor'] ?? 'br');
+            $decimal = $importacao->normalizarValor($valorOriginal, $formato);
             $grade[$numero] = $cadastro + [
                 'documento' => $tomador?->documento ?? $valor($linha, 'coluna_tomador'),
                 'existente' => $tomador !== null, 'ativo' => $tomador?->ativo,
                 'servico' => $servico?->nome ?? $codigo,
                 'descricao' => $valor($linha, 'coluna_descricao') ?: ($servico?->descricao ?? ''),
-                'valor' => $valor($linha, 'coluna_valor'),
+                'valor' => $valorOriginal,
+                'valor_formatado' => $decimal === null ? null : ImportacaoPlanilha::formatarValorBr($decimal),
             ];
         }
         return $grade;

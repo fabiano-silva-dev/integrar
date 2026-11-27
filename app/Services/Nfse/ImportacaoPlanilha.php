@@ -168,6 +168,7 @@ class ImportacaoPlanilha
             $linha['servico'] = $servico?->nome ?? $codigoServico;
             $linha['descricao'] = $descricao;
             $linha['valor'] = $valor ?? $linha['valor'];
+            $linha['valor_formatado'] = $valor === null ? null : self::formatarValorBr($valor);
             $linha['erro'] ??= match (true) {
                 ! $tomador && ! $novo => 'Tomador ativo não encontrado. Mapeie o nome e habilite o cadastro ou corrija o identificador.',
                 ! $servico => 'Serviço ativo não encontrado pelo código interno.',
@@ -367,6 +368,18 @@ class ImportacaoPlanilha
         $inteiro = ltrim($inteiro, '0') ?: '0';
         $decimal = str_pad($decimal, 2, '0');
         return $inteiro === '0' && $decimal === '00' ? null : $inteiro.'.'.$decimal;
+    }
+
+    /** Formata o decimal canônico sem arredondamento ou conversão para float. */
+    public static function formatarValorBr(string $valor): string
+    {
+        if (! preg_match('/^\d{1,18}(?:\.\d{1,2})?$/D', $valor)) {
+            return $valor;
+        }
+        [$inteiro, $decimal] = array_pad(explode('.', $valor, 2), 2, '');
+        $inteiro = preg_replace('/\B(?=(\d{3})+(?!\d))/', '.', $inteiro);
+
+        return $inteiro.','.str_pad($decimal, 2, '0');
     }
 
     private function empresaHabilitada(int $empresaId): Empresa

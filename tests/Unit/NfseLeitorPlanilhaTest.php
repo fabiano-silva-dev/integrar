@@ -125,4 +125,13 @@ class NfseLeitorPlanilhaTest extends TestCase
         }
     }
 
+    public function test_formatacao_brasileira_preserva_centavos_sem_float(): void
+    {
+        $this->assertSame('2.000,00', ImportacaoPlanilha::formatarValorBr('2000'));
+        $this->assertSame('934,16', ImportacaoPlanilha::formatarValorBr('934.16'));
+        $this->assertSame('1.234,50', ImportacaoPlanilha::formatarValorBr('1234.5'));
+        $this->assertSame('9.999.999.999.999,99', ImportacaoPlanilha::formatarValorBr('9999999999999.99'));
+        $this->assertSame('inválido', ImportacaoPlanilha::formatarValorBr('inválido'));
+    }
+
 }
