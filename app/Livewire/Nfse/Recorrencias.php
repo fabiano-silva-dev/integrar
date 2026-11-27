@@ -25,10 +25,10 @@ class Recorrencias extends Component
     #[Locked]
     public array $previa = [];
 
-    public function mount(int $empresaId): void
+    public function mount(int $empresaId, ?string $mesInicial = null): void
     {
         $this->empresaId = app(PreparacaoNfse::class)->empresa($empresaId)->id;
-        $this->mes = now()->format('Y-m');
+        $this->mes = $mesInicial && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $mesInicial) ? $mesInicial : now()->format('Y-m');
         $this->limpar();
     }
 

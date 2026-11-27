@@ -33,10 +33,11 @@ class Conferencia extends Component
     public array $edicao = [];
     public array $massa = ['servico_id' => '', 'valor' => '', 'descricao' => ''];
 
-    public function mount(int $empresaId): void
+    public function mount(int $empresaId, ?string $mesInicial = null, string $situacaoInicial = 'rascunho'): void
     {
         $this->empresaId = app(PreparacaoNfse::class)->empresa($empresaId)->id;
-        $this->mes = now()->format('Y-m');
+        $this->mes = $mesInicial && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $mesInicial) ? $mesInicial : now()->format('Y-m');
+        $this->status = $situacaoInicial === 'em_lote' ? 'em_lote' : 'rascunho';
     }
 
     public function updated(string $campo): void

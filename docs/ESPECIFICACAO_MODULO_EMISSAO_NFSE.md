@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.3 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.4 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A e 2B.1 publicadas; incremento 3A de recorrências mensais incluído nesta atualização, pendente de homologação. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1 e 3A publicadas; incremento 3B de visão geral multiempresa incluído nesta atualização, pendente de homologação. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -246,7 +246,7 @@ Base verificada: `41f062c4471d4c7eed6b26d1d4015e4279a9e1b7`. A nova aba **Confer
 
 **Pendente na fase 2B:** preparar fluxo de aprovação distinto, fila e driver simulado com estados separados dos fiscais, reconciliação, cadastro de tomadores novos durante importação, importação conciliada por referência externa, histórico paginado de importações e exportação de relatório. A preparação do lote não libera emissão. A comparação e o reconhecimento de alertas são operacionais e não substituem as regras fiscais do leiaute oficial.
 
-### 14.4. Incremento 3A — Recorrências mensais
+### 14.4. Incremento 3A — Recorrências mensais (publicado em 9ec9fe6)
 
 - Nova aba Recorrências: referência única por prestador, vínculo com tomador e serviço, vigência mensal inclusiva, dia previsto (ajustado ao último dia dos meses menores), preço e descrição com variáveis {mes} e {ano}. Reajustes têm vigência própria e não sobrescrevem versões anteriores nem notas existentes. Encerramento ao final da competência escolhida; pausa e retomada de uma competência antes da geração.
 - Prévia de até 200 contratos vigentes por prestador, com quantidade, total e situações. Geração explícita de todos os aptos, após revalidação e comparação do hash de conferência sob lock da empresa; gravação na mesma tabela de notas, sem DPS ou transmissão. Restrição única por recorrência e competência mantém idempotência inclusive após descarte. Notas avulsas/importadas do mesmo tomador e serviço no mês impedem geração automática daquela recorrência até revisão; contratos diferentes têm identidades distintas.
@@ -255,11 +255,21 @@ Base verificada: `41f062c4471d4c7eed6b26d1d4015e4279a9e1b7`. A nova aba **Confer
 - Limites iniciais: mensalidade apenas, todos os aptos por competência (seleção e alterações pontuais na conferência posterior), sem execução agendada, reativação de contrato encerrado, histórico visual de reajustes, reconhecimento de conflito de outra origem ou recriação de ocorrência descartada. Encerramento e pausa são operacionais, não cancelam notas.
 - Homologação pendente: migrations MySQL, testes Laravel, navegação Livewire, build Vite e concorrência real. A próxima etapa é o painel multiempresa e a fila simulada, mantendo a API real condicionada à prova técnica.
 
-### 14.5. Próximas entregas e critérios de saída
+### 14.5. Incremento 3B — Painel multiempresa
+
+- Menu Emissão de NFS-e > Visão geral, rota /nfse/visao-geral. A empresa selecionada no cabeçalho não limita o consolidado. Somente empresas ativas do escritório atual; sem contexto de operadora não há consulta. Consultas agregadas no banco com filtro explícito de operadora inclusive nas junções, sem carregar notas/credenciais completas e sem migration nova.
+- Competência mensal, busca por nome/CNPJ, filtros de preparo habilitado, rascunhos, lotes, recorrências, histórico de importação e ausência de A1 próprio vigente. Indicadores do escritório inteiro são clicáveis; filtros atuam apenas na lista paginada.
+- Contadores de rascunhos, notas em lotes preparados, lotes, descartadas, contratos previstos e pausados, ocorrências recorrentes sem nota e recorrências descartadas. Previsão monetária usa a última condição contratual vigente, exclui pausas e não pressupõe aptidão fiscal; valor preparado soma somente rascunhos e notas em lote. Os dois valores não devem ser somados como se fossem receitas distintas. Linhas pendentes de planilha são histórico, não saldo atualizado de erros. Nenhuma contagem de documentos autorizados sem implementação de autorização fiscal.
+- Certificado próprio ativo do tipo A1 vigente por datas atuais, sem consultar senha, arquivo ou validade de credenciamento. Não equivale a certificado selecionado para emissão ou prova de elegibilidade. Status específico de emissão fica para homologação da API.
+- Atalhos por empresa para nota avulsa, recorrências, importação, conferência e lotes, com seleção de empresa revalidada no servidor e competência preservada; configuração somente para administrador/gerente. A competência inicial também é usada nos componentes de destino. Importações anteriores continuam limitadas ao histórico existente das últimas 20.
+- Arquivos principais: PainelNfse, Livewire/Nfse/Painel, view painel, menu, rota, inicialização da central e componentes filhos. Seis testes de feature escritos para isolamento, totais, vigência, pausa e atalhos. Pendentes: execução em MySQL/Laravel, build Vite, testes de navegador e plano de execução/medição das consultas com carteira grande.
+- Não foram criadas filas, DPS, transmissão ou documentos fiscais. Próximo incremento: aprovação e processamento em fila exclusivamente simulados, com reconciliação e estados independentes de autorização real.
+
+### 14.6. Próximas entregas e critérios de saída
 
 1. **Homologar a preparação e a importação:** aplicar migrations apenas em ambiente de desenvolvimento/homologação, executar `docker compose exec app php artisan test --filter=Nfse` e `docker compose exec app npm run build`; verificar cadastro, importação em dois meses, alteração de cabeçalho, arquivo com pendências, troca de empresa, usuário sem contexto e ausência de transmissão. Resolver falhas antes de disponibilizar a operadores.
 2. **Homologar a grade e concluir a fase 2B:** publicar/testar o incremento 2B.1; completar criação de tomadores em importação, referência externa e histórico paginado; implementar aprovação explícita, fila e estados com driver simulado, sem confundir sucesso simulado com autorização fiscal.
-3. **Recorrências e painel (fase 3):** homologar o incremento 3A; completar visão multiempresa com indicadores e pendências, histórico visual e tratamento de conflitos. Pode avançar enquanto a prova técnica da API aguarda credencial.
+3. **Recorrências e painel (fase 3):** homologar os incrementos 3A e 3B; completar histórico visual e tratamento de conflitos. Pode avançar enquanto a prova técnica da API aguarda credencial.
 4. **Prova técnica nacional (fase 0/1, bloqueante para emissão real):** com empresa de teste e autorização, verificar Swagger/XSD vigente, parâmetros municipais, identificação do certificado, assinatura e transmissão de DPS em produção restrita, consulta por DPS e resultado desconhecido. Somente após aprovação integrar a emissão avulsa, a fila de lotes e o acervo fiscal. Reusar `CertificadoDigitalService` e o transporte do cliente `NfseSefinNacionalClient`, sem mudar o fluxo de coleta.
 5. **Piloto e evolução (fase 4):** XML/DANFSe, reconciliação com coleta, cancelamentos/substituições, exportação e entrega de documentos, revisão de permissões, retenção de arquivos, observabilidade e homologação com operadores. Produção somente após aprovação específica.
 

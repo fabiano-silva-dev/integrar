@@ -37,6 +37,9 @@ class CentralEmissao extends Component
     public array $nota = [];
     public string $competencia = '';
 
+    #[Locked]
+    public string $situacaoInicial = 'rascunho';
+
     public function mount(): void
     {
         $id = OperadoraContext::id();
@@ -45,8 +48,16 @@ class CentralEmissao extends Component
                 ->find(session('empresa_selecionada_id'));
             $this->empresaId = $empresa?->id;
         }
-        $this->competencia = now()->format('Y-m');
+        $mes = request()->query('mes');
+        $this->competencia = is_string($mes) && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $mes) ? $mes : now()->format('Y-m');
         $this->novaNota();
+        $aba = request()->query('aba');
+        if ($this->empresaId && is_string($aba) && in_array($aba, ['notas', 'importar', 'conferencia', 'recorrencias', 'configuracao'], true)) {
+            $this->mudarAba($aba);
+            if ($aba === 'conferencia' && request()->query('situacao') === 'em_lote') {
+                $this->situacaoInicial = 'em_lote';
+            }
+        }
     }
 
     private function empresa(): Empresa
@@ -63,6 +74,7 @@ class CentralEmissao extends Component
             abort_unless(app(PreparacaoNfse::class)->podeConfigurar(), 403);
         }
         $this->aba = $aba;
+        $this->situacaoInicial = 'rascunho';
         $this->busca = '';
         $this->resetPage();
         $this->novoCadastro();
@@ -129,7 +141,9 @@ class CentralEmissao extends Component
     public function novaNota(): void
     {
         $this->intencao = (string) Str::uuid();
-        $this->nota = ['tomador_id' => '', 'servico_id' => '', 'competencia' => now()->toDateString(), 'descricao' => '', 'valor' => ''];
+        $data = preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $this->competencia) && $this->competencia !== now()->format('Y-m')
+            ? $this->competencia.'-01' : now()->toDateString();
+        $this->nota = ['tomador_id' => '', 'servico_id' => '', 'competencia' => $data, 'descricao' => '', 'valor' => ''];
         $this->resetValidation();
     }
 

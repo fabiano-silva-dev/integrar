@@ -1,6 +1,6 @@
 <div class="max-w-7xl mx-auto p-6">
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h1 class="text-2xl font-bold text-gray-800">Emissão de NFS-e</h1>
+        <div class="flex flex-wrap justify-between items-center gap-2"><h1 class="text-2xl font-bold text-gray-800">Emissão de NFS-e</h1><a href="{{ route('nfse.painel') }}" class="text-blue-600">Visão geral do escritório</a></div>
         <p class="text-gray-600 mt-1">Preparação fiscal — transmissão indisponível até homologação.</p>
         @if (!$empresa)
             <p class="mt-4 border border-gray-200 rounded-md bg-gray-50 p-3">Selecione o escritório e a empresa prestadora no cabeçalho.</p>
@@ -52,16 +52,16 @@
                 </tbody></table></div>
                 {{ $registros->links() }}
             @elseif ($aba === 'conferencia')
-                <livewire:nfse.conferencia :empresa-id="$empresa->id" :key="'nfse-conferencia-'.$empresa->id" />
+                <livewire:nfse.conferencia :empresa-id="$empresa->id" :mes-inicial="$competencia" :situacao-inicial="$situacaoInicial" :key="'nfse-conferencia-'.$empresa->id" />
             @elseif ($aba === 'recorrencias')
                 @if ($configuracao?->habilitado_preparo)
-                    <livewire:nfse.recorrencias :empresa-id="$empresa->id" :key="'nfse-recorrencias-'.$empresa->id" />
+                    <livewire:nfse.recorrencias :empresa-id="$empresa->id" :mes-inicial="$competencia" :key="'nfse-recorrencias-'.$empresa->id" />
                 @else
                     <p class="mt-3 text-gray-600">Habilite a preparação de NFS-e nas configurações da empresa.</p>
                 @endif
             @elseif ($aba === 'importar')
                 @if ($configuracao?->habilitado_preparo)
-                    <livewire:nfse.importar-planilha :empresa-id="$empresa->id" :key="'nfse-importar-'.$empresa->id" />
+                    <livewire:nfse.importar-planilha :empresa-id="$empresa->id" :mes-inicial="$competencia" :key="'nfse-importar-'.$empresa->id" />
                 @else
                     <p class="mt-3 text-gray-600">Habilite a preparação de NFS-e nas configurações da empresa.</p>
                 @endif

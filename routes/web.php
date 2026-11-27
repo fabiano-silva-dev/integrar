@@ -13,6 +13,7 @@ Route::get('/', function () {
 // Rotas protegidas por autenticação
 Route::middleware(['auth'])->group(function () {
     Route::get('/nfse', App\Livewire\Nfse\CentralEmissao::class)->name('nfse.central');
+    Route::get('/nfse/visao-geral', App\Livewire\Nfse\Painel::class)->name('nfse.painel');
     Route::get('/usuarios', App\Livewire\GerenciadorUsuarios::class)->name('usuarios');
     Route::get('/importador', function () {
         return redirect()->route('importador-avancado');

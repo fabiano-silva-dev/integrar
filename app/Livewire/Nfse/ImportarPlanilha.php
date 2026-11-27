@@ -37,10 +37,11 @@ class ImportarPlanilha extends Component
     #[Locked]
     public ?int $historicoId = null;
 
-    public function mount(int $empresaId): void
+    public function mount(int $empresaId, ?string $mesInicial = null): void
     {
         $this->empresaId = app(PreparacaoNfse::class)->empresa($empresaId)->id;
-        $this->competencia = now()->toDateString();
+        $this->competencia = $mesInicial && preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $mesInicial) && $mesInicial !== now()->format('Y-m')
+            ? $mesInicial.'-01' : now()->toDateString();
     }
 
     public function updated(string $nome): void

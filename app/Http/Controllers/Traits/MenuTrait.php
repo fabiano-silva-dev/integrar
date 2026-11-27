@@ -181,10 +181,16 @@ trait MenuTrait
                 'icon' => 'document',
                 'items' => [
                     [
+                        'name' => 'Visão geral',
+                        'url' => route('nfse.painel'),
+                        'icon' => 'table',
+                        'active' => request()->routeIs('nfse.painel'),
+                    ],
+                    [
                         'name' => 'Central de emissão',
                         'url' => route('nfse.central'),
                         'icon' => 'document',
-                        'active' => request()->routeIs('nfse.*'),
+                        'active' => request()->routeIs('nfse.central'),
                     ],
                 ],
             ],
