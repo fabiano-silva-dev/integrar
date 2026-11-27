@@ -155,4 +155,88 @@ class NfseEmissaoRestritaTenantTest extends TestCase
             ->set('revisado', true)->call('aprovar')->assertForbidden();
     }
 
+
+    private function criarFila(): \App\Models\Nfse\FilaHomologacao
+    {
+        config(['automacao_fiscal.nfse_dps_fila_enabled' => true]);
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\Nfse\TransmitirDpsRestritaJob::class]);
+
+        return app(\App\Services\Nfse\Dps\FilaEmissaoRestrita::class)->aprovar($this->empresa->id, '2026-11', [
+            ['id' => $this->dps->id, 'hash' => $this->dps->xml_hash],
+        ]);
+    }
+
+    public function test_fila_reserva_e_impede_envio_individual_e_reentrega(): void
+    {
+        $fila = $this->criarFila();
+        $r = TransmissaoRestrita::daEmpresa($this->empresa)->where('fila_homologacao_id', $fila->id)->firstOrFail();
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->once())->method('enviar')->willThrowException(new RuntimeException('timeout simulado'));
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        try {
+            app(EmissaoRestrita::class)->enviar($this->empresa->id, $r->id);
+            $this->fail('O envio individual deveria ser bloqueado.');
+        } catch (ValidationException $e) {
+            $this->assertSame('pendente', $r->refresh()->fila_status);
+        }
+        $job = new \App\Jobs\Nfse\TransmitirDpsRestritaJob((int) $fila->empresa_operadora_id, $this->empresa->id, $fila->id, $r->id);
+        $autor = auth()->user();
+        auth()->guard()->forgetUser();
+        $job->handle(app(\App\Services\Nfse\Dps\FilaEmissaoRestrita::class));
+        $job->handle(app(\App\Services\Nfse\Dps\FilaEmissaoRestrita::class));
+        $this->assertNull(auth()->guard()->user());
+        auth()->guard()->setUser($autor);
+        $this->assertSame('concluido', $r->refresh()->fila_status);
+        $this->assertSame('incerta', $r->status);
+        $this->assertNotNull($r->envio_iniciado_em);
+        $this->assertSame('em_lote', $this->nota->refresh()->status);
+    }
+
+    public function test_fila_bloqueia_autorizador_inativado_e_isola_tenant(): void
+    {
+        $fila = $this->criarFila();
+        $r = TransmissaoRestrita::daEmpresa($this->empresa)->where('fila_homologacao_id', $fila->id)->firstOrFail();
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->never())->method('enviar');
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        $svc = app(\App\Services\Nfse\Dps\FilaEmissaoRestrita::class);
+        $outro = EmpresasOperadora::factory()->create(['ativo' => true]);
+        $svc->processar($outro->id, $this->empresa->id, $fila->id, $r->id);
+        $this->assertSame('pendente', $r->refresh()->fila_status);
+        User::query()->whereKey($fila->usuario_id)->update(['ativo' => false]);
+        $svc->processar((int) $fila->empresa_operadora_id, $this->empresa->id, $fila->id, $r->id);
+        $this->assertSame('bloqueado', $r->refresh()->fila_status);
+        $this->assertNull($r->envio_iniciado_em);
+    }
+
+    public function test_aprovacao_coletiva_reverte_se_um_item_for_invalido(): void
+    {
+        config(['automacao_fiscal.nfse_dps_fila_enabled' => true]);
+        \Illuminate\Support\Facades\Bus::fake();
+        try {
+            app(\App\Services\Nfse\Dps\FilaEmissaoRestrita::class)->aprovar($this->empresa->id, '2026-11', [
+                ['id' => $this->dps->id, 'hash' => $this->dps->xml_hash],
+                ['id' => $this->dps->id + 1000000, 'hash' => str_repeat('a', 64)],
+            ]);
+            $this->fail('A seleção inválida deveria impedir a fila.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->assertSame(0, \App\Models\Nfse\FilaHomologacao::daEmpresa($this->empresa)->count());
+            $this->assertSame(0, TransmissaoRestrita::daEmpresa($this->empresa)->count());
+        }
+    }
+
+    public function test_tela_fila_exige_habilitacao_e_confirmacao_explicita(): void
+    {
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        config(['automacao_fiscal.nfse_dps_fila_enabled' => false]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\FilaHomologacao::class)
+            ->set('mes', '2026-11')->assertSee('Fila externa bloqueada')
+            ->call('selecionar', $this->dps->id)->assertForbidden();
+        config(['automacao_fiscal.nfse_dps_fila_enabled' => true]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\FilaHomologacao::class)
+            ->set('mes', '2026-11')->call('selecionar', $this->dps->id)
+            ->call('aprovar')->assertHasErrors(['confirmacao' => 'accepted']);
+        $this->assertSame(0, \App\Models\Nfse\FilaHomologacao::daEmpresa($this->empresa)->count());
+    }
+
 }

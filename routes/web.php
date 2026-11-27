@@ -17,6 +17,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/nfse/acessos', App\Livewire\Nfse\Acessos::class)->name('nfse.acessos');
     Route::get('/nfse/simulacoes', App\Livewire\Nfse\Simulacoes::class)->name('nfse.simulacoes');
     Route::get('/nfse/homologacao', App\Livewire\Nfse\Homologacao::class)->name('nfse.homologacao');
+    Route::get('/nfse/fila-homologacao', App\Livewire\Nfse\FilaHomologacao::class)->name('nfse.fila-homologacao');
     Route::get('/nfse/homologacao/{empresa}/dps/{dps}', [App\Http\Controllers\Nfse\ArtefatoHomologacaoController::class, 'dps'])
         ->whereNumber(['empresa', 'dps'])->name('nfse.homologacao.dps');
     Route::get('/nfse/homologacao/{empresa}/retorno/{transmissao}/{formato}', [App\Http\Controllers\Nfse\ArtefatoHomologacaoController::class, 'nfse'])

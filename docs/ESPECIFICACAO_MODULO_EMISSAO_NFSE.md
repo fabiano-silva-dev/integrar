@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.10 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.11 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) publicados; interface e artefatos de homologação (2B.7) incluídos, pendentes de prova técnica externa. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) publicados; interface e artefatos de homologação (2B.7) publicados; fila coletiva de homologação (2B.8) incluída, pendente de prova técnica externa. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -326,3 +326,14 @@ O transporte recusa rede quando existe transação externa de banco aberta; os t
 - O pacote XSD oficial e a revisão do Swagger continuam requisitos para liberar o piloto; não foram obtidos nesta sessão. Não presumir dispensa de IBS/CBS, não usar certificado sem autorização, nem habilitar flags em produção. A próxima etapa é homologação externa com prestador autorizado, conferir documentos retornados, revisar regras fiscais e avançar no fluxo coletivo. Autenticação efetiva do Emissor Web por senha e alternância de perfil continuam pendentes.
 
 - Testes adicionados: três de feature (tela/download autorizado, perfil operador bloqueado, XML adulterado e flag de comunicação desativada) e dois unitários (DANFSe de teste com marca no conteúdo PDF e rejeição de XML de produção). Execução aguardando CI. Nenhuma migration ou dependência nova nesta etapa.
+
+
+### Incremento 2B.8 — Aprovação coletiva e fila de homologação
+
+- CI anterior 46009828469 (7ce0b1c): 325 testes aprovados, 27 falhas preexistentes na suíte geral, sem aviso GZIP; testes NFS-e, DANFSe, frontend, scripts e runner aprovados. Não comprova comunicação externa.
+- Nova tela Emissão de NFS-e > Fila de homologação, restrita a administrador/gerente e ao prestador piloto. Seleção de até 20 DPS já assinadas e preparadas da mesma competência, com revisão individual de XML e confirmação coletiva explícita. Não gera DPS automaticamente nem pressupõe regras fiscais. Valida cada hash, lote, versão, acesso e XSD no serviço de aprovação existente; reserva toda a seleção na mesma transação ou nenhuma. Não há envio na transação de aprovação.
+- Uma fila persistida com usuário autorizador e competência; cada transmissão fica vinculada e não pode ser enviada diretamente pela interface individual. Despacho após commit, conexão database e fila dedicada nfse-homologacao; um job por transmissão, tries=1, timeout=75s. Worker reconstitui exclusivamente o contexto do autorizador persistido, valida tenant/empresa/perfil e flags, restaura o contexto anterior ao sair. Reentrega não reivindica item já iniciado. Envio único e reconciliação do serviço EmissaoRestrita continuam obrigatórios.
+- Habilitação adicional NFSE_DPS_FILA_ENABLED=false por padrão. Somente habilitar após prova técnica individual e autorização do piloto. Executar um worker dedicado, após configuração/migration: php artisan queue:work database --queue=nfse-homologacao --tries=1 --timeout=75 ; confirmar retry_after > 75 e monitorar worker. A fila não depende da conexão padrão sync. Despacho que falhar deixa item pendente, recuperável por botão explícito. Apenas pendentes sem tentativa podem ser despachados novamente. Itens processando interrompidos ou bloqueados exigem análise individual; não há liberação automática, mesmo se falha antes do POST. O status da fila (pendente/processando/concluido/bloqueado) é separado do resultado fiscal de teste; concluido significa execução da tentativa, não autorização.
+- Histórico de filas e resultados por DPS, consulta individual para resultados incertos, downloads de XML/DANFSe confirmado de teste. Não altera notas/acervo real. Migration 2026_11_27_200000_create_nfse_filas_homologacao.php. Sem novos pacotes. Permanece pendente homologação real, ampliação tributária IBS/CBS, autenticação Web e produção. Nenhuma transmissão externa realizada.
+
+- Quatro testes integrados adicionais escritos: reserva e reentrega do job, isolamento e revogação do autorizador, atomicidade da seleção inválida, interface bloqueada e confirmação explícita. Transporte falso; não exercitam rede nem worker real. O serviço verifica driver database e retry_after superior ao timeout. CI desta entrega pendente.

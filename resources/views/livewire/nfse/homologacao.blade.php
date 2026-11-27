@@ -72,7 +72,7 @@
                             <label class="block text-sm"><input type="checkbox" wire:model="revisado" required> Revisei o XML integral e confirmei os dados e poderes do certificado para o teste.</label>
                             <button type="submit" wire:loading.attr="disabled" class="bg-blue-600 text-white px-4 py-2 rounded-md">Aprovar para homologação</button>
                         </form>
-                    @elseif($transmissao?->status==='aprovada_teste' && $rede && $xsd)
+                    @elseif($transmissao?->status==='aprovada_teste' && !$transmissao->fila_homologacao_id && $rede && $xsd)
                         <form wire:submit="enviar" class="space-y-2">
                             <label class="block text-sm"><input type="checkbox" wire:model="confirmouEnvio" required> Autorizo uma tentativa de transmissão externa em produção restrita, sem valor fiscal.</label>
                             <button type="submit" wire:loading.attr="disabled" class="bg-blue-600 text-white px-4 py-2 rounded-md">Transmitir uma vez à SEFIN de testes</button>
@@ -80,6 +80,9 @@
                     @elseif($transmissao && in_array($transmissao->status,['envio_iniciado','incerta','rejeitada_teste'],true) && $rede)
                         <p class="text-sm text-amber-900">Não reenvie a DPS. Consulte o resultado após o intervalo mínimo de 90 segundos.</p>
                         <button type="button" wire:click="reconciliar" wire:loading.attr="disabled" class="bg-gray-100 px-4 py-2 rounded-md">Consultar resultado (sem novo envio)</button>
+                    @endif
+                    @if($transmissao?->fila_homologacao_id)
+                        <p class="text-sm">Reservada à fila #{{ $transmissao->fila_homologacao_id }} · {{ $transmissao->fila_status }}. <a href="{{ route('nfse.fila-homologacao') }}" class="text-blue-600">Acompanhar fila</a></p>
                     @endif
                     @if($transmissao?->status==='confirmada_teste')
                         <p class="text-sm break-all">Chave de teste: {{ $transmissao->chave_acesso }}</p>

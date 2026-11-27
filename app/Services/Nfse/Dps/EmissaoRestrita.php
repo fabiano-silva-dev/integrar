@@ -49,12 +49,19 @@ class EmissaoRestrita
         });
     }
 
-    public function enviar(int $empresaId, int $transmissaoId): TransmissaoRestrita
+    public function enviar(int $empresaId, int $transmissaoId, ?int $filaId = null): TransmissaoRestrita
     {
         $empresa = $this->empresa($empresaId);
-        [$r, $dps, $cert] = DB::transaction(function () use ($empresa, $transmissaoId) {
+        [$r, $dps, $cert] = DB::transaction(function () use ($empresa, $transmissaoId, $filaId) {
             $empresa = $this->lock($empresa);
             $r = TransmissaoRestrita::daEmpresa($empresa)->lockForUpdate()->findOrFail($transmissaoId);
+            if ($r->fila_homologacao_id !== null || $filaId !== null) {
+                $fila = \App\Models\Nfse\FilaHomologacao::daEmpresa($empresa)->find($filaId);
+                if (! $fila || (int) $r->fila_homologacao_id !== $filaId || $r->fila_status !== 'processando'
+                    || (int) $fila->usuario_id !== auth()->id() || ! config('automacao_fiscal.nfse_dps_fila_enabled', false)) {
+                    $this->falhar('Transmissão reservada à fila de homologação.');
+                }
+            }
             if ($r->status !== 'aprovada_teste' || $r->envio_iniciado_em !== null) {
                 $this->falhar('A DPS já possui tentativa de envio. Utilize apenas reconciliação.');
             }

@@ -213,6 +213,13 @@ trait MenuTrait
                         'active' => request()->routeIs('nfse.homologacao*'),
                         'roles' => ['admin', 'gerente'],
                     ],
+                    [
+                        'name' => 'Fila de homologação',
+                        'url' => route('nfse.fila-homologacao'),
+                        'icon' => 'clock',
+                        'active' => request()->routeIs('nfse.fila-homologacao'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
                 ],
             ],
             [

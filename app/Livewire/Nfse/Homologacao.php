@@ -58,6 +58,9 @@ class Homologacao extends Component
             $this->empresaId = app(AcessoEmissaoNfse::class)->empresa((int) $id)->id;
         }
         $this->mes = now()->format('Y-m');
+        if ($this->empresaId && is_string($id = request()->query('dps')) && ctype_digit($id)) {
+            $this->abrirDps((int) $id);
+        }
     }
 
     public function updatedMes(): void
@@ -248,7 +251,7 @@ class Homologacao extends Component
                     'Opção Simples Nacional' => '/n:prest/n:regTrib/n:opSimpNac', 'Regime de apuração SN' => '/n:prest/n:regTrib/n:regApTribSN'] as $label => $path) {
                     $resumo[$label] = $xp->evaluate('string('.$inf.$path.')');
                 }
-                $transmissao = TransmissaoRestrita::daEmpresa($empresa)->where('dps_local_id', $dps->id)->first(['id', 'status', 'chave_acesso', 'envio_iniciado_em', 'ultima_consulta_em']);
+                $transmissao = TransmissaoRestrita::daEmpresa($empresa)->where('dps_local_id', $dps->id)->first(['id', 'status', 'chave_acesso', 'envio_iniciado_em', 'ultima_consulta_em', 'fila_homologacao_id', 'fila_status']);
                 if ($transmissao) {
                     $eventos = TransmissaoRestritaEvento::daEmpresa($empresa)->where('transmissao_id', $transmissao->id)->latest('id')->limit(30)->get();
                 }
