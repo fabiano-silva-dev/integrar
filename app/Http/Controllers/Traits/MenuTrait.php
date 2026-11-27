@@ -192,6 +192,20 @@ trait MenuTrait
                         'icon' => 'document',
                         'active' => request()->routeIs('nfse.central'),
                     ],
+                    [
+                        'name' => 'Acesso para emissão',
+                        'url' => route('nfse.acessos'),
+                        'icon' => 'document',
+                        'active' => request()->routeIs('nfse.acessos'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
+                    [
+                        'name' => 'Processamento simulado',
+                        'url' => route('nfse.simulacoes'),
+                        'icon' => 'clock',
+                        'active' => request()->routeIs('nfse.simulacoes'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
                 ],
             ],
             [

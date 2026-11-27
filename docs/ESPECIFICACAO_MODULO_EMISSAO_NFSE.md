@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.4 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.5 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1 e 3A publicadas; incremento 3B de visão geral multiempresa incluído nesta atualização, pendente de homologação. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila preparado, pendente de publicação e homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 

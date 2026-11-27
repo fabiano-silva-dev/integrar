@@ -14,6 +14,8 @@ Route::get('/', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/nfse', App\Livewire\Nfse\CentralEmissao::class)->name('nfse.central');
     Route::get('/nfse/visao-geral', App\Livewire\Nfse\Painel::class)->name('nfse.painel');
+    Route::get('/nfse/acessos', App\Livewire\Nfse\Acessos::class)->name('nfse.acessos');
+    Route::get('/nfse/simulacoes', App\Livewire\Nfse\Simulacoes::class)->name('nfse.simulacoes');
     Route::get('/usuarios', App\Livewire\GerenciadorUsuarios::class)->name('usuarios');
     Route::get('/importador', function () {
         return redirect()->route('importador-avancado');
