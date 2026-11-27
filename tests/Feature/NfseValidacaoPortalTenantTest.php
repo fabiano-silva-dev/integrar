@@ -138,10 +138,12 @@ class NfseValidacaoPortalTenantTest extends TestCase
         $this->assertSame('config_alterada', $r->refresh()->status);
     }
 
-    public function test_resultado_manual_e_erro_tecnico_nao_vazam_segredos(): void
+    public function test_erro_tecnico_nao_vaza_segredos_nem_preserva_confirmacao_anterior(): void
     {
         $this->salvar();
+        \App\Models\Nfse\AcessoEmissao::daEmpresa($this->empresa)->update(['status_validacao' => 'portal_confirmado']);
         $r = $this->service->solicitar($this->empresa->id);
+        $this->assertSame('pendente', \App\Models\Nfse\AcessoEmissao::daEmpresa($this->empresa)->value('status_validacao'));
         $this->runner->shouldReceive('testar')->once()->andThrow(new \RuntimeException('segredo-ficticio'));
         $this->processar($r);
         $this->assertSame('nao_confirmada', $r->refresh()->status);

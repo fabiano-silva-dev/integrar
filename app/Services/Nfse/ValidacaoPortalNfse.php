@@ -36,6 +36,7 @@ class ValidacaoPortalNfse
             }
             ValidacaoPortal::daEmpresa($empresa)->whereIn('status', ['pendente', 'iniciada'])
                 ->update(['status' => 'nao_confirmada', 'codigo' => 'UNAVAILABLE', 'concluida_em' => now()]);
+            $a->update(['status_validacao' => 'pendente']);
             $r = ValidacaoPortal::create(['empresa_operadora_id' => $empresa->empresa_operadora_id, 'empresa_id' => $empresa->id,
                 'acesso_id' => $a->id, 'usuario_id' => auth()->id(), 'modo' => $a->modo, 'config_hash' => $this->hash($a, $c), 'status' => 'pendente']);
             ValidarAcessoPortalNfseJob::dispatch((int) $empresa->empresa_operadora_id, $empresa->id, $r->id)->afterCommit();

@@ -351,6 +351,7 @@ main() {
     fi
 
     if ! $SKIP_NPM && [[ -f package.json ]]; then
+        prepare_nfse_web_runner
         if [[ "$MODE" == native ]] && ! resolve_npm && ! has_built_assets; then
             err "Node.js/npm não instalado e não há assets compilados."
             warn_missing_npm
@@ -365,7 +366,6 @@ main() {
         else
             ok "Assets compilados"
         fi
-        prepare_nfse_web_runner
     fi
 
     if ! $SKIP_MIGRATE; then

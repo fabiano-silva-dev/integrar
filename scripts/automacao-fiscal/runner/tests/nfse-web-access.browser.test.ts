@@ -60,7 +60,7 @@ async function fixture(input: WebAccessInput, scenario = 'ok') {
                     'action="/EmissorNacional/Login"',
                     'action="https://evil.invalid/password"',
                 );
-            await route.fulfill({ status: 200, contentType: 'text/html', body: html });
+            await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
         });
     });
     assert.ok(
