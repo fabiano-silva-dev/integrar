@@ -239,4 +239,81 @@ class NfseEmissaoRestritaTenantTest extends TestCase
         $this->assertSame(0, \App\Models\Nfse\FilaHomologacao::daEmpresa($this->empresa)->count());
     }
 
+
+    private function dadosPerfil(): array
+    {
+        return [
+            'regime' => 'simples_nacional', 'regApTribSN' => '1', 'municipio_prestacao' => '4308003',
+            'iss' => 'tributado', 'iss_retido' => 'nao', 'aliquota_iss' => null,
+            'regime_especial' => 'nao', 'deducoes_beneficios' => 'nao',
+            'retencoes' => array_fill_keys(\App\Services\Nfse\PerfisTributariosNfse::RETENCOES, 'nao'),
+            'ibscbs' => 'dispensado', 'cst' => null, 'cclass_trib' => null, 'ind_op' => null,
+            'percentuais_tributos' => ['pTotTribFed' => '5.00', 'pTotTribEst' => '0.00', 'pTotTribMun' => '2.00'],
+            'fundamento' => 'Condições fictícias para teste automatizado, não classificação legal.',
+        ];
+    }
+
+    public function test_perfil_respeita_competencia_e_prioridade_do_servico(): void
+    {
+        $svc = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+        $dados = $this->dadosPerfil();
+        $geral = $svc->cadastrar($this->empresa->id, null, '2026-10', $dados);
+        $svc->cadastrar($this->empresa->id, null, '2026-12', array_replace($dados, ['municipio_prestacao' => '4306907']));
+        $this->assertSame($geral->id, $svc->vigente($this->empresa, $this->nota->refresh())->id);
+        $especifico = $svc->cadastrar($this->empresa->id, $this->nota->servico_id, '2026-11', array_replace($dados, ['municipio_prestacao' => '4306907']));
+        $this->assertSame($especifico->id, $svc->vigente($this->empresa, $this->nota)->id);
+        $this->assertSame('4306907', $svc->sugestao($especifico)['municipio_prestacao']);
+        $this->assertSame('4308003', $geral->refresh()->dados['municipio_prestacao']);
+        $this->expectException(ValidationException::class);
+        $svc->cadastrar($this->empresa->id, null, '2026-10', $dados);
+    }
+
+    public function test_perfil_com_ibscbs_exigido_impede_preparo_mesmo_com_confirmacao_manual(): void
+    {
+        $svc = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+        $svc->cadastrar($this->empresa->id, null, '2026-10', $this->dadosPerfil());
+        $especifico = $svc->cadastrar($this->empresa->id, $this->nota->servico_id, '2026-11', array_replace($this->dadosPerfil(), [
+            'ibscbs' => 'exigido', 'cst' => '000', 'cclass_trib' => '000001',
+        ]));
+        $fiscal = array_replace($svc->sugestao($especifico), ['escopo_confirmado' => true, 'ibscbs_nao_exigido' => true]);
+        $this->expectException(ValidationException::class);
+        app(NumeracaoDpsHomologacao::class)->preparar($this->empresa->id, $this->nota->id, $fiscal);
+    }
+
+    public function test_perfil_novo_impede_aprovacao_de_dps_anterior(): void
+    {
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($this->empresa->id, null, '2026-11', $this->dadosPerfil());
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->never())->method('enviar');
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        $this->expectException(ValidationException::class);
+        $this->aprovar(app(EmissaoRestrita::class));
+    }
+
+    public function test_perfil_prefill_na_homologacao_sem_confirmacao_automatica(): void
+    {
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($this->empresa->id, null, '2026-11', $this->dadosPerfil());
+        \Livewire\Livewire::test(\App\Livewire\Nfse\PerfisTributarios::class)->assertSee('Histórico de versões')->assertSee('Padrão da empresa');
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Homologacao::class)->set('mes', '2026-11')
+            ->call('selecionarNota', $this->nota->id)->assertSet('fiscal.municipio_prestacao', '4308003')
+            ->assertSet('fiscal.percentuais_tributos.pTotTribFed', '5.00')
+            ->assertSet('fiscal.escopo_confirmado', false)->assertSet('fiscal.ibscbs_nao_exigido', false);
+    }
+
+    public function test_perfil_nao_permite_servico_de_outro_prestador(): void
+    {
+        $outra = Empresa::factory()->create(['empresa_operadora_id' => $this->empresa->empresa_operadora_id, 'ativo' => true]);
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($outra->id, $this->nota->servico_id, '2026-11', $this->dadosPerfil());
+    }
+
+    public function test_perfil_rejeita_cst_e_classificacao_incoerentes(): void
+    {
+        $this->expectException(ValidationException::class);
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($this->empresa->id, null, '2026-11', array_replace($this->dadosPerfil(), [
+            'ibscbs' => 'exigido', 'cst' => '000', 'cclass_trib' => '200001',
+        ]));
+    }
+
 }

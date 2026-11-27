@@ -86,12 +86,18 @@ class NumeracaoDpsHomologacao
             if (! $cert || ! $cert->fingerprint || ($a->modo === 'certificado_proprio' && preg_replace('/\D/', '', (string) $cert->documento_titular) !== $documento)) {
                 $this->falhar('Certificado selecionado indisponível ou incompatível.');
             }
+            $perfis = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+            $perfil = $perfis->vigente($empresa, $nota);
+            if ($perfil) {
+                $perfis->conferir($perfil, $cfg, $fiscal);
+            }
             $hash = self::hash([
                 'nota' => $nota->only(['id', 'versao', 'tomador_id', 'servico_id', 'competencia', 'valor', 'descricao', 'snapshot']),
                 'lote' => $lote->id,
                 'config' => $cfg->only(['regime_tributario', 'serie_dps']),
                 'acesso' => $a->only(['id', 'modo', 'canal', 'documento_prestador', 'certificado_digital_id', 'procuracao_ate']),
                 'certificado' => $cert->only(['id', 'fingerprint', 'documento_titular', 'valido_de', 'valido_ate']),
+                ...($perfil ? ['perfil_tributario' => $perfil->id] : []),
                 'fiscal' => $fiscal, 'ambiente' => self::AMBIENTE, 'leiaute' => GeradorDps::VERSAO,
                 'algoritmo' => config('automacao_fiscal.nfse_dps_algoritmo'),
             ]);
@@ -119,6 +125,7 @@ class NumeracaoDpsHomologacao
             $xml = $this->preparador->preparar($empresa->id, $nota->id, (string) $numero, $fiscal);
             $this->conferirIdentidade($xml, $id, $documento, $serie, (string) $numero, $municipio);
             $dps = new DpsLocal([
+                'perfil_tributario_id' => $perfil?->id,
                 'sequencia_id' => $seq->id, 'nota_id' => $nota->id, 'lote_id' => $lote->id,
                 'certificado_id' => $cert->id, 'versao_nota' => $nota->versao, 'ambiente' => self::AMBIENTE,
                 'numero' => $numero, 'id_dps' => $id, 'config_hash' => $hash, 'xml_hash' => hash('sha256', $xml),

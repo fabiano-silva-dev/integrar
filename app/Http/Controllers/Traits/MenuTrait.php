@@ -220,6 +220,13 @@ trait MenuTrait
                         'active' => request()->routeIs('nfse.fila-homologacao'),
                         'roles' => ['admin', 'gerente'],
                     ],
+                    [
+                        'name' => 'Perfis tributários',
+                        'url' => route('nfse.perfis-tributarios'),
+                        'icon' => 'document',
+                        'active' => request()->routeIs('nfse.perfis-tributarios'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
                 ],
             ],
             [

@@ -18,6 +18,8 @@ class FilaHomologacao extends Component
 {
     use WithPagination;
 
+    protected $layout = 'components.layouts.app';
+
     #[Locked]
     public ?int $empresaId = null;
 

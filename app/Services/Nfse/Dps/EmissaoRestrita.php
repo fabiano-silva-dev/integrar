@@ -202,6 +202,12 @@ class EmissaoRestrita
                 || $xp->evaluate('string(/n:DPS/n:infDPS/n:cLocEmi)') !== (string) $empresa->codigo_municipio_ibge) {
                 $this->falhar('Lote ou configuração fiscal mudou desde a preparação.');
             }
+            $perfis = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+            $perfil = $perfis->vigente($empresa, $nota);
+            if ($perfil?->id !== ($dps->perfil_tributario_id === null ? null : (int) $dps->perfil_tributario_id)
+                || ($perfil && $perfis->impedimentos($perfil, $cfg) !== [])) {
+                $this->falhar('O perfil tributário vigente mudou ou está impedido. Revise a nota e a DPS.');
+            }
             $this->xsd->validar($dps->xml_criptografado);
         }
         $hash = hash('sha256', json_encode([

@@ -41,6 +41,13 @@
                 @if($nota && $local)
                     <form wire:submit="preparar" class="mt-4 border rounded-md p-4 space-y-3">
                         <h3 class="font-bold">Dados fiscais explícitos — nota #{{ $nota->id }}</h3>
+                        @if($perfil)
+                            <p class="text-sm">Perfil #{{ $perfil->id }} · {{ $perfil->servico_id ? 'Serviço específico' : 'Padrão da empresa' }} · vigência {{ $perfil->vigencia->format('m/Y') }}. Valores recuperados automaticamente; confirme o caso de teste.</p>
+                            @foreach($impedimentosPerfil as $impedimento)<p class="text-sm text-red-700">{{ $impedimento }}</p>@endforeach
+                            <a href="{{ route('nfse.perfis-tributarios') }}" class="text-blue-600 text-sm">Consultar perfis tributários</a>
+                        @else
+                            <p class="text-sm text-gray-600">Sem perfil vigente. Preenchimento manual de homologação.</p>
+                        @endif
                         <p class="text-sm">Escopo inicial: serviço nacional comum, ISS tributado, sem retenções, deduções, benefícios ou regime especial. Não use em outros casos. Não há cálculo automático de tributos.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <label class="text-sm">Município da prestação (IBGE)<input wire:model="fiscal.municipio_prestacao" required maxlength="7" pattern="[0-9]{7}" class="block w-full rounded-md border-gray-300"></label>
@@ -51,7 +58,7 @@
                         </div>
                         <label class="block text-sm"><input type="checkbox" wire:model="fiscal.escopo_confirmado" required> Confirmei que este caso de teste se enquadra no escopo limitado acima.</label>
                         <label class="block text-sm"><input type="checkbox" wire:model="fiscal.ibscbs_nao_exigido" required> Confirmei, pelas regras fiscais vigentes, que o grupo IBS/CBS não é exigido para este caso de teste.</label>
-                        <button type="submit" wire:loading.attr="disabled" class="bg-blue-600 text-white px-4 py-2 rounded-md">Gerar e validar DPS local</button>
+                        <button type="submit" wire:loading.attr="disabled" @disabled(count($impedimentosPerfil)>0) class="bg-blue-600 text-white px-4 py-2 rounded-md disabled:opacity-50">Gerar e validar DPS local</button>
                     </form>
                 @endif
                 <h2 class="font-bold mt-6">DPS locais (histórico da competência)</h2>

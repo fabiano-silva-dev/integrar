@@ -92,6 +92,10 @@ class Homologacao extends Component
         $this->hashRevisado = '';
         $this->revisado = $this->confirmouEnvio = false;
         $this->reset('fiscal');
+        $perfis = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+        if ($perfil = $perfis->vigente($empresa, $nota)) {
+            $this->fiscal = $perfis->sugestao($perfil);
+        }
         $this->resetValidation();
     }
 
@@ -214,6 +218,8 @@ class Homologacao extends Component
         $eventos = collect();
         $notas = $historico = collect();
         $resumo = [];
+        $perfil = null;
+        $impedimentosPerfil = [];
         $mesValido = (bool) preg_match('/^[1-9]\d{3}-(0[1-9]|1[0-2])$/D', $this->mes);
         if ($empresa) {
             [$local, $rede] = $this->liberacao($empresa);
@@ -240,6 +246,11 @@ class Homologacao extends Component
             }
             if ($this->notaId) {
                 $nota = Nota::daEmpresa($empresa)->where('status', 'em_lote')->find($this->notaId);
+                if ($nota) {
+                    $perfis = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+                    $perfil = $perfis->vigente($empresa, $nota);
+                    $impedimentosPerfil = $perfil ? $perfis->impedimentos($perfil, $cfg) : [];
+                }
             }
             if ($this->dpsId) {
                 [$dps, $xml] = app(ArtefatosHomologacao::class)->dps($empresa->id, $this->dpsId);
@@ -257,6 +268,6 @@ class Homologacao extends Component
                 }
             }
         }
-        return view('livewire.nfse.homologacao', compact('empresa', 'local', 'rede', 'xsd', 'cfg', 'acesso', 'seq', 'nota', 'dps', 'transmissao', 'eventos', 'notas', 'historico', 'mesValido', 'resumo'))->layout($this->layout);
+        return view('livewire.nfse.homologacao', compact('empresa', 'local', 'rede', 'xsd', 'cfg', 'acesso', 'seq', 'nota', 'dps', 'transmissao', 'eventos', 'notas', 'historico', 'mesValido', 'resumo', 'perfil', 'impedimentosPerfil'))->layout($this->layout);
     }
 }
