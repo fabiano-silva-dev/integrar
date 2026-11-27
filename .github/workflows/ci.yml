@@ -40,6 +40,7 @@ jobs:
           extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, zip, gd, bcmath, soap, curl
           coverage: none
       - name: Instalar dependências PHP
+        id: dependencias_php
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Preparar .env
         run: |
@@ -70,7 +71,14 @@ jobs:
           exit(1);
           '
       - name: Migrar MySQL (testes Tenant)
-        run: php artisan migrate --force
+        run: |
+          # A migration histórica de layouts depende de empresas, criada em julho de 2025.
+          # Antecipar apenas na base descartável do CI, sem renomear arquivos já aplicados.
+          php artisan migrate --path=database/migrations/2025_07_06_220835_create_empresas_table.php --force
+          php artisan migrate --force
+      - name: Testes unitários de DPS e identidade (independentes de MySQL)
+        if: ${{ !cancelled() && steps.dependencias_php.outcome == 'success' }}
+        run: vendor/bin/phpunit --testsuite Unit --filter='Nfse(DpsLocal|DiagnosticoIdentidade)Test'
       - name: Pint
         continue-on-error: true
         run: vendor/bin/pint --test

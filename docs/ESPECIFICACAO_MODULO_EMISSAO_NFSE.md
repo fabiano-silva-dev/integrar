@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.7 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.8 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) incluído, pendente de homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) incluídas, pendentes de homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -292,3 +292,13 @@ Cadastro de acessos e simulador publicados em 1bffaae. Diagnóstico de consulta 
 Referências: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita ; https://www.gov.br/nfse/pt-br/biblioteca/manuais-e-tutoriais/manual-integrado-nfse ; https://documentacao.senior.com.br/documentoseletronicos/5.8.16/html_ajuda/emissao-nfse-reforma-tributaria-infsenior-v2-00.htm (exemplo auxiliar, não substitui XSD).
 
 **CI anterior:** execução 46003385086 (commit 8871d93): frontend, scripts e runner aprovados; job PHP interrompido na migration histórica `2025_01_27_000001_create_layouts_importacao_table.php` com MySQL 1824 (tabela `empresas` ainda inexistente). Pint e PHPUnit não executados. Corrigir a ordem/estratégia de inicialização da base de teste em incremento independente, preservando instalações existentes. Ver https://github.com/fabiano-silva-dev/integrar/actions/runs/46003385086.
+
+
+### Incremento 2B.5 — Numeração e persistência de DPS exclusivamente local
+
+- Serviço interno NumeracaoDpsHomologacao: inicialização explícita pelo último número conhecido da série de produção restrita. Não assume zero, não permite reinicializar e não reutiliza números de DPS persistidas. Série normalizada e sequência por escritório, prestador/documento, ambiente 2 e série; limite de 15 dígitos. Não há consulta automática da numeração utilizada por outros emissores. Antes de qualquer transmissão, confirmar série/numeração disponível e regras oficiais; não migrar automaticamente para produção.
+- Dentro de transação com lock do prestador, configuração, nota, lote, certificado e sequência: revalidar identidade, versão, acesso e parâmetros fiscais, obter próximo número, gerar/assinar/validar localmente e persistir XML criptografado no banco com hash SHA-256. Restrições únicas por sequência/número, nota/versão/ambiente e identidade DPS no escritório. Reentrega com mesma versão e configuração devolve o mesmo registro; divergência exige revisão e nova versão de lote. Falha antes da persistência reverte a transação, sem avanço de numeração. A DPS histórica não muda quando o lote é desfeito; não representa autorização, nem é elegível a transmissão automática.
+- O coordenador utiliza PrepararDpsHomologacao como rotina de baixo nível. Verifica que o XML gerado possui o ID, referência da assinatura, ambiente, prestador, município, série e número esperados. A validação XSD integral ocorre depois da assinatura; antes dela exige que o pacote oficial esteja instalado, pois o schema pode exigir Signature. Não há mudança no modelo tributário, nem aprovação fiscal.
+- Migration 2026_11_27_180000_create_nfse_dps_locais_tables.php e modelos DpsSequencia/DpsLocal. XML oculto da serialização e criptografado pelo APP_KEY, sem arquivos públicos ou chave privada. A gestão de chave/backup precisa preservar acesso a esses documentos. Nenhum botão, rota, job, POST, XML autorizado, DANFSe ou alteração dos estados das notas.
+- Seis testes de feature escritos (mock somente do preparador de baixo nível, não prova assinatura/XSD). CI: etapa MySQL antecipa a migration de empresas com --path exclusivamente na base descartável e depois executa as migrations normais, sem alterar nomes históricos. Testes unitários de DPS e identidade rodam mesmo se a migration MySQL falhar, para diagnosticar de forma independente. A inicialização de instalações novas fora do CI continua dependente de revisão da estratégia de migrations.
+- Pendências: executar CI e sanar eventuais falhas adicionais, obter pacote oficial XSD de 24/11/2026, testar assinatura e XSD reais, revisar regras RTC e verificar sequência externa. Somente após isso implementar aprovação fiscal, transporte POST restrito, reconciliação e retorno de documentos. A flag NFSE_DPS_LOCAL_ENABLED permanece false por padrão.

@@ -8,7 +8,7 @@ use RuntimeException;
 class ValidadorDps
 {
     /** Apenas XSD oficial instalado pelo administrador, nunca caminho fornecido por operador. */
-    public function validar(string $xml): void
+    public function garantirDisponivel(): string
     {
         $configurado = (string) config('automacao_fiscal.nfse_dps_xsd_restrita', '');
         $schema = $configurado !== '' ? realpath($configurado) : false;
@@ -17,6 +17,12 @@ class ValidadorDps
             || strtolower(pathinfo($schema, PATHINFO_EXTENSION)) !== 'xsd') {
             throw new RuntimeException('Instale o pacote XSD oficial de produção restrita e configure o arquivo raiz.');
         }
+        return $schema;
+    }
+
+    public function validar(string $xml): void
+    {
+        $schema = $this->garantirDisponivel();
         if ($xml === '' || strlen($xml) > 1048576 || stripos($xml, '<!DOCTYPE') !== false) {
             throw new RuntimeException('XML da DPS inválido.');
         }

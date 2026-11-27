@@ -14,7 +14,7 @@ use RuntimeException;
 
 /**
  * Serviço interno, sem rota nem transmissão. Não reserva numeração fiscal.
- * O chamador fornece número exclusivamente de teste e dados fiscais explícitos.
+ * Usado pelo coordenador NumeracaoDpsHomologacao com número reservado de teste e dados fiscais explícitos.
  */
 class PrepararDpsHomologacao
 {
@@ -81,8 +81,9 @@ class PrepararDpsHomologacao
             'nbs' => $s['nbs'] ?? null,
         ];
         $xml = $this->gerador->gerar($dados);
-        // Fail closed: pacote oficial obrigatório antes de abrir a chave privada.
-        $this->validador->validar($xml->saveXML());
+        // Confere a instalação antes de abrir a chave; o XSD pode exigir Signature.
+        // A validação integral deve ocorrer sobre o XML assinado.
+        $this->validador->garantirDisponivel();
         $pem = $this->certificados->extrairPem($cert);
         try {
             $fingerprint = openssl_x509_fingerprint($pem['cert'], 'sha256');
