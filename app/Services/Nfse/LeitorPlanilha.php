@@ -90,6 +90,7 @@ class LeitorPlanilha
             'coluna_descricao' => ['descricao', 'descricao do servico', 'discriminacao', 'discriminacao dos servicos'],
             'coluna_cep' => ['cep'], 'coluna_logradouro' => ['logradouro', 'rua'], 'coluna_numero' => ['numero', 'numero endereco'],
             'coluna_bairro' => ['bairro'], 'coluna_complemento' => ['complemento'], 'coluna_municipio' => ['codigo municipio ibge', 'codigo ibge', 'ibge'],
+            'coluna_cidade' => ['cidade', 'municipio', 'nome municipio', 'nome do municipio', 'cidade do tomador', 'municipio do tomador'],
             'coluna_uf' => ['uf', 'estado'], 'coluna_email' => ['email', 'e mail'], 'coluna_telefone' => ['telefone', 'celular'],
         ];
         $normalizadas = array_map(fn ($v) => trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(Str::ascii($v)))), $colunas);

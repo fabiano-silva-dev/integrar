@@ -25,7 +25,7 @@ class ImportacaoPlanilha
         'coluna_nome' => 'nome', 'coluna_endereco' => 'endereco_integral',
         'coluna_cep' => 'cep', 'coluna_logradouro' => 'logradouro', 'coluna_numero' => 'numero',
         'coluna_bairro' => 'bairro', 'coluna_complemento' => 'complemento',
-        'coluna_municipio' => 'codigo_municipio_ibge', 'coluna_uf' => 'uf',
+        'coluna_municipio' => 'codigo_municipio_ibge', 'coluna_cidade' => 'municipio', 'coluna_uf' => 'uf',
         'coluna_email' => 'email', 'coluna_telefone' => 'telefone',
     ];
 
@@ -80,7 +80,7 @@ class ImportacaoPlanilha
         ])->validate();
     }
 
-    public function previa(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, array $ajustes = []): array
+    public function previa(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, array $ajustes = [], array $enderecos = []): array
     {
         $empresa = $this->empresaHabilitada($empresaId);
         Validator::make(['competencia' => $competencia], ['competencia' => 'required|date_format:Y-m-d'])->validate();
@@ -102,6 +102,7 @@ class ImportacaoPlanilha
             $this->falhar('Mapeie colunas distintas e escolha uma coluna de serviço ou um serviço fixo, não ambos.');
         }
         $alteracoes = $this->aplicarAjustes($planilha, $ajustes);
+        $enderecos = $this->validarEnderecos($planilha, $enderecos);
         $inicio = CarbonImmutable::parse($competencia)->startOfMonth()->toDateString();
         $fim = CarbonImmutable::parse($competencia)->endOfMonth()->toDateString();
         $hash = hash_file('sha256', $arquivo->getRealPath());
@@ -120,6 +121,10 @@ class ImportacaoPlanilha
                     $linha['cadastro'][$atributo] = $celulas[$config[$campo]];
                 }
             }
+            if (isset($enderecos[$numero])) {
+                $linha['cadastro'] = array_replace($linha['cadastro'], array_intersect_key($enderecos[$numero], array_flip(EnderecoImportacaoNfse::CAMPOS)));
+                $linha['endereco_revisao'] = $enderecos[$numero];
+            }
             $linha['formulas'] = count(array_intersect_key($planilha['formulas'][$numero] ?? [], array_flip($usadas)));
             if (array_intersect_key($planilha['invalidas'][$numero] ?? [], array_flip($usadas))) {
                 $linha['erro'] = 'Célula mapeada com erro ou fórmula sem valor salvo. Recalcule e salve essa célula no Excel.';
@@ -133,13 +138,22 @@ class ImportacaoPlanilha
             }
             $tomador = $ident !== '' && ! $linha['erro'] ? Tomador::daEmpresa($empresa)->where($config['identificacao'], $ident)->first() : null;
             $novo = null;
+            $linha['cadastro_efetivo'] = $tomador
+                ? $tomador->only(['nome', 'documento', 'email', 'telefone', ...array_diff(EnderecoImportacaoNfse::CAMPOS, ['municipio'])])
+                : $linha['cadastro'] + ['documento' => $ident];
+            $linha['tomador_existente'] = $tomador !== null;
             if ($tomador && ! $tomador->ativo) {
                 $linha['erro'] ??= 'Tomador cadastrado está inativo. Revise o cadastro.';
             }
             if (! $tomador && ! $linha['erro'] && ($config['cadastrar_tomadores'] ?? false) && $config['identificacao'] === 'documento') {
-                $novo = $this->novoTomador($ident, $linha['cadastro']);
+                $endereco = $enderecos[$numero] ?? null;
+                if ($endereco && (filled($linha['cadastro']['endereco_integral'] ?? null) || filled($endereco['cep'] ?? null))
+                    && (filled($endereco['aviso'] ?? null) || array_filter(EnderecoImportacaoNfse::OBRIGATORIOS, fn ($campo) => blank($endereco[$campo] ?? null)))) {
+                    $linha['erro'] = 'Revise o endereço: CEP, município/IBGE, UF, bairro, logradouro e número são necessários.';
+                }
+                $novo = $linha['erro'] ? null : $this->novoTomador($ident, $linha['cadastro']);
                 if ($novo === null) {
-                    $linha['erro'] = 'Dados insuficientes ou inválidos para cadastrar tomador. Confira nome e campos de endereço separados.';
+                    $linha['erro'] ??= 'Dados insuficientes ou inválidos para cadastrar tomador. Confira nome e campos de endereço separados.';
                 } elseif (isset($novosTomadores[$ident]) && $novosTomadores[$ident] !== $novo) {
                     $linha['erro'] = 'Há dados cadastrais diferentes para o mesmo documento nesta planilha.';
                 }
@@ -189,14 +203,14 @@ class ImportacaoPlanilha
         return $resultado;
     }
 
-    public function importar(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, string $nome, string $conferencia, array $ajustes = []): Importacao
+    public function importar(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, string $nome, string $conferencia, array $ajustes = [], array $enderecos = []): Importacao
     {
         $empresa = $this->empresaHabilitada($empresaId);
         $path = null;
         try {
-            return DB::transaction(function () use ($empresa, $arquivo, $competencia, $layoutId, $config, $nome, $conferencia, $ajustes, &$path) {
+            return DB::transaction(function () use ($empresa, $arquivo, $competencia, $layoutId, $config, $nome, $conferencia, $ajustes, $enderecos, &$path) {
                 Empresa::query()->where('empresa_operadora_id', $empresa->empresa_operadora_id)->where('ativo', true)->lockForUpdate()->findOrFail($empresa->id);
-                $previa = $this->previa($empresa->id, $arquivo, $competencia, $layoutId, $config, $ajustes);
+                $previa = $this->previa($empresa->id, $arquivo, $competencia, $layoutId, $config, $ajustes, $enderecos);
                 if (! hash_equals($previa['conferencia'], $conferencia) || $previa['aptas'] === 0) {
                     $this->falhar('A conferência mudou ou não há linhas aptas. Revise novamente antes de confirmar.');
                 }
@@ -289,6 +303,25 @@ class ImportacaoPlanilha
             }
         }
         return $historico;
+    }
+
+    private function validarEnderecos(array $planilha, array $enderecos): array
+    {
+        if (count($enderecos) > LeitorPlanilha::MAX_LINHAS) {
+            $this->falhar('Quantidade de endereços inválida.');
+        }
+        $campos = [...EnderecoImportacaoNfse::CAMPOS, 'aviso', 'origem'];
+        foreach ($enderecos as $linha => $e) {
+            if (! is_int($linha) || ! isset($planilha['linhas'][$linha]) || ! is_array($e) || array_diff(array_keys($e), $campos)) {
+                $this->falhar('Endereço não pertence à planilha.');
+            }
+            foreach ($e as $campo => $v) {
+                if (! is_string($v) || mb_strlen($v) > 255 || ! mb_check_encoding($v, 'UTF-8') || str_contains($v, "\0")) {
+                    $this->falhar('Campo de endereço inválido.');
+                }
+            }
+        }
+        return $enderecos;
     }
 
     private function novoTomador(string $documento, array $cadastro): ?array

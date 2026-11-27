@@ -1,5 +1,5 @@
-<div class="max-w-7xl mx-auto p-6">
-    <div class="bg-white rounded-lg shadow-md p-6">
+<div class="mx-auto {{ $aba === 'importar' ? 'w-full max-w-none p-2 md:p-3' : 'max-w-7xl p-6' }}">
+    <div class="bg-white rounded-lg shadow-md {{ $aba === 'importar' ? 'p-3 md:p-4' : 'p-6' }}">
         <div class="flex flex-wrap justify-between items-center gap-2"><h1 class="text-2xl font-bold text-gray-800">Emissão de NFS-e</h1><a href="{{ route('nfse.painel') }}" class="text-blue-600">Visão geral do escritório</a></div>
         <p class="text-gray-600 mt-1">Preparação fiscal — transmissão indisponível até homologação.</p>
         @if (!$empresa)

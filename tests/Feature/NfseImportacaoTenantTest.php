@@ -211,4 +211,59 @@ class NfseImportacaoTenantTest extends TestCase
         $this->assertSame('180.00', Nota::daEmpresa($this->empresa)->whereDate('competencia', '2026-12-01')->sole()->valor);
     }
 
+
+    public function test_endereco_integral_aparece_separado_e_e_gravado_no_novo_tomador(): void
+    {
+        \Illuminate\Support\Facades\Cache::forget('nfse:cep:v1:97010000');
+        config(['documentos.ia.gemini_api_key' => '', 'documentos.ia.groq_api_key' => '']);
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake(['https://viacep.com.br/ws/97010000/json/' => \Illuminate\Support\Facades\Http::response([
+            'cep' => '97010-000', 'localidade' => 'Santa Maria', 'uf' => 'RS', 'ibge' => '4316907',
+            'logradouro' => 'Rua das Flores', 'bairro' => 'Centro',
+        ])]);
+        $csv = "Nome completo;CPF;Endereço completo;Valor pago\nCliente fictício;11144477735;Rua das Flores, 120, apto 21, Centro, Santa Maria – RS, CEP 97010-000;200,00\n";
+        \Livewire\Livewire::test(\App\Livewire\Nfse\ImportarPlanilha::class, ['empresaId' => $this->empresa->id])
+            ->set('competencia', '2026-11-01')->set('arquivo', $this->arquivo($csv))
+            ->assertSet('enderecos.2.cep', '97010000')
+            ->assertSet('enderecos.2.codigo_municipio_ibge', '4316907')
+            ->assertSet('enderecos.2.numero', '120')
+            ->assertSet('enderecos.2.bairro', 'Centro')
+            ->assertSee('Município / UF / IBGE')
+            ->assertSee('Rua das Flores')
+            ->set('config.cadastrar_tomadores', true)
+            ->call('editarLinha', 2)->set('edicaoEndereco.numero', '125')->call('salvarEdicao')
+            ->assertSet('enderecos.2.numero', '125')
+            ->call('conferir')->assertSet('previa.aptas', 1)->assertSet('previa.total', '200.00')
+            ->call('importar')->assertHasNoErrors();
+        $t = \App\Models\Nfse\Tomador::daEmpresa($this->empresa)->where('documento', '11144477735')->sole();
+        $this->assertSame('97010000', $t->cep);
+        $this->assertSame('4316907', $t->codigo_municipio_ibge);
+        $this->assertSame('Rua das Flores', $t->logradouro);
+        $this->assertSame('125', $t->numero);
+        $this->assertSame('Centro', $t->bairro);
+        $this->assertSame('apto 21', $t->complemento);
+        $this->assertSame('RS', $t->uf);
+        $this->assertSame(0, \App\Models\Nfse\Tomador::daEmpresa($this->outra)->where('documento', '11144477735')->count());
+        \Illuminate\Support\Facades\Cache::forget('nfse:cep:v1:97010000');
+    }
+
+    public function test_endereco_incompleto_fica_pendente_e_alteracao_invalida_conferencia(): void
+    {
+        $arquivo = $this->arquivo("Nome;CPF;Endereço completo;Valor\nNovo cliente;11144477735;Rua das Flores, 120;200,00\n");
+        $config = array_replace($this->config, [
+            'coluna_nome' => 0, 'coluna_tomador' => 1, 'coluna_endereco' => 2, 'coluna_valor' => 3,
+            'coluna_servico' => null, 'servico_fixo' => 'S1', 'cadastrar_tomadores' => true,
+        ]);
+        $svc = app(\App\Services\Nfse\EnderecoImportacaoNfse::class);
+        $incompleto = $svc->local('Rua das Flores, 120');
+        $p = $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $config, [], [2 => $incompleto]);
+        $this->assertSame(0, $p['aptas']);
+        $this->assertStringContainsString('Revise o endereço', $p['linhas'][0]['erro']);
+        $completo = array_replace($incompleto, ['cep' => '97010000', 'codigo_municipio_ibge' => '4316907', 'uf' => 'RS', 'municipio' => 'Santa Maria', 'bairro' => 'Centro', 'origem' => 'ajuste manual']);
+        $p = $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $config, [], [2 => $completo]);
+        $this->assertSame(1, $p['aptas']);
+        $this->expectException(ValidationException::class);
+        $this->service->importar($this->empresa->id, $arquivo, '2026-11-01', null, $config, 'Cliente', $p['conferencia'], [], [2 => array_replace($completo, ['numero' => '130'])]);
+    }
+
 }
