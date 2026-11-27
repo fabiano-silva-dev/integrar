@@ -18,7 +18,7 @@ class PerfisTributariosNfse
 
     public function __construct(private AcessoEmissaoNfse $acessos) {}
 
-    public function cadastrar(int $empresaId, ?int $servicoId, string $vigencia, array $dados): PerfilTributario
+    public function cadastrar(int $empresaId, ?int $servicoId, string $vigencia, array $dados, ?int $versaoRevisada = null): PerfilTributario
     {
         $empresa = $this->acessos->empresa($empresaId);
         $v = Validator::make([...$dados, 'vigencia' => $vigencia], [
@@ -56,7 +56,7 @@ class PerfisTributariosNfse
             $this->falhar('Informe CST e cClassTrib coerentes. A conferência na tabela oficial ainda é necessária.');
         }
 
-        return DB::transaction(function () use ($empresa, $servicoId, $v) {
+        return DB::transaction(function () use ($empresa, $servicoId, $v, $versaoRevisada) {
             $empresa = Empresa::query()->where('empresa_operadora_id', $empresa->empresa_operadora_id)
                 ->where('ativo', true)->lockForUpdate()->findOrFail($empresa->id);
             if ($servicoId !== null) {
@@ -67,7 +67,21 @@ class PerfisTributariosNfse
             if (PerfilTributario::daEmpresa($empresa)->where('escopo', $escopo)->where('vigencia', $data)->exists()) {
                 $this->falhar('Já existe uma versão para este escopo e mês. O histórico não pode ser sobrescrito.');
             }
+            $catalogo = app(CatalogoTributarioNfse::class);
+            $versao = $catalogo->atual();
+            if ($versaoRevisada !== null && $versaoRevisada !== (int) ($versao?->id ?? 0)) {
+                $this->falhar('A versão do catálogo mudou. Atualize a seleção e confira novamente.');
+            }
+            $classificacao = null;
+            if ($v['cclass_trib'] !== null && $versao) {
+                $classificacao = $catalogo->consulta((int) $versao->id, $v['vigencia'])
+                    ->where('cst', $v['cst'])->where('cclass_trib', $v['cclass_trib'])->first();
+                if (! $classificacao) {
+                    $this->falhar('CST/cClassTrib não localizado como permitido para NFS-e e vigente durante todo o mês no catálogo carregado.');
+                }
+            }
             $perfil = new PerfilTributario([
+                'classificacao_catalogo_id' => $classificacao?->id,
                 'servico_id' => $servicoId, 'usuario_id' => auth()->id(), 'escopo' => $escopo, 'vigencia' => $data,
                 'dados' => array_diff_key($v, ['vigencia' => true]),
             ]);

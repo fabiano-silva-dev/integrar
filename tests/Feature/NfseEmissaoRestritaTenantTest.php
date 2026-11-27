@@ -316,4 +316,59 @@ class NfseEmissaoRestritaTenantTest extends TestCase
         ]));
     }
 
+
+    private function catalogoFicticio(string $versao = 'Teste A', string $data = '2026-10-01', string $descricao = 'Permitido teste'): object
+    {
+        $csv = implode(';', \App\Services\Nfse\CatalogoTributarioNfse::CABECALHO)."\n"
+            ."000;CST fictício;000001;".$descricao.";2026-01-01;;1;1;0.00;0.00\n"
+            ."000;CST fictício;000002;Vedado teste;2026-01-01;;0;1;;\n"
+            ."000;CST fictício;000003;Expirado teste;2026-01-01;2026-11-15;1;1;;\n";
+        return app(\App\Services\Nfse\CatalogoTributarioNfse::class)->importar($csv, 'svrs', $versao, $data, hash('sha256', $csv));
+    }
+
+    public function test_catalogo_filtra_nfse_e_mes_e_preserva_historico(): void
+    {
+        $catalogo = app(\App\Services\Nfse\CatalogoTributarioNfse::class);
+        $v = $this->catalogoFicticio();
+        $this->assertEquals($v->id, $this->catalogoFicticio()->id);
+        $this->assertSame(['000001'], $catalogo->buscar($v->id, '2026-11', '000')->pluck('cclass_trib')->all());
+        $this->assertCount(2, $catalogo->consulta($v->id, '2026-10')->get());
+        $novo = $this->catalogoFicticio('Teste B', '2026-10-30', 'Descrição revisada teste');
+        $this->assertEquals($novo->id, $catalogo->atual()->id);
+        $this->assertSame('Permitido teste', $catalogo->consulta($v->id, '2026-11')->first()->descricao);
+    }
+
+    public function test_perfil_vincula_classificacao_e_recusa_codigo_vedado(): void
+    {
+        $v = $this->catalogoFicticio();
+        $dados = array_replace($this->dadosPerfil(), ['ibscbs'=>'exigido', 'cst'=>'000', 'cclass_trib'=>'000001']);
+        $svc = app(\App\Services\Nfse\PerfisTributariosNfse::class);
+        $perfil = $svc->cadastrar($this->empresa->id, null, '2026-11', $dados, (int) $v->id);
+        $item = app(\App\Services\Nfse\CatalogoTributarioNfse::class)->consulta($v->id, '2026-11')->first();
+        $this->assertEquals($item->id, $perfil->classificacao_catalogo_id);
+        $this->expectException(ValidationException::class);
+        $svc->cadastrar($this->empresa->id, null, '2026-12', array_replace($dados, ['cclass_trib'=>'000002']));
+    }
+
+    public function test_perfil_recusa_versao_desatualizada_entre_selecao_e_salvamento(): void
+    {
+        $v = $this->catalogoFicticio();
+        $this->catalogoFicticio('Teste B', '2026-10-30', 'Revisado teste');
+        $this->expectException(ValidationException::class);
+        app(\App\Services\Nfse\PerfisTributariosNfse::class)->cadastrar($this->empresa->id, null, '2026-11',
+            array_replace($this->dadosPerfil(), ['ibscbs'=>'exigido','cst'=>'000','cclass_trib'=>'000001']), (int) $v->id);
+    }
+
+    public function test_busca_e_selecao_na_tela_nao_define_enquadramento(): void
+    {
+        $v = $this->catalogoFicticio();
+        $item = app(\App\Services\Nfse\CatalogoTributarioNfse::class)->consulta($v->id, '2026-11')->first();
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\PerfisTributarios::class)
+            ->set('vigencia', '2026-11')->set('buscaClassificacao', 'Permitido')
+            ->assertSee('Permitido teste')->assertDontSee('Vedado teste')
+            ->call('selecionarClassificacao', $item->id)->assertSet('form.cst', '000')
+            ->assertSet('form.cclass_trib', '000001')->assertSet('form.ibscbs', '')->assertSet('confirmado', false);
+    }
+
 }
