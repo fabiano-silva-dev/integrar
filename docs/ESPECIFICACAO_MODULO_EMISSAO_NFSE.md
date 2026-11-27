@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.9 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.10 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) incluídos, pendentes de prova técnica externa. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) publicado; numeração e persistência local (2B.5) publicadas; transporte e aprovação restritos (2B.6) publicados; interface e artefatos de homologação (2B.7) incluídos, pendentes de prova técnica externa. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -315,3 +315,14 @@ Referências: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/prod
 - Seis testes unitários de interpretação/escopo e dois testes de feature de aprovação/reconciliação com transporte falso escritos. Nenhuma chamada fiscal real executada. Próximo passo: executar os testes integrados, ampliar testes de concorrência, instalar XSD oficial, validar acesso e transmissão restrita com empresa piloto autorizada, ampliar regras fiscais, disponibilizar interface e DANFSe de teste.
 
 O transporte recusa rede quando existe transação externa de banco aberta; os testes de feature usam transporte falso para validar a máquina de estados sem comunicação externa.
+
+
+### Incremento 2B.7 — Interface e documentos de homologação
+
+- CI anterior (46007967706, 9cc6625): migration de transmissão aprovada; testes integrados de emissão restrita passaram; 319 aprovados, 27 falhas em outras rotinas e um aviso no teste de GZIP inválido. Build frontend, scripts e runner aprovados. Retorno GZIP inválido agora é rejeitado sem aviso PHP.
+- Menu Emissão de NFS-e > Homologação para administrador/gerente. Empresa selecionada no cabeçalho e contexto revalidados a cada ação; competência, lotes preparados, histórico de DPS e resumo dos dados fiscais. Flags e prestador piloto bloqueiam ações no servidor. Preparação local exige NFSE_DPS_LOCAL_ENABLED e NFSE_DPS_RESTRITA_PRESTADOR; aprovação, envio e reconciliação exigem também NFSE_DPS_RESTRITA_ENABLED. Não se habilitam flags pela interface.
+- Inicialização explícita da sequência, confirmação de escopo/IBS-CBS, percentuais e município informados manualmente; seleção individual de nota, geração e assinatura local. Revisão pelo resumo e download do XML integral, confirmação de leitura e hash bloqueado, aprovação explícita e confirmação separada do único envio de teste. Reconciliação manual sem reenvio, histórico de códigos sanitizados. Não há lote fiscal coletivo, cálculo de tributos, cancelamento, substituição ou emissão real.
+- Downloads autenticados com revalidação da empresa/escritório e perfil, ambiente e hashes. XML da DPS local e retorno de NFS-e de teste somente quando coerente com a DPS e confirmado. Respostas privadas no-store, nomes HOMOLOGACAO, sem inserção no acervo real. DANFSe de teste reaproveita parser e template da biblioteca instalada, Dompdf com recursos remotos/PHP/JS desativados, marca textual em todas as páginas: HOMOLOGACAO - SEM VALOR FISCAL. Rotina separada do gerador de produção. Renderização visual e compatibilidade com XML real de teste precisam ser verificadas.
+- O pacote XSD oficial e a revisão do Swagger continuam requisitos para liberar o piloto; não foram obtidos nesta sessão. Não presumir dispensa de IBS/CBS, não usar certificado sem autorização, nem habilitar flags em produção. A próxima etapa é homologação externa com prestador autorizado, conferir documentos retornados, revisar regras fiscais e avançar no fluxo coletivo. Autenticação efetiva do Emissor Web por senha e alternância de perfil continuam pendentes.
+
+- Testes adicionados: três de feature (tela/download autorizado, perfil operador bloqueado, XML adulterado e flag de comunicação desativada) e dois unitários (DANFSe de teste com marca no conteúdo PDF e rejeição de XML de produção). Execução aguardando CI. Nenhuma migration ou dependência nova nesta etapa.

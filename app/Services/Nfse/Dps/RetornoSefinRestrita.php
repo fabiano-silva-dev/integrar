@@ -62,7 +62,7 @@ class RetornoSefinRestrita
         }
         $b64 = $json['nfseXmlGZipB64'] ?? null;
         if (! is_string($b64) || strlen($b64) > 12582912 || ! is_string($bin = base64_decode($b64, true))
-            || ! is_string($xml = @gzdecode($bin, 8388608))) {
+            || ! str_starts_with($bin, "\x1f\x8b") || ! is_string($xml = self::descompactar($bin))) {
             throw new RuntimeException('XML retornado indisponível.');
         }
         $origem = self::validarDps($dpsXml);
@@ -87,6 +87,17 @@ class RetornoSefinRestrita
             throw new RuntimeException('Prestador retornado divergente.');
         }
         return ['chave' => $chave, 'xml' => $xml];
+    }
+
+    private static function descompactar(string $bin): string|false
+    {
+        // GZIP malformado é retorno não confirmado, não aviso PHP nem conteúdo de log.
+        set_error_handler(static fn () => true, E_WARNING);
+        try {
+            return gzdecode($bin, 8388608);
+        } finally {
+            restore_error_handler();
+        }
     }
 
     private static function estrutura(DOMElement $node): array

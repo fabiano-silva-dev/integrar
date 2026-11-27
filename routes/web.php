@@ -16,6 +16,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/nfse/visao-geral', App\Livewire\Nfse\Painel::class)->name('nfse.painel');
     Route::get('/nfse/acessos', App\Livewire\Nfse\Acessos::class)->name('nfse.acessos');
     Route::get('/nfse/simulacoes', App\Livewire\Nfse\Simulacoes::class)->name('nfse.simulacoes');
+    Route::get('/nfse/homologacao', App\Livewire\Nfse\Homologacao::class)->name('nfse.homologacao');
+    Route::get('/nfse/homologacao/{empresa}/dps/{dps}', [App\Http\Controllers\Nfse\ArtefatoHomologacaoController::class, 'dps'])
+        ->whereNumber(['empresa', 'dps'])->name('nfse.homologacao.dps');
+    Route::get('/nfse/homologacao/{empresa}/retorno/{transmissao}/{formato}', [App\Http\Controllers\Nfse\ArtefatoHomologacaoController::class, 'nfse'])
+        ->whereNumber(['empresa', 'transmissao'])->whereIn('formato', ['xml', 'pdf'])->name('nfse.homologacao.retorno');
     Route::get('/usuarios', App\Livewire\GerenciadorUsuarios::class)->name('usuarios');
     Route::get('/importador', function () {
         return redirect()->route('importador-avancado');

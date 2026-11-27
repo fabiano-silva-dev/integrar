@@ -119,4 +119,40 @@ class NfseEmissaoRestritaTenantTest extends TestCase
         $this->assertArrayNotHasKey('nfse_xml_criptografado', $r->toArray());
         $this->assertSame('em_lote', $this->nota->refresh()->status);
     }
+
+    public function test_tela_e_download_dps_sao_restritos_ao_escritorio_e_perfil(): void
+    {
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        config(['automacao_fiscal.nfse_dps_restrita_enabled' => false]);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Homologacao::class)
+            ->assertSee('SEM VALOR FISCAL')->set('mes', '2026-11')
+            ->call('abrirDps', $this->dps->id)
+            ->assertSee($this->dps->id_dps)->assertDontSee('Transmitir uma vez à SEFIN de testes');
+        $url = route('nfse.homologacao.dps', ['empresa' => $this->empresa->id, 'dps' => $this->dps->id]);
+        $this->get($url)->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="HOMOLOGACAO-'.$this->dps->id_dps.'.xml"')
+            ->assertContent($this->dps->xml_criptografado);
+        $this->actingAs(User::factory()->create(['empresa_operadora_id' => $this->empresa->empresa_operadora_id, 'role' => 'operador', 'ativo' => true]));
+        $this->get($url)->assertForbidden();
+        $this->get(route('nfse.homologacao'))->assertForbidden();
+    }
+
+    public function test_download_rejeita_xml_adulterado(): void
+    {
+        $this->dps->xml_criptografado = '<DPS/>';
+        $this->dps->save();
+        $this->get(route('nfse.homologacao.dps', ['empresa' => $this->empresa->id, 'dps' => $this->dps->id]))->assertStatus(422);
+    }
+
+    public function test_homologacao_nao_libera_acao_externa_com_flag_desligada(): void
+    {
+        session(['empresa_selecionada_id' => $this->empresa->id]);
+        config(['automacao_fiscal.nfse_dps_restrita_enabled' => false]);
+        $mock = $this->createMock(TransporteSefinRestrita::class);
+        $mock->expects($this->never())->method('enviar');
+        $this->app->instance(TransporteSefinRestrita::class, $mock);
+        \Livewire\Livewire::test(\App\Livewire\Nfse\Homologacao::class)
+            ->call('abrirDps', $this->dps->id)
+            ->set('revisado', true)->call('aprovar')->assertForbidden();
+    }
+
 }

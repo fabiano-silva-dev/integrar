@@ -206,6 +206,13 @@ trait MenuTrait
                         'active' => request()->routeIs('nfse.simulacoes'),
                         'roles' => ['admin', 'gerente'],
                     ],
+                    [
+                        'name' => 'Homologação',
+                        'url' => route('nfse.homologacao'),
+                        'icon' => 'document',
+                        'active' => request()->routeIs('nfse.homologacao*'),
+                        'roles' => ['admin', 'gerente'],
+                    ],
                 ],
             ],
             [
