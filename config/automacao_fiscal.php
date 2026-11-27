@@ -39,6 +39,9 @@ return [
     | Sefin Nacional — consulta XML da NFS-e por chave (mTLS do contribuinte)
     |--------------------------------------------------------------------------
     */
+    'nfse_dps_local_enabled' => env('NFSE_DPS_LOCAL_ENABLED', false),
+    'nfse_dps_xsd_restrita' => env('NFSE_DPS_XSD_RESTRITA', ''),
+    'nfse_dps_algoritmo' => env('NFSE_DPS_ALGORITMO', ''),
     'nfse_diagnostico_api_enabled' => env('NFSE_DIAGNOSTICO_API_ENABLED', false),
     'nfse_sefin_url' => env('NFSE_SEFIN_URL', 'https://sefin.nfse.gov.br/SefinNacional'),
     'nfse_sefin_timeout_s' => (int) env('NFSE_SEFIN_TIMEOUT_S', 30),

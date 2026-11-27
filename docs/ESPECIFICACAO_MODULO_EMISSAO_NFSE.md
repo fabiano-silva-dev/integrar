@@ -1,9 +1,9 @@
 # IntegraExpert | Módulo de emissão de NFS-e
 
-**Especificação funcional e técnica — versão 1.6 — 27/11/2026**
+**Especificação funcional e técnica — versão 1.7 — 27/11/2026**
 
 **Repositório:** `fabiano-silva-dev/integrar` · branch `master`  
-**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 de diagnóstico de acesso à API incluído, pendente de homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
+**Situação:** fases 1 parcial, 2A, 2B.1, 3A e 3B publicadas; incremento 2B.2 de acesso e simulação em fila publicado; incremento 2B.3 publicado; núcleo experimental de DPS local (2B.4) incluído, pendente de homologação. Ver também `docs/NFSE_ACESSOS_E_SIMULACAO.md`. Ver seção 14 para o estado de execução. Nenhuma transmissão fiscal real realizada.
 
 ## 1. Objetivo e escopo
 
@@ -279,3 +279,16 @@ Os incrementos 2A e 2B são subdivisões da fase 2 original para facilitar entre
 ### Incremento 2B.3 — diagnóstico de API
 
 Cadastro de acessos e simulador publicados em 1bffaae. Diagnóstico de consulta autenticada incluído nesta atualização, desligado por padrão e sem emissão. Ver [complemento de acessos e simulação](NFSE_ACESSOS_E_SIMULACAO.md), seção 5. A autorização fiscal, assinatura DPS, autenticação e representação no Emissor Web continuam pendentes de homologação/implementação.
+
+
+### Incremento 2B.4 — Núcleo local de DPS em produção restrita
+
+- Serviços internos GeradorDps, AssinadorDps, ValidadorDps e PrepararDpsHomologacao. Geração em DOM, versão 1.01, identificador DPS composto por município, tipo e documento federal, série e número, tpAmb fixo 2, prestador distinto do certificado do procurador. Valor decimal e texto preservados. Nenhum número reservado, nenhuma rota, job, XML persistido, transmissão ou autorização fiscal.
+- Escopo inicial estrito: serviço nacional comum tributado pelo ISS, sem retenções, deduções, regime especial, benefícios, tributos federais retidos ou grupo IBS/CBS. Exige confirmação fiscal expressa da adequação do recorte e dispensa de IBS/CBS; município de prestação, regime de apuração do SN quando aplicável e percentuais de tributos fornecidos explicitamente. Não calcula tributos nem confirma legalmente o enquadramento. Casos não compatíveis devem aguardar a ampliação do modelo fiscal. A série e o número são exclusivamente de teste; não utilizar em produção.
+- Integração interna por nota em lote preparado, com empresa e certificado selecionados no acesso, verificação da versão e do documento do prestador. Reutiliza CertificadoDigitalService::extrairPem e confere fingerprint. Assinatura XMLDSig enveloped/C14N sobre infDPS, RSA com algoritmo explicitamente selecionado (sha1 legado do manual ou sha256 para teste, nenhum padrão automático). Verificação local de digest e assinatura após serialização. O teste usa certificado gerado localmente, não ICP-Brasil. Confirmação do algoritmo aceito na revisão vigente é obrigatória.
+- Validação XSD antes de abrir a chave e depois de assinar. NFSE_DPS_LOCAL_ENABLED=false por padrão, NFSE_DPS_XSD_RESTRITA e NFSE_DPS_ALGORITMO vazios. Instalar somente o pacote oficial confiável no diretório resources/nfse/xsd/restrita, preservando dependências locais. A página oficial de homologação foi atualizada em 25/11/2026, com pacote XSD e anexo I de 24/11/2026; o ZIP/XLSX não pôde ser baixado neste ambiente. Portanto o mapeamento inicial é experimental e não validado contra o XSD vigente. O manual integrado disponível descreve o perfil XMLDSig legado. Não habilitar antes da conferência dos campos, algoritmos e regras atuais.
+- Quatro métodos de teste unitário escritos para identidade, estrutura, exigência de parâmetros e assinatura/digest. Ambiente de execução sem extensão DOM/mbstring e sem vendor/MySQL; testes não executados. Próxima etapa: obter XSD oficial, conferir regras fiscais/RTC, executar testes e homologar assinatura com certificado de teste; implementar reserva idempotente de DPS por prestador/ambiente/série, persistência privada, POST restrito e reconciliação por ID somente após essa revisão. Autenticação real por senha e alternância de perfil do portal continuam pendentes.
+
+Referências: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita ; https://www.gov.br/nfse/pt-br/biblioteca/manuais-e-tutoriais/manual-integrado-nfse ; https://documentacao.senior.com.br/documentoseletronicos/5.8.16/html_ajuda/emissao-nfse-reforma-tributaria-infsenior-v2-00.htm (exemplo auxiliar, não substitui XSD).
+
+**CI anterior:** execução 46003385086 (commit 8871d93): frontend, scripts e runner aprovados; job PHP interrompido na migration histórica `2025_01_27_000001_create_layouts_importacao_table.php` com MySQL 1824 (tabela `empresas` ainda inexistente). Pint e PHPUnit não executados. Corrigir a ordem/estratégia de inicialização da base de teste em incremento independente, preservando instalações existentes. Ver https://github.com/fabiano-silva-dev/integrar/actions/runs/46003385086.
