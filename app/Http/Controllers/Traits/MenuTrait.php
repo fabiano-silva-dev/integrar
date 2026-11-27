@@ -176,6 +176,19 @@ trait MenuTrait
                 ],
             ],
             [
+                'id' => 'nfse-emissao',
+                'name' => 'Emissão de NFS-e',
+                'icon' => 'document',
+                'items' => [
+                    [
+                        'name' => 'Central de emissão',
+                        'url' => route('nfse.central'),
+                        'icon' => 'document',
+                        'active' => request()->routeIs('nfse.*'),
+                    ],
+                ],
+            ],
+            [
                 'id' => 'documentos',
                 'name' => 'Drive contábil',
                 'icon' => 'folder',
