@@ -24,14 +24,18 @@ class LeitorPlanilha
         return $this->tabela($bruto, $cabecalho);
     }
 
-    public function detectar(string $path, string $tipo): array
+    public function detectar(string $path, string $tipo, ?int $abaSelecionada = null): array
     {
         if (! is_file($path) || filesize($path) > self::MAX_BYTES) {
             $this->falhar('Arquivo fora dos limites de importação.');
         }
         $melhor = null;
         $alternativa = null;
-        $opcoes = $tipo === 'csv' ? array_map(fn ($d) => [0, $d], [';', ',', "\t"]) : array_map(fn ($a) => [$a, ';'], range(0, 19));
+        $abas = $this->abas($path, $tipo);
+        if ($tipo !== 'csv' && $abaSelecionada !== null && ! array_key_exists($abaSelecionada, $abas)) {
+            $this->falhar('Aba não encontrada.');
+        }
+        $opcoes = $tipo === 'csv' ? array_map(fn ($d) => [0, $d], [';', ',', "\t"]) : array_map(fn ($a) => [$a, ';'], $abaSelecionada === null ? array_keys($abas) : [$abaSelecionada]);
         foreach ($opcoes as [$aba, $delimitador]) {
             try {
                 $bruto = $this->lerBruto($path, $tipo, $delimitador, $aba);
@@ -72,7 +76,7 @@ class LeitorPlanilha
             // Não impedir o mapeamento manual de uma planilha com títulos desconhecidos.
             $this->falhar('Não foi possível sugerir o cabeçalho automaticamente. Selecione a aba, linha do cabeçalho e separador e clique em Ler colunas.');
         }
-        return $melhor;
+        return $melhor + ['abas' => $abas];
     }
 
     public function sugerir(array $colunas): array
@@ -167,7 +171,31 @@ class LeitorPlanilha
         return $linhas;
     }
 
-    private function excel(string $path, string $tipo, int $aba): array
+    public function abas(string $path, string $tipo): array
+    {
+        if (! is_file($path) || filesize($path) > self::MAX_BYTES) {
+            $this->falhar('Arquivo fora dos limites de importação.');
+        }
+        if ($tipo === 'csv') {
+            return [];
+        }
+        if (! in_array($tipo, ['xls', 'xlsx'], true)) {
+            $this->falhar('Use CSV, XLS ou XLSX.');
+        }
+        $this->verificarZip($path, $tipo);
+        try {
+            $reader = $tipo === 'xlsx' ? new Xlsx : new Xls;
+            $abas = $reader->listWorksheetNames($path);
+        } catch (\Throwable) {
+            $this->falhar('Não foi possível reconhecer as abas do Excel.');
+        }
+        if (count($abas) > 20 || $abas === []) {
+            $this->falhar('Use uma planilha com 1 a 20 abas.');
+        }
+        return array_values($abas);
+    }
+
+    private function verificarZip(string $path, string $tipo): void
     {
         if ($tipo === 'xlsx') {
             $zip = new ZipArchive;
@@ -187,6 +215,11 @@ class LeitorPlanilha
                 $zip->close();
             }
         }
+    }
+
+    private function excel(string $path, string $tipo, int $aba): array
+    {
+        $this->verificarZip($path, $tipo);
         $reader = $tipo === 'xlsx' ? new Xlsx : new Xls;
         try {
             $info = $reader->listWorksheetInfo($path);

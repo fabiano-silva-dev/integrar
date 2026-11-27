@@ -146,4 +146,69 @@ class NfseImportacaoTenantTest extends TestCase
             ->assertSee('Colunas reconhecidas')->assertSee('Linhas de totalização identificadas');
     }
 
+    public function test_editar_valor_recalcula_previa_e_registra_ajuste_no_historico(): void
+    {
+        $arquivo = $this->arquivo("CPF;Valor;Serviço\n52998224725;123,45;S1\n");
+        $original = file_get_contents($arquivo->getRealPath());
+        $ajustes = [2 => [1 => '150,25']];
+        $p = $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $this->config, $ajustes);
+        $this->assertSame('150.25', $p['total']);
+        $this->assertSame('123,45', $p['linhas'][0]['ajustes'][1]['original']);
+        $registro = $this->service->importar($this->empresa->id, $arquivo, '2026-11-01', null, $this->config, 'Cliente', $p['conferencia'], $ajustes);
+        $nota = Nota::daEmpresa($this->empresa)->where('importacao_id', $registro->id)->sole();
+        $this->assertSame('150.25', $nota->valor);
+        $this->assertSame('150,25', $registro->relatorio[0]['ajustes'][1]['ajustado']);
+        $this->assertSame($original, Storage::disk('local')->get($registro->storage_path));
+        $this->assertArrayNotHasKey('ajustes', \App\Models\Nfse\LayoutImportacao::daEmpresa($this->empresa)->findOrFail($registro->layout_id)->configuracao);
+    }
+
+    public function test_nao_aceita_edicao_de_linha_excluida_ou_inexistente(): void
+    {
+        $arquivo = $this->arquivo("CPF;Valor;Serviço\n52998224725;123,45;S1\nTotal;123,45;\n");
+        $this->expectException(ValidationException::class);
+        $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $this->config, [3 => [1 => '200']]);
+    }
+
+    public function test_edicao_depois_da_conferencia_exige_novo_hash(): void
+    {
+        $arquivo = $this->arquivo("CPF;Valor;Serviço\n52998224725;123,45;S1\n");
+        $p = $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $this->config);
+        $this->expectException(ValidationException::class);
+        $this->service->importar($this->empresa->id, $arquivo, '2026-11-01', null, $this->config, 'Cliente', $p['conferencia'], [2 => [1 => '150']]);
+    }
+
+    public function test_interface_mostra_todas_as_linhas_edita_e_desfaz(): void
+    {
+        $csv = "CPF;Valor pago\n";
+        for ($i = 1; $i <= 10; $i++) {
+            $csv .= "52998224725;".$i.",00\n";
+        }
+        \Livewire\Livewire::test(\App\Livewire\Nfse\ImportarPlanilha::class, ['empresaId' => $this->empresa->id])
+            ->set('competencia', '2026-11-01')
+            ->set('arquivo', $this->arquivo($csv))
+            ->assertSet('amostra.11.1', '10,00')
+            ->assertSee('10 linhas')
+            ->call('conferir')->assertSet('previa.total', '55.00')
+            ->call('editarLinha', 11)->assertSet('edicao.1', '10,00')
+            ->set('edicao.1', '20,50')->call('salvarEdicao')
+            ->assertSet('amostra.11.1', '20,50')->assertSet('previa', [])
+            ->call('conferir')->assertSet('previa.total', '65.50')
+            ->call('desfazerLinha', 11)->assertSet('amostra.11.1', '10,00')
+            ->assertSet('previa', [])->assertSet('ajustes', []);
+    }
+
+    public function test_layout_salvo_exibe_grade_editavel_sem_modificar_configuracao(): void
+    {
+        $registro = $this->importarPrimeiro();
+        \Livewire\Livewire::test(\App\Livewire\Nfse\ImportarPlanilha::class, ['empresaId' => $this->empresa->id])
+            ->set('competencia', '2026-12-01')->set('layoutId', $registro->layout_id)
+            ->set('arquivo', $this->arquivo())
+            ->assertSet('amostra.2.1', '123,45')
+            ->call('editarLinha', 2)->set('edicao.1', '180,00')->call('salvarEdicao')
+            ->call('conferir')->assertSet('previa.total', '180.00')
+            ->call('importar')->assertHasNoErrors();
+        $this->assertSame(1, \App\Models\Nfse\LayoutImportacao::daEmpresa($this->empresa)->count());
+        $this->assertSame('180.00', Nota::daEmpresa($this->empresa)->whereDate('competencia', '2026-12-01')->sole()->valor);
+    }
+
 }

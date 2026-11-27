@@ -46,6 +46,23 @@ class ImportarPlanilha extends Component
     public array $ignoradas = [];
 
     #[Locked]
+    public array $abas = [];
+
+    #[Locked]
+    public string $tipoArquivo = '';
+
+    #[Locked]
+    public array $ajustes = [];
+
+    #[Locked]
+    public ?int $linhaEdicao = null;
+
+    public array $edicao = [];
+
+    #[Locked]
+    public int $uploadVersao = 0;
+
+    #[Locked]
     public array $previa = [];
 
     #[Locked]
@@ -60,17 +77,82 @@ class ImportarPlanilha extends Component
 
     public function updated(string $nome): void
     {
-        if ($nome === 'nomeLayout') {
+        if (in_array($nome, ['nomeLayout', 'edicao'], true) || str_starts_with($nome, 'edicao.')) {
             return;
         }
         $this->previa = [];
-        if ($nome === 'arquivo' || $nome === 'layoutId' || in_array($nome, ['config.cabecalho', 'config.aba', 'config.delimitador'], true)) {
-            $this->colunas = $this->amostra = $this->ignoradas = [];
-            $this->leitura = '';
+        if (in_array($nome, ['arquivo', 'layoutId'], true)) {
+            $this->limparLeitura();
+            if ($this->arquivo) {
+                $this->carregarArquivo();
+            }
+            return;
         }
-        if (in_array($nome, ['arquivo', 'layoutId'], true) && $this->arquivo && ! $this->layoutId) {
+        if (in_array($nome, ['config.cabecalho', 'config.aba', 'config.delimitador'], true)) {
+            $this->limparLeitura(false);
+            if ($nome === 'config.aba' && $this->arquivo && ! $this->layoutId) {
+                $this->detectarColunas((int) $this->config['aba']);
+            }
+        }
+        if ($nome === 'config.coluna_servico' && filled($this->config['coluna_servico'])) {
+            $this->config['servico_fixo'] = null;
+        }
+        if ($nome === 'config.servico_fixo' && filled($this->config['servico_fixo'])) {
+            $this->config['coluna_servico'] = null;
+        }
+    }
+
+    private function limparLeitura(bool $metadados = true): void
+    {
+        $this->colunas = $this->amostra = $this->ignoradas = $this->ajustes = $this->previa = [];
+        $this->leitura = '';
+        $this->fecharEdicao();
+        if ($metadados) {
+            $this->abas = [];
+            $this->tipoArquivo = '';
+        }
+    }
+
+    private function carregarArquivo(): void
+    {
+        $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
+        $this->resetValidation();
+        $this->tipoArquivo = strtolower($this->arquivo->getClientOriginalExtension());
+        $svc = app(ImportacaoPlanilha::class);
+        $this->abas = $svc->abas($this->empresaId, $this->arquivo);
+        if (! $this->layoutId) {
             $this->detectarColunas();
+            return;
         }
+        $empresa = app(PreparacaoNfse::class)->empresa($this->empresaId);
+        $layout = LayoutImportacao::daEmpresa($empresa)->findOrFail($this->layoutId);
+        $this->reset('config');
+        $this->config = array_replace($this->config, $layout->configuracao);
+        $r = $svc->ler($this->empresaId, $this->arquivo, $this->configNormalizada());
+        if ($layout->assinatura !== $r['assinatura'] || ($this->config['tipo'] ?? '') !== $this->tipoArquivo) {
+            $this->addError('arquivo', 'O arquivo não corresponde ao layout salvo. Escolha Novo layout para configurar.');
+            return;
+        }
+        $this->exibirLeitura($r, false);
+    }
+
+    public function cancelar(): void
+    {
+        $this->reset('arquivo', 'layoutId', 'nomeLayout', 'config');
+        $this->limparLeitura();
+        $this->uploadVersao++;
+        $this->resetValidation();
+    }
+
+    public function ajustarLayout(): void
+    {
+        $empresa = app(PreparacaoNfse::class)->empresa($this->empresaId);
+        abort_unless($this->layoutId && $this->colunas, 422);
+        $layout = LayoutImportacao::daEmpresa($empresa)->findOrFail($this->layoutId);
+        $this->layoutId = null;
+        $this->nomeLayout = $layout->nome;
+        $this->previa = [];
+        $this->resetValidation();
     }
 
     private function configNormalizada(): array
@@ -78,13 +160,17 @@ class ImportarPlanilha extends Component
         return array_map(fn ($v) => $v === '' ? null : $v, $this->config);
     }
 
-    public function detectarColunas(): void
+    public function detectarColunas(?int $aba = null): void
     {
         $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
         $this->resetValidation();
-        $this->previa = [];
+        abort_if($this->layoutId, 422);
+        $this->limparLeitura(false);
+        $this->tipoArquivo = strtolower($this->arquivo->getClientOriginalExtension());
         try {
-            $r = app(ImportacaoPlanilha::class)->detectar($this->empresaId, $this->arquivo);
+            $svc = app(ImportacaoPlanilha::class);
+            $this->abas = $svc->abas($this->empresaId, $this->arquivo);
+            $r = $svc->detectar($this->empresaId, $this->arquivo, $aba);
             $this->config['cabecalho'] = $r['cabecalho'];
             $this->config['aba'] = $r['aba'];
             $this->config['delimitador'] = match ($r['delimitador']) { ',' => 'virgula', "\t" => 'tab', default => 'ponto_virgula' };
@@ -95,13 +181,15 @@ class ImportarPlanilha extends Component
         }
     }
 
-    private function exibirLeitura(array $r): void
+    private function exibirLeitura(array $r, bool $sugerir = true): void
     {
         $this->colunas = $r['colunas'];
-        $this->amostra = array_slice($r['linhas'], 0, 5, true);
-        $this->amostra = array_map(fn ($linha) => array_map(fn ($v) => \Illuminate\Support\Str::limit($v, 200), $linha), $this->amostra);
+        $this->atualizarGrade($r);
         $this->ignoradas = $r['ignoradas'];
         $this->leitura = $r['nome_aba'].' — '.count($r['linhas']).' linhas de dados';
+        if (! $sugerir) {
+            return;
+        }
         foreach (['coluna_tomador', 'coluna_valor', 'coluna_servico', 'coluna_descricao', ...array_keys(ImportacaoPlanilha::CAMPOS_OPCIONAIS)] as $campo) {
             $this->config[$campo] = null;
         }
@@ -125,10 +213,74 @@ class ImportarPlanilha extends Component
         }
     }
 
+    private function atualizarGrade(array $planilha): void
+    {
+        // Todas as linhas ficam acessíveis. Textos longos têm versão integral no editor.
+        $this->amostra = array_map(fn ($linha) => array_map(fn ($v) => \Illuminate\Support\Str::limit($v, 250), $linha), $planilha['linhas']);
+    }
+
+    private function planilhaOriginal(): array
+    {
+        $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
+        abort_unless($this->colunas, 422);
+        $svc = app(ImportacaoPlanilha::class);
+        $config = $this->layoutId ? $svc->configuracao($this->empresaId, $this->layoutId, []) : $this->configNormalizada();
+        $r = $svc->ler($this->empresaId, $this->arquivo, $config);
+        abort_unless($r['colunas'] === $this->colunas, 422, 'A estrutura da planilha mudou. Leia novamente.');
+        return $r;
+    }
+
+    public function editarLinha(int $linha): void
+    {
+        $r = $this->planilhaOriginal();
+        app(ImportacaoPlanilha::class)->aplicarAjustes($r, $this->ajustes);
+        abort_unless(isset($r['linhas'][$linha]), 404);
+        $this->linhaEdicao = $linha;
+        $this->edicao = $r['linhas'][$linha];
+    }
+
+    public function salvarEdicao(): void
+    {
+        $r = $this->planilhaOriginal();
+        $linha = $this->linhaEdicao;
+        abort_unless($linha !== null && isset($r['linhas'][$linha]), 404);
+        if (array_keys($this->edicao) !== array_keys($r['linhas'][$linha])) {
+            $this->addError('edicao', 'As colunas da edição não correspondem à planilha.');
+            return;
+        }
+        $ajustes = $this->ajustes;
+        $ajustes[$linha] = array_map(fn ($v) => $v === null ? '' : $v, $this->edicao);
+        $historico = app(ImportacaoPlanilha::class)->aplicarAjustes($r, $ajustes);
+        $this->ajustes = array_map(fn ($celulas) => array_map(fn ($c) => $c['ajustado'], $celulas), $historico);
+        $this->atualizarGrade($r);
+        $this->previa = [];
+        $this->fecharEdicao();
+        $this->resetValidation();
+    }
+
+    public function desfazerLinha(int $linha): void
+    {
+        $r = $this->planilhaOriginal();
+        abort_unless(isset($r['linhas'][$linha]), 404);
+        unset($this->ajustes[$linha]);
+        app(ImportacaoPlanilha::class)->aplicarAjustes($r, $this->ajustes);
+        $this->atualizarGrade($r);
+        $this->previa = [];
+        $this->fecharEdicao();
+        $this->resetValidation();
+    }
+
+    public function fecharEdicao(): void
+    {
+        $this->linhaEdicao = null;
+        $this->edicao = [];
+    }
+
     public function lerCabecalho(): void
     {
         $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
-        $this->previa = [];
+        abort_if($this->layoutId, 422);
+        $this->limparLeitura(false);
         $this->resetValidation();
         $this->exibirLeitura(app(ImportacaoPlanilha::class)->ler($this->empresaId, $this->arquivo, $this->configNormalizada()));
     }
@@ -136,14 +288,16 @@ class ImportarPlanilha extends Component
     public function conferir(): void
     {
         $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
+        abort_unless($this->colunas && $this->linhaEdicao === null, 422, 'Conclua a edição e leia a planilha.');
         $this->previa = [];
-        $resultado = app(ImportacaoPlanilha::class)->previa($this->empresaId, $this->arquivo, $this->competencia, $this->layoutId, $this->configNormalizada());
+        $resultado = app(ImportacaoPlanilha::class)->previa($this->empresaId, $this->arquivo, $this->competencia, $this->layoutId, $this->configNormalizada(), $this->ajustes);
         $this->previa = array_intersect_key($resultado, array_flip(['conferencia', 'aptas', 'pendentes', 'total', 'ignoradas', 'novos_tomadores']));
         $this->previa['linhas'] = array_map(function ($linha) {
             $visivel = array_intersect_key($linha, array_flip(['linha', 'tomador', 'servico', 'valor', 'descricao', 'erro', 'formulas']));
             foreach (['tomador', 'servico', 'valor', 'descricao'] as $campo) {
                 $visivel[$campo] = \Illuminate\Support\Str::limit($visivel[$campo], $campo === 'descricao' ? 4000 : 300);
             }
+            $visivel['ajustada'] = ! empty($linha['ajustes']);
             $visivel['novo_tomador'] = $linha['novo_tomador'] !== null && $linha['dados'] !== null;
             $visivel['endereco_integral'] = \Illuminate\Support\Str::limit($linha['cadastro']['endereco_integral'] ?? '', 500);
             return $visivel;
@@ -153,12 +307,14 @@ class ImportarPlanilha extends Component
     public function importar(): void
     {
         $this->validate(['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx']);
-        if (! isset($this->previa['conferencia'])) {
+        if ($this->linhaEdicao !== null || ! isset($this->previa['conferencia'])) {
             $this->addError('arquivo', 'Faça a pré-conferência primeiro.');
             return;
         }
-        $registro = app(ImportacaoPlanilha::class)->importar($this->empresaId, $this->arquivo, $this->competencia, $this->layoutId, $this->configNormalizada(), $this->nomeLayout, $this->previa['conferencia']);
-        $this->reset('arquivo', 'previa', 'colunas', 'amostra', 'ignoradas', 'leitura', 'nomeLayout');
+        $registro = app(ImportacaoPlanilha::class)->importar($this->empresaId, $this->arquivo, $this->competencia, $this->layoutId, $this->configNormalizada(), $this->nomeLayout, $this->previa['conferencia'], $this->ajustes);
+        $this->reset('arquivo', 'nomeLayout');
+        $this->limparLeitura();
+        $this->uploadVersao++;
         $this->layoutId = $registro->layout_id;
         $this->historicoId = $registro->id;
         session()->flash('nfse_importacao_mensagem', "{$registro->quantidade_gerada} rascunhos gerados. Nenhuma nota transmitida.");

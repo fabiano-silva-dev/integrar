@@ -29,11 +29,19 @@ class ImportacaoPlanilha
         'coluna_email' => 'email', 'coluna_telefone' => 'telefone',
     ];
 
-    public function detectar(int $empresaId, UploadedFile $arquivo): array
+    public function detectar(int $empresaId, UploadedFile $arquivo, ?int $aba = null): array
     {
         $this->empresaHabilitada($empresaId);
         Validator::make(['arquivo' => $arquivo], ['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx'])->validate();
-        return $this->leitor->detectar($arquivo->getRealPath(), strtolower($arquivo->getClientOriginalExtension()));
+        return $this->leitor->detectar($arquivo->getRealPath(), strtolower($arquivo->getClientOriginalExtension()), $aba);
+    }
+
+    public function abas(int $empresaId, UploadedFile $arquivo): array
+    {
+        $this->empresaHabilitada($empresaId);
+        Validator::make(['arquivo' => $arquivo], ['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx'])->validate();
+
+        return $this->leitor->abas($arquivo->getRealPath(), strtolower($arquivo->getClientOriginalExtension()));
     }
 
     public function __construct(private PreparacaoNfse $preparo, private LeitorPlanilha $leitor) {}
@@ -72,7 +80,7 @@ class ImportacaoPlanilha
         ])->validate();
     }
 
-    public function previa(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config): array
+    public function previa(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, array $ajustes = []): array
     {
         $empresa = $this->empresaHabilitada($empresaId);
         Validator::make(['competencia' => $competencia], ['competencia' => 'required|date_format:Y-m-d'])->validate();
@@ -93,6 +101,7 @@ class ImportacaoPlanilha
         if (count($usadas) !== count(array_unique($usadas)) || (isset($config['coluna_servico']) === filled($config['servico_fixo'] ?? null))) {
             $this->falhar('Mapeie colunas distintas e escolha uma coluna de serviço ou um serviço fixo, não ambos.');
         }
+        $alteracoes = $this->aplicarAjustes($planilha, $ajustes);
         $inicio = CarbonImmutable::parse($competencia)->startOfMonth()->toDateString();
         $fim = CarbonImmutable::parse($competencia)->endOfMonth()->toDateString();
         $hash = hash_file('sha256', $arquivo->getRealPath());
@@ -104,6 +113,7 @@ class ImportacaoPlanilha
         $novosTomadores = [];
         foreach ($planilha['linhas'] as $numero => $celulas) {
             $linha = ['linha' => $numero, 'tomador' => $celulas[$config['coluna_tomador']], 'servico' => '', 'valor' => $celulas[$config['coluna_valor']], 'descricao' => '', 'dados' => null, 'erro' => null];
+            $linha['ajustes'] = $alteracoes[$numero] ?? [];
             $linha['cadastro'] = [];
             foreach (self::CAMPOS_OPCIONAIS as $campo => $atributo) {
                 if (isset($config[$campo])) {
@@ -179,14 +189,14 @@ class ImportacaoPlanilha
         return $resultado;
     }
 
-    public function importar(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, string $nome, string $conferencia): Importacao
+    public function importar(int $empresaId, UploadedFile $arquivo, string $competencia, ?int $layoutId, array $config, string $nome, string $conferencia, array $ajustes = []): Importacao
     {
         $empresa = $this->empresaHabilitada($empresaId);
         $path = null;
         try {
-            return DB::transaction(function () use ($empresa, $arquivo, $competencia, $layoutId, $config, $nome, $conferencia, &$path) {
+            return DB::transaction(function () use ($empresa, $arquivo, $competencia, $layoutId, $config, $nome, $conferencia, $ajustes, &$path) {
                 Empresa::query()->where('empresa_operadora_id', $empresa->empresa_operadora_id)->where('ativo', true)->lockForUpdate()->findOrFail($empresa->id);
-                $previa = $this->previa($empresa->id, $arquivo, $competencia, $layoutId, $config);
+                $previa = $this->previa($empresa->id, $arquivo, $competencia, $layoutId, $config, $ajustes);
                 if (! hash_equals($previa['conferencia'], $conferencia) || $previa['aptas'] === 0) {
                     $this->falhar('A conferência mudou ou não há linhas aptas. Revise novamente antes de confirmar.');
                 }
@@ -238,6 +248,47 @@ class ImportacaoPlanilha
             }
             throw $e;
         }
+    }
+
+    /**
+     * Ajustes de uma importação, nunca de um layout. Reaplica sobre o arquivo original
+     * no servidor; índices e texto são validados mesmo quando vierem da interface.
+     */
+    public function aplicarAjustes(array &$planilha, array $ajustes): array
+    {
+        if (count($ajustes) > LeitorPlanilha::MAX_LINHAS) {
+            $this->falhar('Quantidade de linhas ajustadas inválida.');
+        }
+        $historico = [];
+        $bytes = 0;
+        foreach ($ajustes as $linha => $celulas) {
+            if (! is_int($linha) || ! isset($planilha['linhas'][$linha]) || ! is_array($celulas) || count($celulas) > LeitorPlanilha::MAX_COLUNAS) {
+                $this->falhar('Uma linha ajustada não pertence à planilha lida.');
+            }
+            foreach ($celulas as $coluna => $valor) {
+                if (! is_int($coluna) || ! array_key_exists($coluna, $planilha['linhas'][$linha])
+                    || ! is_string($valor) || strlen($valor) > 8000 || ! mb_check_encoding($valor, 'UTF-8') || str_contains($valor, "\0")) {
+                    $this->falhar('Um valor ajustado é inválido ou pertence a uma coluna inexistente.');
+                }
+                $bytes += strlen($valor);
+                if ($bytes > LeitorPlanilha::MAX_BYTES) {
+                    $this->falhar('Os ajustes excedem o limite de tamanho.');
+                }
+                $valor = trim($valor);
+                $original = $planilha['linhas'][$linha][$coluna];
+                if ($valor === $original) {
+                    continue;
+                }
+                $historico[$linha][$coluna] = ['coluna' => $planilha['colunas'][$coluna], 'original' => $original, 'ajustado' => $valor];
+                $planilha['linhas'][$linha][$coluna] = $valor;
+                // Valor digitado é texto, interpretado pelo formato selecionado.
+                unset($planilha['numericas'][$linha][$coluna], $planilha['formulas'][$linha][$coluna], $planilha['invalidas'][$linha][$coluna]);
+            }
+            if (isset($historico[$linha])) {
+                ksort($historico[$linha]);
+            }
+        }
+        return $historico;
     }
 
     private function novoTomador(string $documento, array $cadastro): ?array

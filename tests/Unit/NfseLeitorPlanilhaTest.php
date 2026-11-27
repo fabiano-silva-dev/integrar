@@ -102,4 +102,27 @@ class NfseLeitorPlanilhaTest extends TestCase
         $this->assertNull($service->normalizarValor('-5', 'decimal'));
         $this->assertNull($service->normalizarValor('0,00', 'br'));
     }
+
+    public function test_excel_lista_abas_reais_e_detecta_cabecalho_da_aba_escolhida(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nfse-');
+        $book = new Spreadsheet;
+        try {
+            $book->getActiveSheet()->setTitle('Janeiro')->fromArray([['CPF', 'Valor'], ['52998224725', 100]]);
+            $book->createSheet()->setTitle('Fevereiro')->fromArray([['Relatório'], ['Nome', 'CPF', 'Valor'], ['Cliente B', '11144477735', 200]]);
+            (new Xlsx($book))->save($path);
+            $leitor = new LeitorPlanilha;
+            $this->assertSame(['Janeiro', 'Fevereiro'], $leitor->abas($path, 'xlsx'));
+            $r = $leitor->detectar($path, 'xlsx', 1);
+            $this->assertSame(1, $r['aba']);
+            $this->assertSame(2, $r['cabecalho']);
+            $this->assertSame('Fevereiro', $r['nome_aba']);
+            $this->assertSame(['Janeiro', 'Fevereiro'], $r['abas']);
+            $this->assertSame('200', $r['linhas'][3][2]);
+        } finally {
+            $book->disconnectWorksheets();
+            unlink($path);
+        }
+    }
+
 }
