@@ -98,4 +98,52 @@ class NfseImportacaoTenantTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->service->importar($this->empresa->id, $this->arquivo("CPF;Valor;Serviço\n52998224725;150,00;S1\n"), '2026-11-01', null, $this->config, 'Cliente', $previa['conferencia']);
     }
+
+    public function test_excel_com_total_e_novo_tomador_sem_alterar_existente(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nfse-');
+        $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
+        try {
+            $book->getActiveSheet()->setTitle('Clientes')->fromArray([
+                ['Nome completo', 'Endereço completo', 'CPF', 'Valor pago'],
+                ['Nome diferente do cadastrado', 'Endereço fictício A', '529.982.247-25', 934.16],
+                ['Novo cliente', 'Endereço fictício B', '111.444.777-35', 200],
+                ['Total', null, null, '=SUM(D2:D3)'],
+            ]);
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($path);
+            $arquivo = new UploadedFile($path, 'clientes.xlsx', null, null, true);
+            $r = $this->service->detectar($this->empresa->id, $arquivo);
+            $this->assertSame(['Nome completo', 'Endereço completo', 'CPF', 'Valor pago'], $r['colunas']);
+            $config = array_replace($this->config, $r['sugestoes'], [
+                'coluna_servico' => null, 'servico_fixo' => 'S1', 'cadastrar_tomadores' => true,
+            ]);
+            $p = $this->service->previa($this->empresa->id, $arquivo, '2026-11-01', null, $config);
+            $this->assertSame(2, $p['aptas']);
+            $this->assertSame('1134.16', $p['total']);
+            $this->assertSame([4], $p['ignoradas']);
+            $this->assertSame(1, $p['novos_tomadores']);
+            $this->assertSame(1, \App\Models\Nfse\Tomador::daEmpresa($this->empresa)->count());
+            $importacao = $this->service->importar($this->empresa->id, $arquivo, '2026-11-01', null, $config, 'Clientes', $p['conferencia']);
+            $this->assertSame(2, $importacao->quantidade_gerada);
+            $this->assertSame(2, \App\Models\Nfse\Tomador::daEmpresa($this->empresa)->count());
+            $this->assertSame('Tomador fictício', \App\Models\Nfse\Tomador::daEmpresa($this->empresa)->where('documento', '52998224725')->value('nome'));
+            $this->assertSame('Endereço fictício B', $importacao->relatorio[1]['cadastro']['endereco_integral']);
+            $this->assertSame(2, Nota::daEmpresa($this->empresa)->where('status', 'rascunho')->count());
+            $this->assertSame(0, Nota::daEmpresa($this->outra)->count());
+        } finally {
+            $book->disconnectWorksheets();
+            unlink($path);
+        }
+    }
+
+    public function test_interface_detecta_colunas_no_upload(): void
+    {
+        \Livewire\Livewire::test(\App\Livewire\Nfse\ImportarPlanilha::class, ['empresaId' => $this->empresa->id])
+            ->set('arquivo', $this->arquivo("Nome completo;CPF;Valor pago\nCliente fictício;52998224725;123,45\nTotal;;123,45\n"))
+            ->assertSet('colunas', ['Nome completo', 'CPF', 'Valor pago'])
+            ->assertSet('config.coluna_nome', 0)->assertSet('config.coluna_tomador', 1)
+            ->assertSet('config.coluna_valor', 2)->assertSet('config.servico_fixo', 'S1')
+            ->assertSee('Colunas reconhecidas')->assertSee('Linhas de totalização identificadas');
+    }
+
 }

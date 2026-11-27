@@ -21,6 +21,21 @@ use Illuminate\Validation\ValidationException;
 
 class ImportacaoPlanilha
 {
+    public const CAMPOS_OPCIONAIS = [
+        'coluna_nome' => 'nome', 'coluna_endereco' => 'endereco_integral',
+        'coluna_cep' => 'cep', 'coluna_logradouro' => 'logradouro', 'coluna_numero' => 'numero',
+        'coluna_bairro' => 'bairro', 'coluna_complemento' => 'complemento',
+        'coluna_municipio' => 'codigo_municipio_ibge', 'coluna_uf' => 'uf',
+        'coluna_email' => 'email', 'coluna_telefone' => 'telefone',
+    ];
+
+    public function detectar(int $empresaId, UploadedFile $arquivo): array
+    {
+        $this->empresaHabilitada($empresaId);
+        Validator::make(['arquivo' => $arquivo], ['arquivo' => 'required|file|max:2048|extensions:csv,xls,xlsx'])->validate();
+        return $this->leitor->detectar($arquivo->getRealPath(), strtolower($arquivo->getClientOriginalExtension()));
+    }
+
     public function __construct(private PreparacaoNfse $preparo, private LeitorPlanilha $leitor) {}
 
     public function ler(int $empresaId, UploadedFile $arquivo, array $config): array
@@ -52,6 +67,8 @@ class ImportacaoPlanilha
             'coluna_tomador' => 'required|integer|min:0|max:39', 'coluna_valor' => 'required|integer|min:0|max:39',
             'coluna_servico' => 'nullable|integer|min:0|max:39', 'coluna_descricao' => 'nullable|integer|min:0|max:39',
             'servico_fixo' => 'nullable|string|max:50',
+            'cadastrar_tomadores' => 'sometimes|boolean',
+            ...array_fill_keys(array_keys(self::CAMPOS_OPCIONAIS), 'nullable|integer|min:0|max:39'),
         ])->validate();
     }
 
@@ -66,12 +83,13 @@ class ImportacaoPlanilha
             $this->falhar('O arquivo mudou em relação ao layout salvo. Configure e salve uma nova versão.');
         }
         $config['tipo'] = strtolower($arquivo->getClientOriginalExtension());
-        foreach (['coluna_tomador', 'coluna_valor', 'coluna_servico', 'coluna_descricao'] as $campo) {
+        $campos = ['coluna_tomador', 'coluna_valor', 'coluna_servico', 'coluna_descricao', ...array_keys(self::CAMPOS_OPCIONAIS)];
+        foreach ($campos as $campo) {
             if (isset($config[$campo]) && ! array_key_exists($config[$campo], $planilha['colunas'])) {
                 $this->falhar('Uma coluna mapeada não existe no cabeçalho.');
             }
         }
-        $usadas = array_values(array_filter(array_map(fn ($campo) => $config[$campo] ?? null, ['coluna_tomador', 'coluna_valor', 'coluna_servico', 'coluna_descricao']), fn ($v) => $v !== null));
+        $usadas = array_values(array_filter(array_map(fn ($campo) => $config[$campo] ?? null, $campos), fn ($v) => $v !== null));
         if (count($usadas) !== count(array_unique($usadas)) || (isset($config['coluna_servico']) === filled($config['servico_fixo'] ?? null))) {
             $this->falhar('Mapeie colunas distintas e escolha uma coluna de serviço ou um serviço fixo, não ambos.');
         }
@@ -83,8 +101,19 @@ class ImportacaoPlanilha
         }
         $linhas = [];
         $vistos = [];
+        $novosTomadores = [];
         foreach ($planilha['linhas'] as $numero => $celulas) {
             $linha = ['linha' => $numero, 'tomador' => $celulas[$config['coluna_tomador']], 'servico' => '', 'valor' => $celulas[$config['coluna_valor']], 'descricao' => '', 'dados' => null, 'erro' => null];
+            $linha['cadastro'] = [];
+            foreach (self::CAMPOS_OPCIONAIS as $campo => $atributo) {
+                if (isset($config[$campo])) {
+                    $linha['cadastro'][$atributo] = $celulas[$config[$campo]];
+                }
+            }
+            $linha['formulas'] = count(array_intersect_key($planilha['formulas'][$numero] ?? [], array_flip($usadas)));
+            if (array_intersect_key($planilha['invalidas'][$numero] ?? [], array_flip($usadas))) {
+                $linha['erro'] = 'Célula mapeada com erro ou fórmula sem valor salvo. Recalcule e salve essa célula no Excel.';
+            }
             $ident = $linha['tomador'];
             if ($config['identificacao'] === 'documento') {
                 $ident = preg_replace('/[.\/\-\s]/', '', $ident);
@@ -92,31 +121,47 @@ class ImportacaoPlanilha
                     $linha['erro'] = 'CPF/CNPJ inválido. Não são completados zeros automaticamente.';
                 }
             }
-            $tomador = $ident !== '' && ! $linha['erro'] ? Tomador::daEmpresa($empresa)->where('ativo', true)->where($config['identificacao'], $ident)->first() : null;
+            $tomador = $ident !== '' && ! $linha['erro'] ? Tomador::daEmpresa($empresa)->where($config['identificacao'], $ident)->first() : null;
+            $novo = null;
+            if ($tomador && ! $tomador->ativo) {
+                $linha['erro'] ??= 'Tomador cadastrado está inativo. Revise o cadastro.';
+            }
+            if (! $tomador && ! $linha['erro'] && ($config['cadastrar_tomadores'] ?? false) && $config['identificacao'] === 'documento') {
+                $novo = $this->novoTomador($ident, $linha['cadastro']);
+                if ($novo === null) {
+                    $linha['erro'] = 'Dados insuficientes ou inválidos para cadastrar tomador. Confira nome e campos de endereço separados.';
+                } elseif (isset($novosTomadores[$ident]) && $novosTomadores[$ident] !== $novo) {
+                    $linha['erro'] = 'Há dados cadastrais diferentes para o mesmo documento nesta planilha.';
+                }
+            }
+            $linha['novo_tomador'] = $novo;
             $codigoServico = isset($config['coluna_servico']) ? $celulas[$config['coluna_servico']] : $config['servico_fixo'];
             $servico = Servico::daEmpresa($empresa)->where('ativo', true)->where('codigo', $codigoServico)->first();
-            $valor = $this->normalizarValor($linha['valor'], $config['formato_valor']);
+            $valor = $this->normalizarValor($linha['valor'], isset($planilha['numericas'][$numero][$config['coluna_valor']]) ? 'decimal' : $config['formato_valor']);
             $descricao = isset($config['coluna_descricao']) ? $celulas[$config['coluna_descricao']] : '';
             $descricao = $descricao === '' ? ($servico?->descricao ?? '') : $descricao;
-            $linha['tomador'] = $tomador ? $tomador->nome.' · '.$tomador->documento : $linha['tomador'];
+            $linha['tomador'] = $tomador ? $tomador->nome.' · '.$tomador->documento : (($linha['cadastro']['nome'] ?? '') !== '' ? $linha['cadastro']['nome'].' · '.$linha['tomador'] : $linha['tomador']);
             $linha['servico'] = $servico?->nome ?? $codigoServico;
             $linha['descricao'] = $descricao;
             $linha['valor'] = $valor ?? $linha['valor'];
             $linha['erro'] ??= match (true) {
-                ! $tomador => 'Tomador ativo não encontrado. Cadastre ou corrija o identificador.',
+                ! $tomador && ! $novo => 'Tomador ativo não encontrado. Mapeie o nome e habilite o cadastro ou corrija o identificador.',
                 ! $servico => 'Serviço ativo não encontrado pelo código interno.',
                 $valor === null => 'Valor inválido para o formato escolhido.',
                 $descricao === '' || mb_strlen($descricao) > 2000 => 'Descrição ausente ou acima de 2.000 caracteres.',
                 default => null,
             };
             if (! $linha['erro']) {
-                $dados = ['tomador_id' => $tomador->id, 'servico_id' => $servico->id, 'competencia' => $competencia, 'descricao' => $descricao, 'valor' => $valor];
-                $chave = hash('sha256', json_encode($dados, JSON_THROW_ON_ERROR));
-                if (isset($vistos[$chave]) || Nota::daEmpresa($empresa)->whereBetween('competencia', [$inicio, $fim])->where('tomador_id', $tomador->id)->where('servico_id', $servico->id)->where('valor', $valor)->where('descricao', $descricao)->where('status', '!=', 'descartada')->exists()) {
+                $dados = ['tomador_id' => $tomador?->id, 'servico_id' => $servico->id, 'competencia' => $competencia, 'descricao' => $descricao, 'valor' => $valor];
+                $chave = hash('sha256', json_encode([$ident, $dados], JSON_THROW_ON_ERROR));
+                if (isset($vistos[$chave]) || ($tomador && Nota::daEmpresa($empresa)->whereBetween('competencia', [$inicio, $fim])->where('tomador_id', $tomador->id)->where('servico_id', $servico->id)->where('valor', $valor)->where('descricao', $descricao)->where('status', '!=', 'descartada')->exists())) {
                     $linha['erro'] = 'Possível duplicidade na competência; confira a central antes de preparar outra nota.';
                 } else {
                     $vistos[$chave] = true;
                     $linha['dados'] = $dados;
+                    if ($novo) {
+                        $novosTomadores[$ident] = $novo;
+                    }
                 }
             }
             $linhas[] = $linha;
@@ -129,7 +174,7 @@ class ImportacaoPlanilha
             }
         }
         $total = intdiv($totalCentavos, 100).'.'.str_pad((string) ($totalCentavos % 100), 2, '0', STR_PAD_LEFT);
-        $resultado = ['competencia' => $competencia, 'hash' => $hash, 'assinatura' => $planilha['assinatura'], 'config' => $config, 'linhas' => $linhas, 'aptas' => $aptas, 'pendentes' => count($linhas) - $aptas, 'total' => $total];
+        $resultado = ['competencia' => $competencia, 'hash' => $hash, 'assinatura' => $planilha['assinatura'], 'config' => $config, 'linhas' => $linhas, 'aptas' => $aptas, 'pendentes' => count($linhas) - $aptas, 'total' => $total, 'ignoradas' => $planilha['ignoradas'], 'novos_tomadores' => count($novosTomadores)];
         $resultado['conferencia'] = hash('sha256', json_encode($resultado, JSON_THROW_ON_ERROR));
         return $resultado;
     }
@@ -169,11 +214,18 @@ class ImportacaoPlanilha
                 $importacao->empresa_id = $empresa->id;
                 $importacao->empresa_operadora_id = $empresa->empresa_operadora_id;
                 $importacao->save();
+                $criados = [];
                 foreach ($previa['linhas'] as $linha) {
                     if (! $linha['dados']) {
                         continue;
                     }
-                    $nota = $this->preparo->salvarRascunho($empresa->id, (string) Str::uuid(), $linha['dados']);
+                    $dados = $linha['dados'];
+                    if ($linha['novo_tomador']) {
+                        $novo = $linha['novo_tomador'];
+                        $criados[$novo['documento']] ??= $this->preparo->salvarTomador($empresa->id, null, $novo)->id;
+                        $dados['tomador_id'] = $criados[$novo['documento']];
+                    }
+                    $nota = $this->preparo->salvarRascunho($empresa->id, (string) Str::uuid(), $dados);
                     $nota->importacao_id = $importacao->id;
                     $nota->linha_importacao = $linha['linha'];
                     $nota->save();
@@ -186,6 +238,31 @@ class ImportacaoPlanilha
             }
             throw $e;
         }
+    }
+
+    private function novoTomador(string $documento, array $cadastro): ?array
+    {
+        // Endereço integral permanece no relatório. Não inventar município, CEP, número ou bairro.
+        unset($cadastro['endereco_integral']);
+        $cadastro = array_filter($cadastro, fn ($v) => $v !== '');
+        if (isset($cadastro['cep'])) {
+            $cadastro['cep'] = preg_replace('/[-\s]/', '', $cadastro['cep']);
+        }
+        if (isset($cadastro['uf'])) {
+            $cadastro['uf'] = strtoupper($cadastro['uf']);
+        }
+        // O gerador exige endereço nacional completo quando qualquer campo fiscal de endereço existe.
+        $endereco = array_intersect_key($cadastro, array_flip(['cep', 'logradouro', 'numero', 'bairro', 'codigo_municipio_ibge', 'complemento']));
+        if ($endereco && count(array_intersect_key($endereco, array_flip(['cep', 'logradouro', 'numero', 'bairro', 'codigo_municipio_ibge']))) !== 5) {
+            return null;
+        }
+        $v = Validator::make($cadastro, [
+            'nome' => 'required|string|max:150', 'email' => 'nullable|email|max:255', 'telefone' => 'nullable|string|max:30',
+            'cep' => 'nullable|digits:8', 'logradouro' => 'nullable|string|max:255', 'numero' => 'nullable|string|max:30',
+            'bairro' => 'nullable|string|max:60', 'complemento' => 'nullable|string|max:156', 'codigo_municipio_ibge' => 'nullable|regex:/^[1-9]\d{6}$/D',
+            'uf' => 'nullable|in:AC,AL,AP,AM,BA,CE,DF,ES,GO,MA,MT,MS,MG,PA,PB,PR,PE,PI,RJ,RN,RS,RO,RR,SC,SP,SE,TO',
+        ]);
+        return $v->fails() ? null : $v->validated() + ['documento' => $documento, 'ativo' => true];
     }
 
     public function normalizarValor(string $valor, string $formato): ?string
