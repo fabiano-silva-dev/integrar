@@ -9,7 +9,7 @@
                 <strong>{{ $empresa->razao_social ?: $empresa->nome }}</strong> · {{ $empresa->cnpj }}
             </div>
             <div class="flex flex-wrap gap-2 mt-4 border-b border-gray-200 pb-3">
-                @foreach (['notas' => 'Central de emissão', 'tomadores' => 'Tomadores', 'servicos' => 'Serviços', 'importar' => 'Importar planilha', 'configuracao' => 'Configurações'] as $chave => $rotulo)
+                @foreach (['notas' => 'Central de emissão', 'tomadores' => 'Tomadores', 'servicos' => 'Serviços', 'importar' => 'Importar planilha', 'conferencia' => 'Conferência e lotes', 'configuracao' => 'Configurações'] as $chave => $rotulo)
                     @if ($chave !== 'configuracao' || app(\App\Services\Nfse\PreparacaoNfse::class)->podeConfigurar())
                         <button type="button" wire:click="mudarAba('{{ $chave }}')" class="px-4 py-2 rounded-lg {{ $aba === $chave ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700' }}">{{ $rotulo }}</button>
                     @endif
@@ -47,10 +47,12 @@
                 <div class="flex flex-wrap justify-between items-center mt-6 gap-4"><h2 class="text-xl font-bold text-gray-800">Pré-conferência</h2><label class="text-sm">Competência <input type="month" wire:model.live="competencia" class="rounded-md border-gray-300"></label></div>
                 <div class="overflow-x-auto mt-3"><table class="min-w-full divide-y divide-gray-200 text-sm"><thead><tr><th class="text-left p-3">Tomador</th><th class="text-left p-3">Serviço</th><th class="text-left p-3">Competência</th><th class="text-right p-3">Valor</th><th class="text-left p-3">Situação</th></tr></thead><tbody>
                     @forelse ($registros as $registro)
-                        <tr wire:key="nota-{{ $registro->id }}"><td class="p-3">{{ data_get($registro->snapshot, 'tomador.nome') }}<p class="text-gray-600">{{ data_get($registro->snapshot, 'tomador.documento') }}</p></td><td class="p-3">{{ data_get($registro->snapshot, 'servico.nome') }}<p class="text-gray-600">{{ $registro->descricao }}</p></td><td class="p-3">{{ $registro->competencia->format('d/m/Y') }}</td><td class="p-3 text-right">R$ {{ number_format($registro->valor, 2, ',', '.') }}</td><td class="p-3">Rascunho — não transmitida @if ($registro->importacao_id)<p class="text-gray-600">Planilha #{{ $registro->importacao_id }} · linha {{ $registro->linha_importacao }}</p>@endif</td></tr>
+                        <tr wire:key="nota-{{ $registro->id }}"><td class="p-3">{{ data_get($registro->snapshot, 'tomador.nome') }}<p class="text-gray-600">{{ data_get($registro->snapshot, 'tomador.documento') }}</p></td><td class="p-3">{{ data_get($registro->snapshot, 'servico.nome') }}<p class="text-gray-600">{{ $registro->descricao }}</p></td><td class="p-3">{{ $registro->competencia->format('d/m/Y') }}</td><td class="p-3 text-right">R$ {{ number_format($registro->valor, 2, ',', '.') }}</td><td class="p-3">{{ match($registro->status) {'rascunho'=>'Rascunho — não transmitida','em_lote'=>'Lote #'.$registro->lote_id.' preparado','descartada'=>'Descartada',default=>$registro->status} }} @if ($registro->importacao_id)<p class="text-gray-600">Planilha #{{ $registro->importacao_id }} · linha {{ $registro->linha_importacao }}</p>@endif</td></tr>
                     @empty <tr><td colspan="5" class="p-3 text-gray-600">Nenhum rascunho nesta competência.</td></tr> @endforelse
                 </tbody></table></div>
                 {{ $registros->links() }}
+            @elseif ($aba === 'conferencia')
+                <livewire:nfse.conferencia :empresa-id="$empresa->id" :key="'nfse-conferencia-'.$empresa->id" />
             @elseif ($aba === 'importar')
                 @if ($configuracao?->habilitado_preparo)
                     <livewire:nfse.importar-planilha :empresa-id="$empresa->id" :key="'nfse-importar-'.$empresa->id" />

@@ -112,13 +112,18 @@ class PreparacaoNfse
             $registro = new Nota;
             return $this->persistir($registro, $empresa, array_merge($validos, [
                 'intencao' => $intencao, 'usuario_id' => auth()->id(), 'status' => 'rascunho',
-                'snapshot' => [
-                    'prestador' => $empresa->only(['id', 'cnpj', 'razao_social', 'nome', 'inscricao_municipal', 'codigo_municipio_ibge']),
-                    'tomador' => $tomador->only($tomador->getFillable()),
-                    'servico' => $servico->only($servico->getFillable()),
-                ],
+                'snapshot' => $this->snapshot($empresa, $tomador, $servico),
             ]));
         });
+    }
+
+    public function snapshot(Empresa $empresa, Tomador $tomador, Servico $servico): array
+    {
+        return [
+            'prestador' => $empresa->only(['id', 'cnpj', 'razao_social', 'nome', 'inscricao_municipal', 'codigo_municipio_ibge']),
+            'tomador' => $tomador->only($tomador->getFillable()),
+            'servico' => $servico->only($servico->getFillable()),
+        ];
     }
 
     private function bloquearEmpresa(Empresa $empresa): void
